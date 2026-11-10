@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/MusicManager.Core/MusicManager.Core.csproj" />
+    <Project Path="src/MusicManager.Web/MusicManager.Web.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/MusicManager.Tests/MusicManager.Tests.csproj" />
+  </Folder>
+</Solution>
