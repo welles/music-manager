@@ -24,6 +24,8 @@ public sealed partial class MatchingPipeline(
     CoverArtService coverArt,
     AiService ai,
     ExternalSourceService external,
+    DuplicateDetector duplicates,
+    LibraryIndexer libraryIndexer,
     PipelineNotifier notifier,
     WorkQueue queue,
     ILogger<MatchingPipeline> logger)
@@ -553,15 +555,36 @@ public sealed partial class MatchingPipeline(
             if (!File.Exists(source))
                 throw new FileNotFoundException("Datei ist nicht mehr im Eingang vorhanden", source);
 
-            var target = storage.LibraryPath(file.TargetPath);
-            if (File.Exists(target))
+            // Duplicate check against the library index (unless already decided in the duplicate view).
+            notifier.SetActivity($"Duplikatprüfung für {file.FileName}");
+            var fingerprint = (await audio.RawFingerprintAsync(source, ct))?.Values;
+            if (file.DuplicateDecision == null)
             {
-                SetStatus(file, FileStatus.NeedsReview, $"Zieldatei existiert bereits: {file.TargetPath} (mögliches Duplikat)");
-                AddEvent(file, "Nicht einsortiert: Zieldatei existiert bereits", EventLevel.Warning);
-                await db.SaveChangesAsync(ct);
-                notifier.Notify();
-                return;
+                file.Duplicates = await duplicates.FindAsync(file.FinalTags, file.DurationSeconds, fingerprint, file.TargetPath, ct);
+                var dup = file.Duplicates.Where(d => d.Kind == DuplicateKind.Duplicate).ToList();
+                if (dup.Count > 0 || File.Exists(storage.LibraryPath(file.TargetPath)))
+                {
+                    var reason = dup.Count > 0 ? $"{dup[0].Reason}: {dup[0].RelativePath}" : $"Zieldatei existiert bereits: {file.TargetPath}";
+                    SetStatus(file, FileStatus.Duplicate, $"Mögliches Duplikat – {reason}");
+                    AddEvent(file, $"Nicht einsortiert, mögliches Duplikat ({dup.Count} Treffer): {reason}", EventLevel.Warning);
+                    await db.SaveChangesAsync(ct);
+                    notifier.Notify();
+                    return;
+                }
+
+                foreach (var other in file.Duplicates.Where(d => d.Kind == DuplicateKind.OtherVersion))
+                    AddEvent(file, $"Mögliche andere Version in der Bibliothek: {other.RelativePath} ({other.Reason.TrimStart(' ', '–')})");
             }
+
+            // "Keep new": the new file takes the path of the replaced one (as far as the extension allows).
+            if (file.DuplicateDecision == DuplicateDecision.KeepNew && file.ReplaceLibraryPath != null)
+                file.TargetPath = Path.ChangeExtension(file.ReplaceLibraryPath, ".m4a");
+            else if (file.DuplicateDecision == DuplicateDecision.KeepBoth)
+                file.TargetPath = Path.GetRelativePath(storage.LibraryRoot, Storage.UniquePath(storage.LibraryPath(file.TargetPath)));
+
+            var target = storage.LibraryPath(file.TargetPath);
+            if (File.Exists(target) && !(file.DuplicateDecision == DuplicateDecision.KeepNew && file.ReplaceLibraryPath == file.TargetPath))
+                throw new InvalidOperationException($"Zieldatei existiert bereits: {file.TargetPath}");
 
             // Convert into the work folder.
             Directory.CreateDirectory(storage.WorkRoot);
@@ -580,10 +603,24 @@ public sealed partial class MatchingPipeline(
             TagIo.WriteM4a(tmp, file.FinalTags, cover,
                 SourceFor(file));
 
+            // Replaced library file goes to the trash (decision can be undone from there).
+            if (file.DuplicateDecision == DuplicateDecision.KeepNew && file.ReplaceLibraryPath != null)
+            {
+                var replaced = storage.LibraryPath(file.ReplaceLibraryPath);
+                if (File.Exists(replaced))
+                {
+                    var trashed = storage.MoveToTrash(replaced, Path.Combine("ersetzt", file.ReplaceLibraryPath));
+                    AddEvent(file, $"Vorhandene Datei {file.ReplaceLibraryPath} ersetzt (in den Papierkorb: {trashed})");
+                }
+
+                await libraryIndexer.RemoveAsync(file.ReplaceLibraryPath, ct);
+            }
+
             // Keep the timestamp of the original file.
             File.SetLastWriteTimeUtc(tmp, File.GetLastWriteTimeUtc(source));
             Storage.MovePreservingTime(tmp, target);
             tmp = null;
+            await libraryIndexer.UpsertAsync(file.TargetPath, fingerprint, ct);
 
             file.TrashPath = storage.MoveToTrash(source, file.RelativePath);
             SetStatus(file, FileStatus.Done, null);

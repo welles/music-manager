@@ -18,6 +18,9 @@ public enum FileStatus
     /// <summary>Neither fingerprint nor text search found the recording in MusicBrainz.</summary>
     NotInMusicBrainz,
 
+    /// <summary>Possible duplicate of a file in the library – waits for a decision in the duplicate view.</summary>
+    Duplicate,
+
     /// <summary>Decision made in the frontend, waiting to be written.</summary>
     Approved,
 
@@ -101,6 +104,15 @@ public sealed class TrackFile
 
     /// <summary>Source of the applied external tags ("spotify", "deezer").</summary>
     public string? ExternalSource { get; set; }
+
+    /// <summary>Library files that may be the same recording (or another version of it).</summary>
+    public List<DuplicateMatch> Duplicates { get; set; } = [];
+
+    /// <summary>Decision in the duplicate view; null = not decided (check before writing).</summary>
+    public DuplicateDecision? DuplicateDecision { get; set; }
+
+    /// <summary>For "keep new": library file (relative) that is replaced; the new file takes its path.</summary>
+    public string? ReplaceLibraryPath { get; set; }
 
     /// <summary>Tags that will be (or were) written.</summary>
     public TagSet? FinalTags { get; set; }
@@ -257,4 +269,42 @@ public sealed class LibraryEntry
     public bool FingerprintFailed { get; set; }
 
     public DateTimeOffset IndexedAt { get; set; } = DateTimeOffset.UtcNow;
+}
+
+public enum DuplicateKind
+{
+    /// <summary>Same recording – not filed automatically.</summary>
+    Duplicate,
+
+    /// <summary>Probably another version (remix, live, remaster …) – only shown as a hint.</summary>
+    OtherVersion,
+}
+
+public enum DuplicateDecision
+{
+    KeepNew,
+    KeepExisting,
+    KeepBoth,
+}
+
+/// <summary>A library file that matches a new file, with a snapshot of its data for the comparison view.</summary>
+public sealed class DuplicateMatch
+{
+    public int LibraryEntryId { get; set; }
+    public required string RelativePath { get; set; }
+    public DuplicateKind Kind { get; set; }
+    public required string Reason { get; set; }
+    public double? Similarity { get; set; }
+
+    public string? Title { get; set; }
+    public string? Artist { get; set; }
+    public string? Album { get; set; }
+    public string? Date { get; set; }
+    public string? Codec { get; set; }
+    public int? BitrateKbps { get; set; }
+    public double? DurationSeconds { get; set; }
+    public long FileSize { get; set; }
+    public string? MbRecordingId { get; set; }
+    public string? MbReleaseId { get; set; }
+    public string? TagSource { get; set; }
 }

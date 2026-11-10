@@ -197,6 +197,49 @@ public sealed class ReviewService(
         notifier.Notify();
     }
 
+    /// <summary>
+    /// Decision in the duplicate view. Keep new: the library file goes to the trash and the new one
+    /// takes its path. Keep existing: the new file goes to the trash. Keep both: filed next to it.
+    /// </summary>
+    public async Task ResolveDuplicateAsync(int fileId, DuplicateDecision decision, int? libraryEntryId = null, CancellationToken ct = default)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        var file = await db.Files.FirstAsync(f => f.Id == fileId, ct);
+        if (file.FinalTags == null) throw new InvalidOperationException("Keine Tags zum Schreiben vorhanden");
+
+        switch (decision)
+        {
+            case DuplicateDecision.KeepExisting:
+                var path = storage.InboxPath(file.RelativePath);
+                if (File.Exists(path))
+                    file.TrashPath = storage.MoveToTrash(path, file.RelativePath);
+                file.DuplicateDecision = decision;
+                MatchingPipeline.SetStatus(file, FileStatus.Discarded, "Duplikat – vorhandene Version behalten");
+                MatchingPipeline.AddEvent(file, "Duplikat: vorhandene Version behalten, neue Datei in den Papierkorb");
+                await db.SaveChangesAsync(ct);
+                notifier.Notify();
+                return;
+
+            case DuplicateDecision.KeepNew:
+                var match = file.Duplicates.FirstOrDefault(d => d.LibraryEntryId == libraryEntryId)
+                            ?? file.Duplicates.FirstOrDefault(d => d.Kind == DuplicateKind.Duplicate)
+                            ?? throw new InvalidOperationException("Keine vorhandene Datei zum Ersetzen angegeben");
+                file.ReplaceLibraryPath = match.RelativePath;
+                file.DuplicateDecision = decision;
+                Approve(file, $"Duplikat: neue Version ersetzt {match.RelativePath}");
+                break;
+
+            case DuplicateDecision.KeepBoth:
+                file.DuplicateDecision = decision;
+                Approve(file, "Duplikat: beide Versionen behalten");
+                break;
+        }
+
+        await db.SaveChangesAsync(ct);
+        queue.Enqueue(new WorkItem(WorkKind.WriteFile, file.Id));
+        notifier.Notify();
+    }
+
     /// <summary>Processes a file again from the beginning.</summary>
     public async Task RetryAsync(int fileId, CancellationToken ct = default)
     {
@@ -206,6 +249,9 @@ public sealed class ReviewService(
         file.SelectedCandidateKey = null;
         file.Decision = DecisionSource.None;
         file.AiDecision = null;
+        file.Duplicates = [];
+        file.DuplicateDecision = null;
+        file.ReplaceLibraryPath = null;
         MatchingPipeline.AddEvent(file, "Erneute Verarbeitung angestoßen");
         await db.SaveChangesAsync(ct);
         queue.Enqueue(new WorkItem(WorkKind.ProcessGroup, file.GroupId));

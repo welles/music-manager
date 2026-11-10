@@ -262,6 +262,13 @@ namespace MusicManager.Core.Data.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("DuplicateDecision")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Duplicates")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
                     b.Property<double?>("DurationSeconds")
                         .HasColumnType("REAL");
 
@@ -302,6 +309,9 @@ namespace MusicManager.Core.Data.Migrations
 
                     b.Property<string>("RelativePath")
                         .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ReplaceLibraryPath")
                         .HasColumnType("TEXT");
 
                     b.Property<string>("SelectedCandidateKey")
