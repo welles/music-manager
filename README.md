@@ -27,7 +27,10 @@ a review queue in the web frontend, optionally after Claude had a look first.
    (256 kbps). `+faststart` is set, and a 500 px cover is embedded.
 7. **Filing**: `{album artist}/{album}/{album artist} - {title}.m4a`. Images move
    along, the original goes to the trash, and empty inbox folders are removed.
-   Existing target files are never overwritten (possible duplicate → review).
+   Before filing, every file is checked against the library index (MusicBrainz ID,
+   fingerprint, artist/title + duration); duplicates wait in the duplicate view with
+   an A/B player (keep new / keep existing / keep both). The library itself can be
+   checked for existing duplicates as well.
 
 ## Running with Docker
 
@@ -77,7 +80,6 @@ Database changes: `dotnet ef migrations add <Name> --project src/MusicManager.Co
 
 ## Not implemented yet
 
-- Duplicate view with A/B player and library index
 - Discogs as an additional fallback source
 - Periodic re-check of manually tagged files, MusicBrainz release editor seeding
 - ReplayGain calculation
