@@ -96,6 +96,9 @@ public sealed class TrackFile
     /// <summary>Target path relative to the library.</summary>
     public string? TargetPath { get; set; }
 
+    /// <summary>AcoustID of the file (from its tags or the fingerprint lookup).</summary>
+    public string? AcoustId { get; set; }
+
     public string? CoverSource { get; set; }
 
     /// <summary>Uploaded or chosen cover for manual tagging (stored in the work folder).</summary>

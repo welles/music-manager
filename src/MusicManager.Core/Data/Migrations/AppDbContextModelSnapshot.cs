@@ -151,6 +151,9 @@ namespace MusicManager.Core.Data.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("INTEGER");
 
+                    b.Property<string>("AcoustId")
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("AiDecision")
                         .HasColumnType("TEXT");
 

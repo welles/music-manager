@@ -45,6 +45,7 @@ public static class TagIo
             t.MbReleaseGroupId = tag.MusicBrainzReleaseGroupId.NullIfEmpty();
 
             ReadExtra(file, t);
+            t.AcoustId = (t.Extra.GetValueOrDefault("Acoustid Id") ?? t.Extra.GetValueOrDefault("acoustid_id")).NullIfEmpty();
         }
         catch (Exception ex) when (ex is CorruptFileException or UnsupportedFormatException)
         {
@@ -62,6 +63,8 @@ public static class TagIo
             if (show.Length > 0) t.Extra["show"] = string.Join("; ", show);
             var marker = apple.GetDashBox(ITunesMean, SourceMarker);
             if (!string.IsNullOrEmpty(marker)) t.Extra[SourceMarker] = marker;
+            var acoustId = apple.GetDashBox(ITunesMean, "Acoustid Id");
+            if (!string.IsNullOrEmpty(acoustId)) t.Extra["Acoustid Id"] = acoustId;
         }
 
         if (file.GetTag(TagTypes.Id3v2) is TagLib.Id3v2.Tag id3)
@@ -139,6 +142,7 @@ public static class TagIo
         SetDash(apple, "LABEL", t.Label);
         SetDash(apple, "ORIGINALDATE", t.OriginalDate);
         SetDash(apple, "MusicBrainz Release Track Id", t.MbTrackId);
+        SetDash(apple, "Acoustid Id", t.AcoustId);
         SetDash(apple, SourceMarker, source);
 
         if (cover != null)

@@ -239,6 +239,9 @@
         ("Remixer", t => t.Remixer),
         ("Label", t => t.Label),
         ("Release-Typ", t => t.ReleaseType),
+        ("MusicBrainz-Recording", t => t.MbRecordingId),
+        ("MusicBrainz-Release", t => t.MbReleaseId),
+        ("AcoustID", t => t.AcoustId),
         ("Weitere Tags", t => t.Extra.Count > 0 ? string.Join("; ", t.Extra.Where(e => !e.Key.StartsWith('_')).Select(e => $"{e.Key}={e.Value}")) : null),
     ];
 

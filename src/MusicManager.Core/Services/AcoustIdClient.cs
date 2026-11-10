@@ -8,7 +8,29 @@ namespace MusicManager.Core.Services;
 
 public sealed record AcoustIdMatch(string RecordingId, double Score);
 
-/// <summary>AcoustID web service: fingerprint → MusicBrainz recording IDs.</summary>
+/// <summary>One AcoustID track (a cluster of fingerprints) with its linked MusicBrainz recordings.</summary>
+public sealed record AcoustIdTrack(string AcoustId, double Score, List<string> RecordingIds);
+
+public sealed record AcoustIdResult(List<AcoustIdTrack> Tracks)
+{
+    /// <summary>Best score per recording.</summary>
+    public List<AcoustIdMatch> Matches => Tracks
+        .SelectMany(t => t.RecordingIds.Select(r => (Recording: r, t.Score)))
+        .GroupBy(x => x.Recording)
+        .Select(g => new AcoustIdMatch(g.Key, g.Max(x => x.Score)))
+        .OrderByDescending(m => m.Score)
+        .ToList();
+
+    /// <summary>
+    /// AcoustID for the file: the best track linked to the given recording, otherwise the best
+    /// track above the threshold.
+    /// </summary>
+    public string? BestAcoustId(string? recordingId, double minScore) =>
+        (recordingId == null ? null : Tracks.Where(t => t.RecordingIds.Contains(recordingId)).MaxBy(t => t.Score)?.AcoustId)
+        ?? Tracks.Where(t => t.Score >= minScore).MaxBy(t => t.Score)?.AcoustId;
+}
+
+/// <summary>AcoustID web service: fingerprint → AcoustID tracks → MusicBrainz recording IDs.</summary>
 public sealed class AcoustIdClient(HttpClient http, IOptions<MusicManagerOptions> options, ILogger<AcoustIdClient> logger)
 {
     private static readonly SemaphoreSlim RateLimit = new(1, 1);
@@ -16,10 +38,10 @@ public sealed class AcoustIdClient(HttpClient http, IOptions<MusicManagerOptions
 
     public bool IsConfigured => !string.IsNullOrWhiteSpace(options.Value.AcoustIdApiKey);
 
-    public async Task<List<AcoustIdMatch>> LookupAsync(Fingerprint fp, CancellationToken ct)
+    public async Task<AcoustIdResult> LookupAsync(Fingerprint fp, CancellationToken ct)
     {
         if (!IsConfigured)
-            return [];
+            return new AcoustIdResult([]);
 
         await RateLimit.WaitAsync(ct);
         try
@@ -46,19 +68,16 @@ public sealed class AcoustIdClient(HttpClient http, IOptions<MusicManagerOptions
                 throw new InvalidOperationException("AcoustID: " + json);
             }
 
-            var matches = new Dictionary<string, double>();
+            var tracks = new List<AcoustIdTrack>();
             foreach (var result in doc.RootElement.GetProperty("results").EnumerateArray())
             {
-                var score = result.GetProperty("score").GetDouble();
-                if (!result.TryGetProperty("recordings", out var recs)) continue;
-                foreach (var rec in recs.EnumerateArray())
-                {
-                    var id = rec.GetProperty("id").GetString()!;
-                    matches[id] = Math.Max(matches.GetValueOrDefault(id), score);
-                }
+                var recordings = result.TryGetProperty("recordings", out var recs)
+                    ? recs.EnumerateArray().Select(r => r.GetProperty("id").GetString()!).ToList()
+                    : [];
+                tracks.Add(new AcoustIdTrack(result.GetProperty("id").GetString()!, result.GetProperty("score").GetDouble(), recordings));
             }
 
-            return matches.Select(m => new AcoustIdMatch(m.Key, m.Value)).OrderByDescending(m => m.Score).ToList();
+            return new AcoustIdResult(tracks.OrderByDescending(t => t.Score).ToList());
         }
         finally
         {

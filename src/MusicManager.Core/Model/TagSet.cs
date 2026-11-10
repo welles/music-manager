@@ -40,6 +40,9 @@ public sealed class TagSet
     public string? ReleaseStatus { get; set; }
     public string? ReleaseType { get; set; }
 
+    /// <summary>AcoustID track ID (tag "Acoustid Id").</summary>
+    public string? AcoustId { get; set; }
+
     public string? MbRecordingId { get; set; }
     public string? MbTrackId { get; set; }
     public string? MbReleaseId { get; set; }

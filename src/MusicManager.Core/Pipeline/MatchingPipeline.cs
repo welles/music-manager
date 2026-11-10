@@ -205,8 +205,18 @@ public sealed partial class MatchingPipeline(
     private async Task<Identification> IdentifyAsync(TrackFile file, string path, AppSettings settings, CancellationToken ct)
     {
         var ids = new List<(string Id, double Score, string Source)>();
+        file.AcoustId = file.OriginalTags?.AcoustId;
+        var hasTaggedRecording = Guid.TryParse(file.OriginalTags?.MbRecordingId, out var taggedRecording);
 
-        if (Guid.TryParse(file.OriginalTags?.MbRecordingId, out var taggedRecording))
+        // Fingerprint whenever the recording is unknown or the file has no AcoustID yet
+        // (already assigned files still get their AcoustID).
+        AcoustIdResult? lookup = null;
+        if (acoustId.IsConfigured && (!hasTaggedRecording || file.AcoustId == null))
+            lookup = await LookupAcoustIdAsync(file, path, settings, ct);
+        else if (!acoustId.IsConfigured)
+            AddEvent(file, "AcoustID-API-Key fehlt – kein Fingerabdruck-Abgleich", EventLevel.Warning);
+
+        if (hasTaggedRecording)
         {
             try
             {
@@ -216,6 +226,7 @@ public sealed partial class MatchingPipeline(
                 if (onRelease.Count > 0 && !rec.IsVideo)
                 {
                     AddEvent(file, $"MusicBrainz-Tags gefunden: Recording \"{rec.Title}\" auf Release \"{onRelease[0].Title}\"");
+                    file.AcoustId ??= lookup?.BestAcoustId(rec.RecordingId, settings.AcoustIdMinScore);
                     return new Identification([WithReleases(rec, onRelease)], true);
                 }
 
@@ -230,28 +241,17 @@ public sealed partial class MatchingPipeline(
             }
         }
 
-        if (ids.Count == 0 && acoustId.IsConfigured)
+        if (ids.Count == 0 && lookup != null)
         {
-            notifier.SetActivity($"Fingerabdruck für {file.FileName}");
-            var fp = await audio.FingerprintAsync(path, ct);
-            if (fp != null)
-            {
-                var matches = await acoustId.LookupAsync(fp, ct);
-                var usable = matches.Where(m => m.Score >= settings.AcoustIdMinScore).ToList();
-                AddEvent(file, matches.Count == 0
-                    ? "AcoustID: kein Treffer"
-                    : $"AcoustID: {matches.Count} Recordings, {usable.Count} über Schwellwert (bester Score {matches[0].Score:P0})");
-                ids.AddRange(usable.Select(m => (m.RecordingId, m.Score, "acoustid")));
-            }
-            else
-            {
-                AddEvent(file, "Fingerabdruck konnte nicht berechnet werden", EventLevel.Warning);
-            }
+            var matches = lookup.Matches;
+            var usable = matches.Where(m => m.Score >= settings.AcoustIdMinScore).ToList();
+            AddEvent(file, matches.Count == 0
+                ? "AcoustID: kein Recording verknüpft"
+                : $"AcoustID: {matches.Count} Recordings, {usable.Count} über Schwellwert (bester Score {matches[0].Score:P0})");
+            ids.AddRange(usable.Select(m => (m.RecordingId, m.Score, "acoustid")));
         }
-        else if (ids.Count == 0)
-        {
-            AddEvent(file, "AcoustID-API-Key fehlt – nur Textsuche", EventLevel.Warning);
-        }
+
+        file.AcoustId ??= lookup?.BestAcoustId(ids.Select(i => i.Id).FirstOrDefault(), settings.AcoustIdMinScore);
 
         var tags = file.CleanedTags!;
         if (ids.Count == 0 && !string.IsNullOrWhiteSpace(tags.Title))
@@ -297,6 +297,22 @@ public sealed partial class MatchingPipeline(
         }
 
         return new Identification(recordings, false);
+    }
+
+    private async Task<AcoustIdResult?> LookupAcoustIdAsync(TrackFile file, string path, AppSettings settings, CancellationToken ct)
+    {
+        notifier.SetActivity($"Fingerabdruck für {file.FileName}");
+        var fp = await audio.FingerprintAsync(path, ct);
+        if (fp == null)
+        {
+            AddEvent(file, "Fingerabdruck konnte nicht berechnet werden", EventLevel.Warning);
+            return null;
+        }
+
+        var result = await acoustId.LookupAsync(fp, ct);
+        if (result.Tracks.Count == 0)
+            AddEvent(file, "AcoustID: Fingerabdruck unbekannt");
+        return result;
     }
 
     private static RecordingMatch WithReleases(RecordingMatch r, List<ReleaseAppearance> releases) => new()
@@ -388,6 +404,7 @@ public sealed partial class MatchingPipeline(
         }
 
         file.FinalTags = TagBuilder.Build(release, candidate.RecordingId, artists, settings, rules);
+        file.FinalTags.AcoustId = file.AcoustId;
         file.TargetPath = PathBuilder.Build(file.FinalTags);
         file.ManuallyTagged = false;
         AddEvent(file, $"Release gewählt: {release.Title} ({release.Date}, {release.Country}) → {file.TargetPath}");
@@ -399,6 +416,7 @@ public sealed partial class MatchingPipeline(
         var settings = await settingsService.GetAsync(ct);
         var rules = await settingsService.GetArtistRulesAsync(ct);
         file.FinalTags = TaggingRules.Apply(manual, rules, settings.ConvertPunctuation);
+        file.FinalTags.AcoustId = file.AcoustId;
         file.TargetPath = PathBuilder.Build(file.FinalTags);
         file.ManuallyTagged = true;
         file.Decision = DecisionSource.ManualTags;
