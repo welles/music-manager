@@ -474,9 +474,13 @@ public sealed partial class MatchingPipeline(
             tmp = Path.Combine(storage.WorkRoot, $"{file.Id}-{Guid.NewGuid():N}.m4a");
             var info = await audio.ProbeAsync(source, ct);
             var remuxed = await audio.ConvertToM4aAsync(source, tmp, info.Codec, settings.AacBitrateKbps, ct);
-            AddEvent(file, remuxed
-                ? "AAC erkannt – nur in M4A umverpackt (keine Neukodierung)"
-                : $"Konvertiert {info.Codec} → AAC {settings.AacBitrateKbps} kbps");
+            var alreadyM4a = Path.GetExtension(source).ToLowerInvariant() is ".m4a" or ".mp4";
+            AddEvent(file, (remuxed, alreadyM4a) switch
+            {
+                (true, true) => "Bereits M4A/AAC – Audio unverändert übernommen, nur Metadaten und Cover neu geschrieben",
+                (true, false) => $"AAC aus {Path.GetExtension(source)} ohne Neukodierung in M4A übernommen",
+                _ => $"Konvertiert {info.Codec} → AAC {settings.AacBitrateKbps} kbps",
+            });
 
             var cover = await GetCoverAsync(file, source, settings, ct);
             TagIo.WriteM4a(tmp, file.FinalTags, cover,
