@@ -122,6 +122,55 @@
         <TagDiff File="_file" Preview="_preview" OnClearPreview="() => _preview = null" />
     </MudTabPanel>
 
+    <MudTabPanel Text="Spotify/Deezer" Icon="@Icons.Material.Filled.TravelExplore" BadgeData="@(_file.ExternalMatches.Count > 0 ? _file.ExternalMatches.Count : null)"
+                 Disabled="_file.ExternalMatches.Count == 0">
+        <MudText Typo="Typo.body2" Class="mb-3">
+            Treffer außerhalb von MusicBrainz. Beim Übernehmen werden Tags und Cover der Quelle verwendet und die eigenen Regeln angewendet;
+            die Datei gilt danach als manuell getaggt.
+        </MudText>
+        <MudStack Spacing="2">
+            @foreach (var m in _file.ExternalMatches.OrderByDescending(m => m.Score))
+            {
+                <MudPaper Outlined="true" Class="pa-3">
+                    <div class="d-flex" style="gap:16px">
+                        <MudImage Src="@m.CoverUrl" Width="96" Height="96" ObjectFit="ObjectFit.Cover" Class="rounded flex-shrink-0" Alt="Cover" />
+                        <div style="min-width:0;flex:1">
+                            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1" Wrap="Wrap.Wrap">
+                                <MudText Typo="Typo.subtitle1"><b>@m.Title</b></MudText>
+                                <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="@(m.Source == "spotify" ? Color.Success : Color.Info)">
+                                    @MatchingPipeline.SourceName(m.Source)
+                                </MudChip>
+                                <MudChip T="string" Size="Size.Small" Variant="Variant.Text" Color="@(m.Score >= 0.95 ? Color.Success : Color.Warning)">
+                                    @(m.Score >= 1 ? "Link aus den Tags" : $"{m.Score:P0} Übereinstimmung")
+                                </MudChip>
+                            </MudStack>
+                            <MudText Typo="Typo.body2">
+                                @string.Join(", ", m.Artists)@(m.FeaturedArtists.Count > 0 ? $" feat. {string.Join(", ", m.FeaturedArtists)}" : "")
+                            </MudText>
+                            <MudText Typo="Typo.body2" Style="opacity:.8">
+                                @m.Album · @m.AlbumType · @m.ReleaseDate@(m.TrackNumber != null ? $" · Track {m.TrackNumber}/{m.TrackCount}" : "")
+                            </MudText>
+                            <MudText Typo="Typo.caption" Style="opacity:.7">
+                                Länge @FormatLength(m.DurationSeconds) (Datei @FormatLength(_file.DurationSeconds))
+                                @(m.Isrc != null ? $" · ISRC {m.Isrc}" : "")@(m.Label != null ? $" · {m.Label}" : "")@(m.Genres.Count > 0 ? $" · {string.Join(", ", m.Genres)}" : "")
+                            </MudText>
+                        </div>
+                        <MudStack Spacing="1" AlignItems="AlignItems.End" Class="flex-shrink-0">
+                            @if (IsOpen)
+                            {
+                                <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary" OnClick="() => ApplyExternal(m)">Übernehmen</MudButton>
+                            }
+                            @if (m.Url != null)
+                            {
+                                <MudLink Href="@m.Url" Target="_blank" Typo="Typo.caption">Bei @MatchingPipeline.SourceName(m.Source) öffnen</MudLink>
+                            }
+                        </MudStack>
+                    </div>
+                </MudPaper>
+            }
+        </MudStack>
+    </MudTabPanel>
+
     <MudTabPanel Text="KI" Icon="@Icons.Material.Filled.AutoAwesome" Disabled="_file.AiDecision == null && _file.AiSuggestion == null">
         @if (_file.AiDecision is { } d)
         {
@@ -208,6 +257,12 @@
         await using var db = await DbFactory.CreateDbContextAsync();
         _file = await db.Files.AsNoTracking().FirstOrDefaultAsync(f => f.Id == Id);
         _events = await db.Events.AsNoTracking().Where(e => e.TrackFileId == Id).OrderByDescending(e => e.Id).ToListAsync();
+        if (!_tabChosen && _file != null)
+        {
+            // Files without MusicBrainz candidates open on the Spotify/Deezer tab.
+            _tab = _file.Candidates.Count == 0 && _file.ExternalMatches.Count > 0 ? 2 : 0;
+            _tabChosen = true;
+        }
     }
 
     /// <summary>All categories with achieved and maximum points, including categories with 0 points.</summary>
@@ -233,6 +288,21 @@
         catch (Exception ex)
         {
             Snackbar.Add($"Vorschau fehlgeschlagen: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private bool _tabChosen;
+
+    private async Task ApplyExternal(ExternalMatch m)
+    {
+        try
+        {
+            await Review.ApplyExternalAsync([Id], m.Key);
+            Snackbar.Add($"Tags aus {MatchingPipeline.SourceName(m.Source)} übernommen – Datei wird geschrieben.", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Fehler: {ex.Message}", Severity.Error);
         }
     }
 

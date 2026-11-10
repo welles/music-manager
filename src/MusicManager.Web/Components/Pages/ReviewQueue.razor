@@ -16,6 +16,7 @@
         <MudSpacer />
         <MudButtonGroup Variant="Variant.Outlined" Size="Size.Small">
             <MudButton StartIcon="@Icons.Material.Filled.Search" Disabled="_selected.Count == 0" OnClick="SearchRelease">Release zuweisen</MudButton>
+            <MudButton StartIcon="@Icons.Material.Filled.TravelExplore" Disabled="!_selected.Any(f => f.ExternalMatches.Count > 0)" OnClick="ApplyExternal">Spotify/Deezer übernehmen</MudButton>
             <MudButton StartIcon="@Icons.Material.Filled.Edit" Disabled="_selected.Count == 0" OnClick="ManualTag">Manuell taggen</MudButton>
             <MudButton StartIcon="@Icons.Material.Filled.Replay" Disabled="_selected.Count == 0" OnClick="Retry">Erneut verarbeiten</MudButton>
             <MudButton StartIcon="@Icons.Material.Filled.Delete" Color="Color.Error" Disabled="_selected.Count == 0" OnClick="Discard">Verwerfen</MudButton>
@@ -43,6 +44,11 @@
                 {
                     <MudText Typo="Typo.body2">@best.Release.Title (@best.Release.Date, @best.Release.Country)</MudText>
                     <MudText Typo="Typo.caption">@best.Score.ToString("0.#")@(best.MaxScore > 0 ? $" / {best.MaxScore:0.#}" : "") Punkte · @context.Item.Candidates.Count Kandidaten</MudText>
+                }
+                else if (context.Item.ExternalMatches.OrderByDescending(m => m.Score).FirstOrDefault() is { } ext)
+                {
+                    <MudText Typo="Typo.body2">@MatchingPipeline.SourceName(ext.Source): @ext.Title (@ext.Album, @ext.ReleaseDate)</MudText>
+                    <MudText Typo="Typo.caption">@(ext.Score >= 1 ? "Link aus den Tags" : $"{ext.Score:P0} Übereinstimmung") · @context.Item.ExternalMatches.Count Treffer</MudText>
                 }
                 else if (context.Item.AiSuggestion is { } s)
                 {
@@ -90,6 +96,15 @@
             new DialogOptions { MaxWidth = MaxWidth.Large, FullWidth = true });
         var result = await dialog.Result;
         if (result is { Canceled: false }) _selected.Clear();
+    }
+
+    private async Task ApplyExternal()
+    {
+        var ids = _selected.Where(f => f.ExternalMatches.Count > 0).Select(f => f.Id).ToList();
+        var problems = await Review.ApplyExternalAsync(ids);
+        foreach (var p in problems) Snackbar.Add(p, Severity.Warning);
+        Snackbar.Add($"{ids.Count - problems.Count} Datei(en) mit dem besten Spotify/Deezer-Treffer getaggt – werden geschrieben.", Severity.Success);
+        _selected.Clear();
     }
 
     private void ManualTag() => Nav.NavigateTo($"manuell?ids={string.Join(",", SelectedIds)}");

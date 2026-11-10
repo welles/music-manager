@@ -99,23 +99,27 @@
 
         _rows = files.Select(f =>
         {
+            // Prefill: best Spotify/Deezer match, then AI suggestion, then the cleaned tags.
             var t = f.CleanedTags ?? new TagSet();
             var ai = f.AiSuggestion;
+            var ext = Best(f) is { } m ? MusicManager.Core.Services.ExternalSourceService.ToTagSet(m) : null;
             return new Row
             {
                 File = f,
-                Track = t.TrackNumber,
-                Artist = ai?.Artist ?? t.Artist,
-                Title = ai?.Title ?? t.Title,
+                Track = ext?.TrackNumber ?? t.TrackNumber,
+                Artist = ext?.Artist ?? ai?.Artist ?? t.Artist,
+                Title = ext?.Title ?? ai?.Title ?? t.Title,
             };
         }).ToList();
 
         var first = files.FirstOrDefault();
-        _album = MostCommon(files.Select(f => f.AiSuggestion?.Album ?? f.CleanedTags?.Album));
-        _albumArtist = MostCommon(files.Select(f => f.CleanedTags?.AlbumArtist));
-        _date = MostCommon(files.Select(f => f.CleanedTags?.Date));
+        _album = MostCommon(files.Select(f => Best(f)?.Album ?? f.AiSuggestion?.Album ?? f.CleanedTags?.Album));
+        _albumArtist = MostCommon(files.Select(f => Best(f) is { AlbumArtists.Count: > 0 } m ? string.Join(" & ", m.AlbumArtists) : f.CleanedTags?.AlbumArtist));
+        _date = MostCommon(files.Select(f => Best(f)?.ReleaseDate ?? f.CleanedTags?.Date));
         _genres = first?.CleanedTags?.Genres is { Count: > 0 } g ? string.Join(", ", g) : null;
     }
+
+    private static ExternalMatch? Best(TrackFile f) => f.ExternalMatches.OrderByDescending(m => m.Score).FirstOrDefault();
 
     private static string? MostCommon(IEnumerable<string?> values) =>
         values.Where(v => !string.IsNullOrWhiteSpace(v)).GroupBy(v => v).OrderByDescending(g => g.Count()).Select(g => g.Key).FirstOrDefault();

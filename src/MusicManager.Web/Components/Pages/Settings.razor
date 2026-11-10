@@ -74,6 +74,18 @@
         </MudGrid>
     </MudExpansionPanel>
 
+    <MudExpansionPanel Text="Fremdquellen (Titel ohne MusicBrainz)">
+        @if (string.IsNullOrWhiteSpace(Options.Value.SpotifyClientId) || string.IsNullOrWhiteSpace(Options.Value.SpotifyClientSecret))
+        {
+            <MudAlert Severity="Severity.Info" Dense="true" Class="mb-2">Spotify ist nicht eingerichtet (MusicManager__SpotifyClientId und MusicManager__SpotifyClientSecret). Deezer braucht keinen Key.</MudAlert>
+        }
+        <MudGrid>
+            <MudItem xs="12" md="4"><MudSwitch @bind-Value="_s.SpotifyEnabled" Color="Color.Primary" Label="Spotify durchsuchen" /></MudItem>
+            <MudItem xs="12" md="4"><MudSwitch @bind-Value="_s.DeezerEnabled" Color="Color.Primary" Label="Deezer durchsuchen" /></MudItem>
+            <MudItem xs="6" md="4"><MudNumericField @bind-Value="_s.ExternalMinScore" Label="Mindest-Übereinstimmung (0–1)" Variant="Variant.Outlined" Step="0.05" Min="0" Max="1" /></MudItem>
+        </MudGrid>
+    </MudExpansionPanel>
+
     <MudExpansionPanel Text="KI (Claude)">
         @if (string.IsNullOrWhiteSpace(Options.Value.AnthropicApiKey))
         {
