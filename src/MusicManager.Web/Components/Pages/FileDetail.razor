@@ -14,7 +14,7 @@
     return;
 }
 
-<PageHeader Title="@_file.FileName" UseHistory="true">
+<PageHeader Title="@TrackSummary.TitleOf(_file)" UseHistory="true">
     <Badges>
     <StatusChip Status="_file.Status" />
     <DecisionChip Decision="_file.Decision" />
@@ -37,7 +37,9 @@
     </Actions>
 </PageHeader>
 
-<MudText Typo="Typo.body2" Class="mb-1 mono">@_file.RelativePath</MudText>
+<MudPaper Outlined="true" Class="pa-3 mb-3">
+    <TrackSummary File="_file" Large="true" ShowTitle="false" />
+</MudPaper>
 @if (_file.StatusReason != null)
 {
     <MudAlert Severity="@(_file.Status == FileStatus.Error ? Severity.Error : Severity.Info)" Dense="true" Class="mb-2">@_file.StatusReason</MudAlert>

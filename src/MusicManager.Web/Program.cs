@@ -39,6 +39,39 @@ app.UseAntiforgery();
 
 app.MapGet("/healthz", () => Results.Ok("ok"));
 
+// Cover of a file: embedded picture of the filed file, otherwise of the original in the inbox.
+app.MapGet("/api/files/{id:int}/cover", async (int id, Microsoft.EntityFrameworkCore.IDbContextFactory<MusicManager.Core.Data.AppDbContext> dbFactory, Storage storage, HttpContext http) =>
+{
+    await using var db = await dbFactory.CreateDbContextAsync();
+    var file = await db.Files.FindAsync(id);
+    byte[]? data = null;
+    if (file != null)
+    {
+        var paths = new[]
+        {
+            file.TargetPath != null && file.Status == MusicManager.Core.Data.FileStatus.Done ? storage.LibraryPath(file.TargetPath) : null,
+            file.ManualCoverFile,
+            storage.InboxPath(file.RelativePath),
+            file.TrashPath,
+        };
+        foreach (var p in paths.Where(p => p != null && File.Exists(p)))
+        {
+            data = p == file.ManualCoverFile ? await File.ReadAllBytesAsync(p!) : MusicManager.Core.Services.TagIo.ReadEmbeddedCover(p!);
+            if (data != null) break;
+        }
+    }
+
+    http.Response.Headers.CacheControl = "private, max-age=300";
+    if (data == null)
+    {
+        const string placeholder = "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\"><rect width=\"24\" height=\"24\" fill=\"#9e9e9e33\"/><path fill=\"#9e9e9e\" d=\"M12 3v10.55A4 4 0 1 0 14 17V7h4V3z\"/></svg>";
+        return Results.Content(placeholder, "image/svg+xml");
+    }
+
+    var mime = data.Length > 3 && data[0] == 0x89 && data[1] == 0x50 ? "image/png" : "image/jpeg";
+    return Results.File(data, mime);
+});
+
 // Processing state, e.g. for scripts: pending = files still waiting to be processed or written.
 app.MapGet("/api/status", async (Microsoft.EntityFrameworkCore.IDbContextFactory<MusicManager.Core.Data.AppDbContext> dbFactory, WorkQueue queue, PipelineNotifier notifier) =>
 {

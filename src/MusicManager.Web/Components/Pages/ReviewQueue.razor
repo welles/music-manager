@@ -28,10 +28,9 @@
                 <MudText Typo="Typo.subtitle2">@(string.IsNullOrEmpty(context.Grouping.Key?.ToString()) ? "Eingang (lose Dateien)" : context.Grouping.Key) (@context.Grouping.Count())</MudText>
             </GroupTemplate>
         </PropertyColumn>
-        <TemplateColumn Title="Datei" SortBy="x => x.FileName">
+        <TemplateColumn Title="Titel" SortBy="x => TrackSummary.TitleOf(x)">
             <CellTemplate>
-                <MudLink Href="@($"datei/{context.Item.Id}")">@context.Item.FileName</MudLink>
-                <MudText Typo="Typo.caption" Class="d-block">@Describe(context.Item.CleanedTags)</MudText>
+                <TrackSummary File="context.Item" Href="@($"datei/{context.Item.Id}")" />
             </CellTemplate>
         </TemplateColumn>
         <PropertyColumn Property="x => x.Status" Title="Status">

@@ -1,0 +1,41 @@
+@* Metadata first: cover, title, artist, album – the file path only as a small secondary line. *@
+
+<div class="d-flex align-center" style="gap:12px;min-width:0">
+    <MudImage Src="@CoverUrl" Width="@Size" Height="@Size" ObjectFit="ObjectFit.Cover" Class="rounded flex-shrink-0" Alt="Cover" />
+    <div style="min-width:0">
+        @if (ShowTitle && Href != null)
+        {
+            <MudLink Href="@Href" Typo="@(Large ? Typo.h5 : Typo.subtitle2)" Style="overflow-wrap:anywhere">@Title</MudLink>
+        }
+        else if (ShowTitle)
+        {
+            <MudText Typo="@(Large ? Typo.h5 : Typo.subtitle2)" Style="overflow-wrap:anywhere">@Title</MudText>
+        }
+        <MudText Typo="@(Large ? Typo.subtitle1 : Typo.body2)">@Tags?.Artist</MudText>
+        @if (!string.IsNullOrWhiteSpace(AlbumLine))
+        {
+            <MudText Typo="Typo.body2" Style="opacity:.75">@AlbumLine</MudText>
+        }
+        <MudText Typo="Typo.caption" Class="mono" Style="opacity:.55;overflow-wrap:anywhere">@File.RelativePath</MudText>
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public TrackFile File { get; set; } = null!;
+    [Parameter] public string? Href { get; set; }
+    [Parameter] public bool Large { get; set; }
+    [Parameter] public bool ShowTitle { get; set; } = true;
+
+    /// <summary>Final tags if available, otherwise the cleaned tags of the original.</summary>
+    private TagSet? Tags => File.FinalTags ?? File.CleanedTags ?? File.OriginalTags;
+
+    public static string TitleOf(TrackFile f) => (f.FinalTags ?? f.CleanedTags ?? f.OriginalTags)?.Title ?? f.FileName;
+
+    private string Title => Tags?.Title ?? File.FileName;
+
+    private string? AlbumLine => string.Join(" · ", new[] { Tags?.Album, Tags?.Year?.ToString() }.Where(x => !string.IsNullOrWhiteSpace(x)));
+
+    private int Size => Large ? 140 : 48;
+
+    private string CoverUrl => $"api/files/{File.Id}/cover?v={File.UpdatedAt.UtcTicks}";
+}

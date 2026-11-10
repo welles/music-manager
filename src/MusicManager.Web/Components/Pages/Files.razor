@@ -14,7 +14,9 @@
                       AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Medium" Class="mt-0" Clearable="true" />
     </ToolBarContent>
     <Columns>
-        <PropertyColumn Property="x => x.RelativePath" Title="Datei" />
+        <TemplateColumn Title="Titel" SortBy="x => TrackSummary.TitleOf(x)">
+            <CellTemplate><TrackSummary File="context.Item" /></CellTemplate>
+        </TemplateColumn>
         <PropertyColumn Property="x => x.Status" Title="Status">
             <CellTemplate><StatusChip Status="context.Item.Status" /></CellTemplate>
         </PropertyColumn>
