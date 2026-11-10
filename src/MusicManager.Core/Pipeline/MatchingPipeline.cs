@@ -416,9 +416,37 @@ public sealed partial class MatchingPipeline(
         file.FinalTags = TagBuilder.Build(release, candidate.RecordingId, artists, settings, rules);
         file.FinalTags = TaggingRules.AddFeaturesFromOriginalTitle(file.FinalTags, file.CleanedTags?.Title, rules);
         file.FinalTags.AcoustId = file.AcoustId;
+        await TranslateForeignTitlesAsync(file, settings, ct);
         file.TargetPath = PathBuilder.Build(file.FinalTags);
         file.ManuallyTagged = false;
         AddEvent(file, $"Release gewählt: {release.Title} ({release.Date}, {release.Country}) → {file.TargetPath}");
+    }
+
+    /// <summary>Title and album in non-Latin script become "English (Original)" (translated by Claude).</summary>
+    private async Task TranslateForeignTitlesAsync(TrackFile file, AppSettings settings, CancellationToken ct)
+    {
+        var t = file.FinalTags;
+        if (t == null || !settings.TranslateForeignTitles) return;
+
+        var texts = new[] { t.Title, t.Album }.Where(ForeignTitles.NeedsTranslation).Distinct().Cast<string>().ToList();
+        if (texts.Count == 0) return;
+        if (!ai.IsConfigured)
+        {
+            AddEvent(file, "Nicht-lateinischer Titel – Übersetzung braucht einen Anthropic-API-Key", EventLevel.Warning);
+            return;
+        }
+
+        try
+        {
+            var translations = await ai.TranslateAsync(texts, t.Artist, settings, ct);
+            if (ForeignTitles.NeedsTranslation(t.Title)) t.Title = ForeignTitles.Combine(t.Title!, translations.GetValueOrDefault(t.Title!));
+            if (ForeignTitles.NeedsTranslation(t.Album)) t.Album = ForeignTitles.Combine(t.Album!, translations.GetValueOrDefault(t.Album!));
+            AddEvent(file, $"Übersetzt: {string.Join(", ", texts.Select(x => $"\"{x}\" → \"{translations.GetValueOrDefault(x)}\""))}");
+        }
+        catch (Exception ex) when (!ct.IsCancellationRequested)
+        {
+            AddEvent(file, $"Übersetzung fehlgeschlagen: {ex.Message}", EventLevel.Warning);
+        }
     }
 
     /// <summary>Applies the rules to manually entered tags (fallback for files not in MusicBrainz).</summary>
@@ -428,6 +456,7 @@ public sealed partial class MatchingPipeline(
         var rules = await settingsService.GetArtistRulesAsync(ct);
         file.FinalTags = TaggingRules.Apply(manual, rules, settings.ConvertPunctuation);
         file.FinalTags.AcoustId = file.AcoustId;
+        await TranslateForeignTitlesAsync(file, settings, ct);
         file.TargetPath = PathBuilder.Build(file.FinalTags);
         file.ManuallyTagged = true;
         file.Decision = DecisionSource.ManualTags;

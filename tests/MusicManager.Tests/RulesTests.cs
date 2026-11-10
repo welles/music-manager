@@ -174,3 +174,29 @@ public class MatchingFixTests
         Assert.True(result.IsCertain, result.Reason);
     }
 }
+
+public class ForeignTitleTests
+{
+    [Theory]
+    [InlineData("リトルワールド", true)]
+    [InlineData("Little World (リトルワールド)", false)]
+    [InlineData("Сплин", true)]
+    [InlineData("Ágætis byrjun", false)]
+    [InlineData("Song (Remix)", false)]
+    [InlineData("リトルワールド (Remix)", true)]
+    public void DetectsTitlesThatNeedTranslation(string title, bool expected) =>
+        Assert.Equal(expected, ForeignTitles.NeedsTranslation(title));
+
+    [Fact]
+    public void CombinesTranslationAndOriginal() =>
+        Assert.Equal("Little World (リトルワールド)", ForeignTitles.Combine("リトルワールド", "Little World"));
+
+    [Fact]
+    public void FileNameDropsNonLatinBracketPart() =>
+        Assert.Equal(Path.Combine("PompadollS", "Little World", "PompadollS - Little World.m4a"),
+            PathBuilder.Build(new TagSet { AlbumArtist = "PompadollS", Album = "Little World (リトルワールド)", Title = "Little World (リトルワールド)" }));
+
+    [Fact]
+    public void FileNameKeepsUntranslatedTitleAsFallback() =>
+        Assert.Equal("_______", PathBuilder.SanitizeComponent("リトルワールド"));
+}

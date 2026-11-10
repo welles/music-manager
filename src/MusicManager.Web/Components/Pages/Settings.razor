@@ -82,6 +82,7 @@
         <MudGrid>
             <MudItem xs="12" md="4"><MudSwitch @bind-Value="_s.AiDecisionEnabled" Color="Color.Primary" Label="Unsichere Fälle zuerst an die KI" /></MudItem>
             <MudItem xs="12" md="4"><MudSwitch @bind-Value="_s.AiSuggestForUnknown" Color="Color.Primary" Label="Vorschläge für Titel ohne MusicBrainz" /></MudItem>
+            <MudItem xs="12" md="4"><MudSwitch @bind-Value="_s.TranslateForeignTitles" Color="Color.Primary" Label="Nicht-lateinische Titel übersetzen: „English (Original)“" /></MudItem>
             <MudItem xs="12" md="4">
                 <MudSelect @bind-Value="_s.AiCleanupMode" Label="Tag-Bereinigung per KI" Variant="Variant.Outlined">
                     <MudSelectItem Value="AiCleanupMode.Off">Aus</MudSelectItem>

@@ -91,6 +91,9 @@ public sealed class AppSettings
     public AiCleanupMode AiCleanupMode { get; set; } = AiCleanupMode.WhenMessy;
     public bool AiSuggestForUnknown { get; set; } = true;
 
+    /// <summary>Titles/albums in non-Latin script become "English translation (Original)".</summary>
+    public bool TranslateForeignTitles { get; set; } = true;
+
     /// <summary>AI decisions below this confidence go to manual review.</summary>
     public double AiMinConfidence { get; set; } = 0.8;
 

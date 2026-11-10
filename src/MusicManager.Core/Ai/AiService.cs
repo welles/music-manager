@@ -178,6 +178,74 @@ public sealed class AiService(IOptions<MusicManagerOptions> options, ILogger<AiS
         };
     }
 
+    // --- Title translation -----------------------------------------------------------------
+
+    private const string TranslateSystemPrompt = """
+        You translate song and album titles that are written in a non-Latin script (Japanese,
+        Korean, Chinese, Cyrillic, Greek, Arabic, …) into English for a music library.
+        - Give the natural English title a listener would expect, not a literal word-by-word gloss.
+        - Katakana or other transliterated English loanwords become the English words
+          (e.g. "リトルワールド" → "Little World").
+        - Proper names stay names in their usual Latin spelling (romanization).
+        - Keep the original capitalization style in English title case, no quotes, no explanations.
+        Return one entry per input title, with "original" exactly as given.
+        """;
+
+    private static readonly Dictionary<string, JsonElement> TranslateSchema = Schema(new
+    {
+        type = "object",
+        properties = new
+        {
+            translations = new
+            {
+                type = "array",
+                items = new
+                {
+                    type = "object",
+                    properties = new { original = new { type = "string" }, english = new { type = "string" } },
+                    required = new[] { "original", "english" },
+                    additionalProperties = false,
+                },
+            },
+        },
+        required = new[] { "translations" },
+        additionalProperties = false,
+    });
+
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, string> _translationCache = new();
+
+    /// <summary>Translates titles into English; results are cached (an album is translated once).</summary>
+    public async Task<Dictionary<string, string>> TranslateAsync(IReadOnlyList<string> texts, string? artist, AppSettings settings,
+        CancellationToken ct)
+    {
+        var result = new Dictionary<string, string>();
+        var missing = new List<string>();
+        foreach (var text in texts)
+        {
+            if (_translationCache.TryGetValue(text, out var cached)) result[text] = cached;
+            else missing.Add(text);
+        }
+
+        if (missing.Count == 0) return result;
+
+        var json = await AskAsync(TranslateSystemPrompt, JsonSerializer.Serialize(new { artist, titles = missing }, JsonOptions),
+            TranslateSchema, settings, ct);
+        if (json == null) return result;
+
+        var response = JsonSerializer.Deserialize<TranslateResponse>(json, JsonOptions)!;
+        foreach (var t in response.Translations.Where(t => missing.Contains(t.Original) && !string.IsNullOrWhiteSpace(t.English)))
+        {
+            _translationCache[t.Original] = t.English.Trim();
+            result[t.Original] = t.English.Trim();
+        }
+
+        return result;
+    }
+
+    private sealed record TranslateResponse(List<TranslationItem> Translations);
+
+    private sealed record TranslationItem(string Original, string English);
+
     // --- Shared ----------------------------------------------------------------------------
 
     private async Task<string?> AskAsync(string system, string userJson, Dictionary<string, JsonElement> schema, AppSettings settings,

@@ -35,6 +35,12 @@ public static class PathBuilder
     /// <summary>ASCII only, Windows compatible, slashes in values replaced by "_".</summary>
     public static string SanitizeComponent(string value)
     {
+        // "Little World (リトルワールド)" → "Little World": bracket parts without any Latin letters
+        // would only become underscores in an ASCII file name.
+        var withoutForeign = System.Text.RegularExpressions.Regex.Replace(value, @"\s*[\(\[]([^\)\]]*)[\)\]]",
+            m => ForeignTitles.HasNonLatinLetters(m.Value) && !ForeignTitles.HasLatinLetters(m.Groups[1].Value) ? "" : m.Value).Trim();
+        if (withoutForeign.Length > 0) value = withoutForeign;
+
         var s = TextUtil.ToAscii(value);
         var sb = new StringBuilder(s.Length);
         foreach (var ch in s)
