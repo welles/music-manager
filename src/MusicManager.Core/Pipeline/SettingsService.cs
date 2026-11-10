@@ -18,7 +18,7 @@ public sealed class SettingsService(IDbContextFactory<AppDbContext> dbFactory)
     {
         if (_settings != null) return _settings;
         await using var db = await dbFactory.CreateDbContextAsync(ct);
-        var row = await db.Settings.FirstOrDefaultAsync(ct);
+        var row = await db.Settings.OrderBy(s => s.Id).FirstOrDefaultAsync(ct);
         _settings = row == null ? new AppSettings() : JsonSerializer.Deserialize<AppSettings>(row.Json, JsonOptions) ?? new AppSettings();
         return _settings;
     }
@@ -30,7 +30,7 @@ public sealed class SettingsService(IDbContextFactory<AppDbContext> dbFactory)
     public async Task SaveAsync(AppSettings settings, CancellationToken ct = default)
     {
         await using var db = await dbFactory.CreateDbContextAsync(ct);
-        var row = await db.Settings.FirstOrDefaultAsync(ct);
+        var row = await db.Settings.OrderBy(s => s.Id).FirstOrDefaultAsync(ct);
         var json = JsonSerializer.Serialize(settings, JsonOptions);
         if (row == null)
             db.Settings.Add(new SettingsEntry { Json = json });
