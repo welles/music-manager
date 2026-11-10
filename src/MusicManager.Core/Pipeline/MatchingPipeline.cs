@@ -309,10 +309,19 @@ public sealed partial class MatchingPipeline(
             return null;
         }
 
-        var result = await acoustId.LookupAsync(fp, ct);
-        if (result.Tracks.Count == 0)
-            AddEvent(file, "AcoustID: Fingerabdruck unbekannt");
-        return result;
+        try
+        {
+            var result = await acoustId.LookupAsync(fp, ct);
+            if (result.Tracks.Count == 0)
+                AddEvent(file, "AcoustID: Fingerabdruck unbekannt");
+            return result;
+        }
+        catch (Exception ex) when (!ct.IsCancellationRequested)
+        {
+            // AcoustID problems (invalid key, outage) must not stop the file – fall back to text search.
+            AddEvent(file, $"AcoustID-Abfrage fehlgeschlagen, weiter mit Textsuche: {ex.Message}", EventLevel.Warning);
+            return null;
+        }
     }
 
     private static RecordingMatch WithReleases(RecordingMatch r, List<ReleaseAppearance> releases) => new()
