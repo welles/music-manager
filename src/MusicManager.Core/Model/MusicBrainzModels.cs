@@ -101,6 +101,9 @@ public sealed class TrackDetail
     public double? LengthSeconds { get; init; }
     public List<CreditPart> Credits { get; init; } = [];
     public List<string> Isrcs { get; init; } = [];
+
+    /// <summary>Remixers from the recording's "remixer" relationships.</summary>
+    public List<CreditPart> Remixers { get; init; } = [];
 }
 
 /// <summary>Artist data needed for name translation and genres.</summary>
