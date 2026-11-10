@@ -10,6 +10,7 @@
         FileStatus.Processing => "In Bearbeitung",
         FileStatus.NeedsReview => "Prüfen",
         FileStatus.NotInMusicBrainz => "Nicht in MusicBrainz",
+        FileStatus.Duplicate => "Mögliches Duplikat",
         FileStatus.Approved => "Wird geschrieben",
         FileStatus.Done => "Einsortiert",
         FileStatus.Error => "Fehler",
@@ -23,7 +24,7 @@
     {
         FileStatus.Done => Color.Success,
         FileStatus.Error => Color.Error,
-        FileStatus.NeedsReview or FileStatus.NotInMusicBrainz => Color.Warning,
+        FileStatus.NeedsReview or FileStatus.NotInMusicBrainz or FileStatus.Duplicate => Color.Warning,
         FileStatus.Processing or FileStatus.Approved => Color.Info,
         _ => Color.Default,
     };
@@ -34,6 +35,7 @@
         FileStatus.Error => Icons.Material.Filled.Error,
         FileStatus.NeedsReview => Icons.Material.Filled.HelpOutline,
         FileStatus.NotInMusicBrainz => Icons.Material.Filled.SearchOff,
+        FileStatus.Duplicate => Icons.Material.Filled.ContentCopy,
         FileStatus.Processing or FileStatus.Approved => Icons.Material.Filled.Autorenew,
         FileStatus.Discarded => Icons.Material.Filled.Delete,
         _ => Icons.Material.Filled.Schedule,

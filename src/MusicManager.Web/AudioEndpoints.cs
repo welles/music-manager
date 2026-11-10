@@ -39,6 +39,17 @@ public static class AudioEndpoints
             return path == null || !File.Exists(path) ? Results.NotFound() : await Serve(path, audio, ct);
         });
 
+        // Cover of a library file.
+        app.MapGet("/api/library/{id:int}/cover", async (int id, IDbContextFactory<AppDbContext> dbFactory, Storage storage, CancellationToken ct) =>
+        {
+            await using var db = await dbFactory.CreateDbContextAsync(ct);
+            var entry = await db.Library.FindAsync([id], ct);
+            var path = entry == null ? null : storage.LibraryPath(entry.RelativePath);
+            var data = path != null && File.Exists(path) ? TagIo.ReadEmbeddedCover(path) : null;
+            if (data == null) return Results.NotFound();
+            return Results.File(data, data.Length > 3 && data[0] == 0x89 ? "image/png" : "image/jpeg");
+        });
+
         // Loudness of both versions (LUFS) for the volume match.
         app.MapGet("/api/audio/loudness", async (int file, int entry, IDbContextFactory<AppDbContext> dbFactory, Storage storage, AudioTools audio,
             CancellationToken ct) =>

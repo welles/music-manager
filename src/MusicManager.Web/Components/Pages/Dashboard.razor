@@ -3,6 +3,7 @@
 @inject IDbContextFactory<AppDbContext> DbFactory
 @inject InboxScanner Scanner
 @inject WorkQueue Queue
+@inject LibraryIndexer LibraryIndexer
 @inject ISnackbar Snackbar
 @inject Microsoft.Extensions.Options.IOptions<MusicManagerOptions> Options
 
@@ -36,6 +37,10 @@
 
 <MudText Typo="Typo.body2" Class="mb-2">
     Warteschlange: @Queue.Count Aufträge · Letzter Scan: @(Scanner.LastScan?.ToLocalTime().ToString("HH:mm:ss") ?? "–")
+    @if (_library is { } lib)
+    {
+        <span> · Bibliothek: @lib.Files Dateien, @lib.Fingerprinted mit Fingerabdruck@(lib.FingerprintPending > 0 ? $" ({lib.FingerprintPending} ausstehend)" : "")</span>
+    }
 </MudText>
 
 <MudTable Items="_recent" Dense="true" Hover="true" Outlined="true" OnRowClick="@((TableRowClickEventArgs<TrackFile> e) => Nav.NavigateTo($"datei/{e.Item!.Id}"))" T="TrackFile">
@@ -61,6 +66,7 @@
     private Dictionary<FileStatus, int> _counts = [];
     private List<TrackFile> _recent = [];
     private List<string> _warnings = [];
+    private LibraryIndexStatus? _library;
 
     private static readonly (string, FileStatus[], Color, string)[] Tiles =
     [
@@ -68,6 +74,7 @@
         ("In Bearbeitung", [FileStatus.Processing, FileStatus.Approved], Color.Info, "dateien"),
         ("Zu prüfen", [FileStatus.NeedsReview], Color.Warning, "pruefung"),
         ("Nicht in MusicBrainz", [FileStatus.NotInMusicBrainz], Color.Warning, "pruefung"),
+        ("Duplikate", [FileStatus.Duplicate], Color.Warning, "duplikate"),
         ("Fehler", [FileStatus.Error], Color.Error, "pruefung"),
         ("Einsortiert", [FileStatus.Done], Color.Success, "dateien"),
     ];
@@ -80,6 +87,8 @@
         _counts = await db.Files.GroupBy(f => f.Status).Select(g => new { g.Key, Count = g.Count() })
             .ToDictionaryAsync(x => x.Key, x => x.Count);
         _recent = await db.Files.AsNoTracking().OrderByDescending(f => f.UpdatedAt).Take(20).ToListAsync();
+
+        _library = await LibraryIndexer.GetStatusAsync();
 
         var o = Options.Value;
         _warnings = [];

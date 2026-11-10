@@ -1,0 +1,352 @@
+@page "/duplikate"
+@inherits LivePage
+@using MusicManager.Core.Services
+@inject IDbContextFactory<AppDbContext> DbFactory
+@inject ReviewService Review
+@inject AudioTools Audio
+@inject Storage Storage
+@inject IJSRuntime Js
+@inject ISnackbar Snackbar
+@inject IDialogService Dialogs
+
+<PageTitle>Duplikate – Music Manager</PageTitle>
+
+<PageHeader Title="Duplikate" />
+
+@if (_files.Count == 0)
+{
+    <MudAlert Severity="Severity.Success" Variant="Variant.Outlined">Keine möglichen Duplikate offen.</MudAlert>
+    return;
+}
+
+<MudGrid>
+    <MudItem xs="12" md="4">
+        <MudPaper Outlined="true">
+            <MudList T="int" SelectedValue="_selectedId" SelectedValueChanged="Select" Dense="true">
+                @foreach (var f in _files)
+                {
+                    <MudListItem T="int" Value="f.Id">
+                        <TrackSummary File="f" />
+                    </MudListItem>
+                }
+            </MudList>
+        </MudPaper>
+    </MudItem>
+
+    <MudItem xs="12" md="8">
+        @if (_file != null && _match != null)
+        {
+            var t = _file.FinalTags ?? new TagSet();
+
+            @if (DuplicateMatches.Count > 1)
+            {
+                <MudChipSet T="int" SelectedValue="_match.LibraryEntryId" SelectedValueChanged="SelectMatch" SelectionMode="SelectionMode.SingleSelection" Class="mb-2">
+                    @foreach (var m in DuplicateMatches)
+                    {
+                        <MudChip T="int" Value="m.LibraryEntryId" Text="@m.RelativePath" />
+                    }
+                </MudChipSet>
+            }
+
+            <MudAlert Severity="Severity.Warning" Dense="true" Class="mb-3">@_match.Reason</MudAlert>
+
+            <MudSimpleTable Dense="true" Bordered="true" Class="mb-3">
+                <thead>
+                    <tr><th></th><th>Neu (Eingang)</th><th>Vorhanden (Bibliothek)</th></tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td></td>
+                        <td><MudImage Src="@($"api/files/{_file.Id}/cover?which=original")" Width="140" Height="140" ObjectFit="ObjectFit.Cover" Class="rounded" /></td>
+                        <td><MudImage Src="@($"api/library/{_match.LibraryEntryId}/cover")" Width="140" Height="140" ObjectFit="ObjectFit.Cover" Class="rounded" /></td>
+                    </tr>
+                    @Row("Titel", t.Title, _match.Title)
+                    @Row("Künstler", t.Artist, _match.Artist)
+                    @Row("Album", t.Album, _match.Album)
+                    @Row("Datum", t.Date, _match.Date)
+                    @Row("Format", _file.Codec, _match.Codec)
+                    @Row("Bitrate", Kbps(_file.BitrateKbps), Kbps(_match.BitrateKbps), Better(_file.BitrateKbps, _match.BitrateKbps))
+                    @Row("Dauer", Length(_file.DurationSeconds), Length(_match.DurationSeconds))
+                    @Row("Dateigröße", Mb(_file.FileSize), Mb(_match.FileSize))
+                    @Row("Quelle", Source(_file), _match.TagSource ?? "nicht von diesem Tool")
+                    <tr>
+                        <td>Release</td>
+                        <td>@ReleaseLink(t.MbReleaseId)</td>
+                        <td>@ReleaseLink(_match.MbReleaseId)</td>
+                    </tr>
+                    <tr>
+                        <td>Pfad</td>
+                        <td class="mono" style="opacity:.7">@_file.RelativePath<br />→ @_file.TargetPath</td>
+                        <td class="mono" style="opacity:.7">@_match.RelativePath</td>
+                    </tr>
+                </tbody>
+            </MudSimpleTable>
+
+            <MudPaper Outlined="true" Class="pa-3 mb-3">
+                <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap">
+                    <MudIconButton Icon="@(_state.Playing ? Icons.Material.Filled.Pause : Icons.Material.Filled.PlayArrow)" Color="Color.Primary"
+                                   Variant="Variant.Filled" OnClick="PlayPause" aria-label="Abspielen/Pause" />
+                    <MudToggleGroup T="string" Value="_state.Active" ValueChanged="Toggle" SelectionMode="SelectionMode.SingleSelection" Color="Color.Primary">
+                        <MudToggleItem Value="@("a")" Text="A · Neu" />
+                        <MudToggleItem Value="@("b")" Text="B · Vorhanden" />
+                    </MudToggleGroup>
+                    <MudText Typo="Typo.body2" Class="mono">@Length(_state.Time) / @Length(_state.Duration)</MudText>
+                    <MudSpacer />
+                    <MudSwitch T="bool" Value="_matchLoudness" ValueChanged="SetMatchLoudness" Color="Color.Primary" Label="Lautstärke angleichen" />
+                </MudStack>
+                <MudSlider T="double" Value="_state.Time" ValueChanged="Seek" Min="0" Max="@Math.Max(1, _state.Duration)" Step="0.5" Immediate="false" />
+                <MudText Typo="Typo.caption" Style="opacity:.7">
+                    Beim Umschalten spielt die andere Version an derselben Stelle weiter.
+                    @if (_loudnessBusy)
+                    {
+                        <span> Lautheit wird gemessen …</span>
+                    }
+                    else if (_loudness is { } l)
+                    {
+                        <span> Lautheit: neu @Lufs(l.New), vorhanden @Lufs(l.Existing).</span>
+                    }
+                </MudText>
+            </MudPaper>
+
+            <MudStack Row="true" Wrap="Wrap.Wrap" Spacing="2" Class="mb-3">
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.SwapHoriz" OnClick="KeepNew" Disabled="_busy">
+                    Neue behalten (ersetzt vorhandene)
+                </MudButton>
+                <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Inventory2" OnClick="KeepExisting" Disabled="_busy">
+                    Vorhandene behalten
+                </MudButton>
+                <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.LibraryAdd" OnClick="KeepBoth" Disabled="_busy">
+                    Beide behalten
+                </MudButton>
+            </MudStack>
+            <MudText Typo="Typo.caption" Style="opacity:.7">
+                Ersetzte oder verworfene Dateien landen im Papierkorb. „Neue behalten“ übernimmt den Pfad der vorhandenen Datei,
+                damit Navidrome Wiedergabezähler, Favoriten und Playlists möglichst behält.
+            </MudText>
+
+            @if (_file.Duplicates.Any(d => d.Kind == DuplicateKind.OtherVersion))
+            {
+                <MudText Typo="Typo.subtitle2" Class="mt-4">Mögliche andere Versionen (kein Duplikat)</MudText>
+                @foreach (var o in _file.Duplicates.Where(d => d.Kind == DuplicateKind.OtherVersion))
+                {
+                    <MudText Typo="Typo.body2">@o.Artist – @o.Title (@o.Album) <span class="mono" style="opacity:.6">@o.RelativePath</span></MudText>
+                }
+            }
+        }
+    </MudItem>
+</MudGrid>
+
+@code {
+    private sealed record PlayerState(double Time, double Duration, bool Playing, string Active);
+
+    private List<TrackFile> _files = [];
+    private int _selectedId;
+    private TrackFile? _file;
+    private DuplicateMatch? _match;
+    private PlayerState _state = new(0, 0, false, "a");
+    private System.Threading.Timer? _timer;
+    private bool _busy, _matchLoudness, _loudnessBusy;
+    private (double? New, double? Existing)? _loudness;
+
+    private List<DuplicateMatch> DuplicateMatches => _file?.Duplicates.Where(d => d.Kind == DuplicateKind.Duplicate).ToList() ?? [];
+
+    protected override async Task ReloadAsync()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        _files = await db.Files.AsNoTracking().Where(f => f.Status == FileStatus.Duplicate).OrderBy(f => f.RelativePath).ToListAsync();
+        if (_files.All(f => f.Id != _selectedId))
+        {
+            _selectedId = _files.FirstOrDefault()?.Id ?? 0;
+            _file = null;
+        }
+
+        var selected = _files.FirstOrDefault(f => f.Id == _selectedId);
+        if (selected != null && (_file == null || _file.Id != selected.Id))
+        {
+            _file = selected;
+            _match = DuplicateMatches.FirstOrDefault();
+            _playerReady = false;
+        }
+        else if (selected != null)
+        {
+            _file = selected;
+        }
+    }
+
+    private bool _playerReady;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        await base.OnAfterRenderAsync(firstRender);
+        if (firstRender)
+            _timer = new System.Threading.Timer(_ => InvokeAsync(PollAsync), null, 300, 300);
+        if (!_playerReady && _file != null && _match != null)
+        {
+            _playerReady = true;
+            await Js.InvokeVoidAsync("abPlayer.init", $"api/audio/file/{_file.Id}", $"api/audio/library/{_match.LibraryEntryId}");
+            _state = new PlayerState(0, 0, false, "a");
+            _loudness = null;
+            if (_matchLoudness) _ = MeasureLoudnessAsync();
+        }
+    }
+
+    private async Task PollAsync()
+    {
+        try
+        {
+            var s = await Js.InvokeAsync<PlayerState>("abPlayer.state");
+            if (s != _state)
+            {
+                _state = s;
+                StateHasChanged();
+            }
+        }
+        catch
+        {
+            // Circuit gone or page not interactive yet.
+        }
+    }
+
+    private Task Select(int id)
+    {
+        _selectedId = id;
+        _file = _files.FirstOrDefault(f => f.Id == id);
+        _match = DuplicateMatches.FirstOrDefault();
+        _playerReady = false;
+        return Task.CompletedTask;
+    }
+
+    private Task SelectMatch(int entryId)
+    {
+        _match = DuplicateMatches.FirstOrDefault(m => m.LibraryEntryId == entryId) ?? _match;
+        _playerReady = false;
+        return Task.CompletedTask;
+    }
+
+    private async Task PlayPause() => await Js.InvokeVoidAsync("abPlayer.playPause");
+
+    private async Task Toggle(string target) => await Js.InvokeVoidAsync("abPlayer.toggle", target);
+
+    private async Task Seek(double seconds) => await Js.InvokeVoidAsync("abPlayer.seek", seconds);
+
+    private async Task SetMatchLoudness(bool on)
+    {
+        _matchLoudness = on;
+        if (!on)
+        {
+            await Js.InvokeVoidAsync("abPlayer.setVolumes", 1.0, 1.0);
+            return;
+        }
+
+        if (_loudness == null) await MeasureLoudnessAsync();
+        else await ApplyVolumesAsync();
+    }
+
+    /// <summary>Measures EBU R128 loudness of both files; the louder one is turned down.</summary>
+    private async Task MeasureLoudnessAsync()
+    {
+        if (_file == null || _match == null) return;
+        _loudnessBusy = true;
+        StateHasChanged();
+        try
+        {
+            var newPath = new[] { Storage.InboxPath(_file.RelativePath), _file.TrashPath }.FirstOrDefault(p => p != null && File.Exists(p));
+            var oldPath = Storage.LibraryPath(_match.RelativePath);
+            var a = newPath == null ? null : await Audio.LoudnessAsync(newPath, CancellationToken.None);
+            var b = File.Exists(oldPath) ? await Audio.LoudnessAsync(oldPath, CancellationToken.None) : null;
+            _loudness = (a, b);
+            await ApplyVolumesAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Lautheit konnte nicht gemessen werden: {ex.Message}", Severity.Warning);
+        }
+        finally
+        {
+            _loudnessBusy = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task ApplyVolumesAsync()
+    {
+        if (_loudness is not { New: { } a, Existing: { } b }) return;
+        // Only attenuation is possible in the browser: the louder version is turned down.
+        var diff = a - b;
+        var va = diff > 0 ? Math.Pow(10, -diff / 20) : 1;
+        var vb = diff < 0 ? Math.Pow(10, diff / 20) : 1;
+        await Js.InvokeVoidAsync("abPlayer.setVolumes", va, vb);
+    }
+
+    private async Task Decide(Func<Task> action, string message)
+    {
+        _busy = true;
+        try
+        {
+            await Js.InvokeVoidAsync("abPlayer.dispose");
+            await action();
+            Snackbar.Add(message, Severity.Success);
+            _playerReady = false;
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Fehler: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task KeepNew()
+    {
+        var ok = await Dialogs.ShowMessageBoxAsync("Neue behalten",
+            $"Die vorhandene Datei {_match!.RelativePath} kommt in den Papierkorb, die neue Datei übernimmt ihren Platz.",
+            yesText: "Ersetzen", cancelText: "Abbrechen");
+        if (ok != true) return;
+        await Decide(() => Review.ResolveDuplicateAsync(_file!.Id, DuplicateDecision.KeepNew, _match.LibraryEntryId), "Neue Version wird einsortiert.");
+    }
+
+    private Task KeepExisting() =>
+        Decide(() => Review.ResolveDuplicateAsync(_file!.Id, DuplicateDecision.KeepExisting), "Vorhandene Version behalten, neue Datei im Papierkorb.");
+
+    private Task KeepBoth() =>
+        Decide(() => Review.ResolveDuplicateAsync(_file!.Id, DuplicateDecision.KeepBoth), "Beide Versionen werden behalten.");
+
+    private RenderFragment Row(string label, string? a, string? b, int better = 0) => __builder =>
+    {
+        var differs = !string.Equals(a, b, StringComparison.OrdinalIgnoreCase);
+        <tr>
+            <td>@label</td>
+            <td style="@(better > 0 ? "color:var(--mud-palette-success)" : differs ? "font-weight:600" : null)">@a</td>
+            <td style="@(better < 0 ? "color:var(--mud-palette-success)" : differs ? "font-weight:600" : null)">@b</td>
+        </tr>
+    };
+
+    private static int Better(int? a, int? b) => a == null || b == null || a == b ? 0 : a > b ? 1 : -1;
+
+    private static RenderFragment ReleaseLink(string? id) => __builder =>
+    {
+        if (id != null)
+        {
+            <MudLink Href="@($"https://musicbrainz.org/release/{id}")" Target="_blank">MusicBrainz</MudLink>
+        }
+        else
+        {
+            <span style="opacity:.6">–</span>
+        }
+    };
+
+    private static string Source(TrackFile f) => f.ExternalSource ?? (f.ManuallyTagged ? "manuell" : "MusicBrainz") + " (neu)";
+    private static string? Kbps(int? v) => v == null ? null : $"{v} kbps";
+    private static string? Mb(long bytes) => bytes <= 0 ? null : $"{bytes / 1024.0 / 1024.0:0.0} MB";
+    private static string Lufs(double? v) => v == null ? "–" : $"{v:0.0} LUFS";
+    private static string Length(double? s) => s is > 0 ? TimeSpan.FromSeconds(s.Value).ToString(s >= 3600 ? @"h\:mm\:ss" : @"m\:ss") : "–";
+
+    public override void Dispose()
+    {
+        _timer?.Dispose();
+        _ = Js.InvokeVoidAsync("abPlayer.dispose").AsTask().ContinueWith(_ => { });
+        base.Dispose();
+    }
+}
