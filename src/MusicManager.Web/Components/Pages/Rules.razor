@@ -1,0 +1,222 @@
+@page "/regeln"
+@using MusicManager.Core.Rules
+@inject IDbContextFactory<AppDbContext> DbFactory
+@inject SettingsService SettingsService
+@inject ISnackbar Snackbar
+
+<PageTitle>Regeln – Music Manager</PageTitle>
+
+<MudText Typo="Typo.h5" Class="mb-4">Regeln</MudText>
+
+<MudTabs Outlined="true" Border="true" TabPanelsClass="pa-4">
+    <MudTabPanel Text="Künstler">
+        <MudText Typo="Typo.body2" Class="mb-2">
+            <b>Aufteilen</b>: MusicBrainz-Künstler, die immer in Einzelkünstler zerlegt werden.
+            <b>Ersetzen</b>: Name eines einzelnen Künstlers vereinheitlichen.
+            <b>Nie aufteilen</b>: Bandnamen mit „&amp;“, „and“ usw., die nicht getrennt werden dürfen.
+        </MudText>
+        <MudDataGrid T="ArtistRule" Items="_artistRules" ReadOnly="false" EditMode="DataGridEditMode.Cell" Dense="true"
+                     CommittedItemChanges="SaveArtistRule" Bordered="true">
+            <ToolBarContent>
+                <MudButton StartIcon="@Icons.Material.Filled.Add" Variant="Variant.Outlined" OnClick="AddArtistRule">Neue Regel</MudButton>
+            </ToolBarContent>
+            <Columns>
+                <PropertyColumn Property="x => x.Kind" Title="Art">
+                    <CellTemplate>@KindLabel(context.Item.Kind)</CellTemplate>
+                    <EditTemplate>
+                        <MudSelect T="ArtistRuleKind" Value="context.Item.Kind" ValueChanged="@(async k => { context.Item.Kind = k; await SaveArtistRule(context.Item); })" Dense="true" Margin="Margin.Dense">
+                            @foreach (var k in Enum.GetValues<ArtistRuleKind>())
+                            {
+                                <MudSelectItem Value="k">@KindLabel(k)</MudSelectItem>
+                            }
+                        </MudSelect>
+                    </EditTemplate>
+                </PropertyColumn>
+                <PropertyColumn Property="x => x.Pattern" Title="Künstler" />
+                <PropertyColumn Property="x => x.Replacement" Title="Ersetzung (nur Ersetzen)" />
+                <PropertyColumn Property="x => x.Comment" Title="Kommentar" />
+                <TemplateColumn Editable="false" Style="width:60px">
+                    <CellTemplate>
+                        <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" OnClick="() => DeleteArtistRule(context.Item)" />
+                    </CellTemplate>
+                </TemplateColumn>
+            </Columns>
+        </MudDataGrid>
+    </MudTabPanel>
+
+    <MudTabPanel Text="Trennzeichen">
+        <MudText Typo="Typo.body2" Class="mb-2">
+            Trennzeichen zum Aufteilen zusammengesetzter Künstler-Strings. Sie werden nur für Daten ohne
+            MusicBrainz-Credits benutzt (manuelles Taggen, Fremdquellen); Leerzeichen zählen mit.
+        </MudText>
+        <MudChipSet T="string" AllClosable="true" OnClose="RemoveSplitter">
+            @foreach (var s in _splitters)
+            {
+                <MudChip T="string" Value="s" Text="@($"“{s}”")" Class="mono" />
+            }
+        </MudChipSet>
+        <MudStack Row="true" AlignItems="AlignItems.Center" Class="mt-2">
+            <MudTextField @bind-Value="_newSplitter" Label="Neues Trennzeichen (z. B. „ x “)" Variant="Variant.Outlined" Margin="Margin.Dense" />
+            <MudButton Variant="Variant.Outlined" OnClick="AddSplitter">Hinzufügen</MudButton>
+        </MudStack>
+    </MudTabPanel>
+
+    <MudTabPanel Text="Quellen">
+        <MudText Typo="Typo.body2" Class="mb-2">
+            Vorbereinigung je Quelle: Dateien in einem Unterordner des Eingangs mit diesem Namen werden vor der Suche
+            entsprechend bereinigt. Zu löschende Tags kommagetrennt (z. B. show, discnumber).
+        </MudText>
+        <MudDataGrid T="SourceProfile" Items="_profiles" ReadOnly="false" EditMode="DataGridEditMode.Cell" Dense="true"
+                     CommittedItemChanges="SaveProfile" Bordered="true">
+            <ToolBarContent>
+                <MudButton StartIcon="@Icons.Material.Filled.Add" Variant="Variant.Outlined" OnClick="AddProfile">Neue Quelle</MudButton>
+            </ToolBarContent>
+            <Columns>
+                <PropertyColumn Property="x => x.Name" Title="Name" />
+                <PropertyColumn Property="x => x.FolderName" Title="Unterordner" />
+                <PropertyColumn Property="x => x.Enabled" Title="Aktiv" />
+                <PropertyColumn Property="x => x.SplitCommaWithoutSpace" Title="„A,B“ aufteilen" />
+                <PropertyColumn Property="x => x.TrimTrackTotal" Title="Tracknr. „3/12“ → „3“" />
+                <TemplateColumn Title="Tags löschen">
+                    <CellTemplate>@string.Join(", ", context.Item.DeleteTags)</CellTemplate>
+                    <EditTemplate>
+                        <MudTextField T="string" Value="@string.Join(", ", context.Item.DeleteTags)" Margin="Margin.Dense"
+                                      ValueChanged="@(async (string? v) => { context.Item.DeleteTags = (v ?? string.Empty).Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries).ToList(); await SaveProfile(context.Item); })" />
+                    </EditTemplate>
+                </TemplateColumn>
+                <TemplateColumn Editable="false" Style="width:60px">
+                    <CellTemplate>
+                        <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" OnClick="() => DeleteProfile(context.Item)" />
+                    </CellTemplate>
+                </TemplateColumn>
+            </Columns>
+        </MudDataGrid>
+    </MudTabPanel>
+
+    <MudTabPanel Text="Testen" Icon="@Icons.Material.Filled.Science">
+        <MudText Typo="Typo.body2" Class="mb-2">Probiere aus, wie Künstler- und Titel-Angaben ohne MusicBrainz-Credits verarbeitet werden.</MudText>
+        <MudGrid>
+            <MudItem xs="12" md="6"><MudTextField @bind-Value="_testArtist" Label="Künstler" Variant="Variant.Outlined" Immediate="true" /></MudItem>
+            <MudItem xs="12" md="6"><MudTextField @bind-Value="_testTitle" Label="Titel" Variant="Variant.Outlined" Immediate="true" /></MudItem>
+        </MudGrid>
+        @if (TestResult is { } r)
+        {
+            <MudSimpleTable Dense="true" Class="mt-4">
+                <tbody>
+                    <tr><td>ARTIST</td><td>@r.Artist</td></tr>
+                    <tr><td>ARTISTS</td><td>@string.Join(" | ", r.Artists)</td></tr>
+                    <tr><td>Titel</td><td>@r.Title</td></tr>
+                    <tr><td>Remixer</td><td>@r.Remixer</td></tr>
+                    <tr><td>Pfad</td><td class="mono">@PathBuilder.Build(r)</td></tr>
+                </tbody>
+            </MudSimpleTable>
+        }
+    </MudTabPanel>
+</MudTabs>
+
+@code {
+    private List<ArtistRule> _artistRules = [];
+    private List<SourceProfile> _profiles = [];
+    private List<string> _splitters = [];
+    private string? _newSplitter;
+    private string? _testArtist = "A feat. B & Simon & Garfunkel";
+    private string? _testTitle = "Song (Explicit) (DJ X Remix)";
+    private ArtistRuleSet _ruleSet = new();
+    private bool _convertPunctuation = true;
+
+    private static string KindLabel(ArtistRuleKind k) => k switch
+    {
+        ArtistRuleKind.ForceSplit => "Aufteilen",
+        ArtistRuleKind.ForceReplace => "Ersetzen",
+        ArtistRuleKind.NoSplit => "Nie aufteilen",
+        _ => k.ToString(),
+    };
+
+    private TagSet? TestResult => string.IsNullOrWhiteSpace(_testArtist) && string.IsNullOrWhiteSpace(_testTitle)
+        ? null
+        : TaggingRules.Apply(new TagSet { Artist = _testArtist, Title = _testTitle, Album = "Album" }, _ruleSet, _convertPunctuation);
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        _artistRules = await db.ArtistRules.AsNoTracking().OrderBy(r => r.Kind).ThenBy(r => r.Pattern).ToListAsync();
+        _profiles = await db.SourceProfiles.AsNoTracking().OrderBy(p => p.Name).ToListAsync();
+        var settings = await SettingsService.GetAsync();
+        _splitters = [.. settings.ArtistSplitters];
+        _convertPunctuation = settings.ConvertPunctuation;
+        _ruleSet = await SettingsService.GetArtistRulesAsync();
+    }
+
+    private async Task Persist<T>(T entity, bool delete = false) where T : class
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        if (delete) db.Remove(entity);
+        else db.Update(entity);
+        await db.SaveChangesAsync();
+        _ruleSet = await SettingsService.GetArtistRulesAsync();
+    }
+
+    private async Task<DataGridEditFormAction> SaveArtistRule(ArtistRule rule)
+    {
+        await Persist(rule);
+        Snackbar.Add("Regel gespeichert", Severity.Success);
+        return DataGridEditFormAction.Close;
+    }
+
+    private async Task AddArtistRule()
+    {
+        var rule = new ArtistRule { Kind = ArtistRuleKind.NoSplit, Pattern = "Neuer Künstler" };
+        await Persist(rule);
+        _artistRules.Add(rule);
+    }
+
+    private async Task DeleteArtistRule(ArtistRule rule)
+    {
+        await Persist(rule, delete: true);
+        _artistRules.Remove(rule);
+    }
+
+    private async Task<DataGridEditFormAction> SaveProfile(SourceProfile profile)
+    {
+        await Persist(profile);
+        Snackbar.Add("Quelle gespeichert", Severity.Success);
+        return DataGridEditFormAction.Close;
+    }
+
+    private async Task AddProfile()
+    {
+        var profile = new SourceProfile { Name = "Neue Quelle", FolderName = "neue-quelle" };
+        await Persist(profile);
+        _profiles.Add(profile);
+    }
+
+    private async Task DeleteProfile(SourceProfile profile)
+    {
+        await Persist(profile, delete: true);
+        _profiles.Remove(profile);
+    }
+
+    private async Task SaveSplitters()
+    {
+        var settings = await SettingsService.GetCopyAsync();
+        settings.ArtistSplitters = [.. _splitters];
+        await SettingsService.SaveAsync(settings);
+        _ruleSet = await SettingsService.GetArtistRulesAsync();
+    }
+
+    private async Task AddSplitter()
+    {
+        if (string.IsNullOrEmpty(_newSplitter) || _splitters.Contains(_newSplitter)) return;
+        _splitters.Add(_newSplitter);
+        _newSplitter = null;
+        await SaveSplitters();
+    }
+
+    private async Task RemoveSplitter(MudChip<string> chip)
+    {
+        _splitters.Remove(chip.Value!);
+        await SaveSplitters();
+    }
+}

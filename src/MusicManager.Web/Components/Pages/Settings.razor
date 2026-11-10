@@ -1,0 +1,145 @@
+@page "/einstellungen"
+@inject SettingsService SettingsService
+@inject ISnackbar Snackbar
+@inject Microsoft.Extensions.Options.IOptions<MusicManagerOptions> Options
+
+<PageTitle>Einstellungen – Music Manager</PageTitle>
+
+<MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-4">
+    <MudText Typo="Typo.h5">Einstellungen</MudText>
+    <MudSpacer />
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Save" OnClick="Save" Disabled="_s == null">Speichern</MudButton>
+</MudStack>
+
+@if (_s == null)
+{
+    <MudProgressLinear Indeterminate="true" />
+    return;
+}
+
+<MudExpansionPanels MultiExpansion="true">
+    <MudExpansionPanel Text="Eingang und Automatik" Expanded="true">
+        <MudGrid>
+            <MudItem xs="12" md="4"><MudSwitch @bind-Value="_s.InboxWatchEnabled" Color="Color.Primary" Label="Eingang automatisch überwachen" /></MudItem>
+            <MudItem xs="12" md="4"><MudSwitch @bind-Value="_s.AutoFileConfidentMatches" Color="Color.Primary" Label="Sichere Treffer automatisch einsortieren" /></MudItem>
+            <MudItem xs="6" md="2"><MudNumericField @bind-Value="_s.InboxQuietSeconds" Label="Ruhezeit (s)" Variant="Variant.Outlined" Min="0" /></MudItem>
+            <MudItem xs="6" md="2"><MudNumericField @bind-Value="_s.InboxScanIntervalSeconds" Label="Scan-Intervall (s)" Variant="Variant.Outlined" Min="2" /></MudItem>
+            <MudItem xs="12"><ListField @bind-Values="_s.AudioExtensions" Label="Audio-Dateiendungen" /></MudItem>
+            <MudItem xs="12" md="6"><ListField @bind-Values="_s.AdditionalFilePatterns" Label="Zusätzlich mitverschieben" /></MudItem>
+            <MudItem xs="6" md="3"><MudNumericField @bind-Value="_s.TrashRetentionDays" Label="Papierkorb aufbewahren (Tage)" Variant="Variant.Outlined" Min="0" /></MudItem>
+        </MudGrid>
+    </MudExpansionPanel>
+
+    <MudExpansionPanel Text="Erkennung und Release-Auswahl">
+        <MudGrid>
+            <MudItem xs="6" md="3"><MudNumericField @bind-Value="_s.AcoustIdMinScore" Label="AcoustID-Mindestscore (0–1)" Variant="Variant.Outlined" Step="0.05" Min="0" Max="1" /></MudItem>
+            <MudItem xs="6" md="3"><MudNumericField @bind-Value="_s.TextSearchMinScore" Label="Textsuche-Mindestscore (0–100)" Variant="Variant.Outlined" Min="0" Max="100" /></MudItem>
+            <MudItem xs="6" md="3"><MudNumericField @bind-Value="_s.MaxRecordingsPerFile" Label="Max. Recordings je Datei" Variant="Variant.Outlined" Min="1" /></MudItem>
+            <MudItem xs="6" md="3"><MudNumericField @bind-Value="_s.LengthToleranceSeconds" Label="Längentoleranz (s)" Variant="Variant.Outlined" Step="0.5" Min="0" /></MudItem>
+            <MudItem xs="6" md="3"><MudNumericField @bind-Value="_s.ScoreMarginThreshold" Label="Mindestabstand zum Zweiten (Punkte)" Variant="Variant.Outlined" Min="0" /></MudItem>
+            <MudItem xs="6" md="3"><MudNumericField @bind-Value="_s.MinCandidateConfidence" Label="Mindest-Bewertung (0–1)" Variant="Variant.Outlined" Step="0.05" Min="0" Max="1" /></MudItem>
+            <MudItem xs="12" md="3"><ListField @bind-Values="_s.PreferredCountries" Label="Bevorzugte Länder (Reihenfolge)" /></MudItem>
+            <MudItem xs="12" md="3"><ListField @bind-Values="_s.PreferredFormats" Label="Bevorzugte Formate" /></MudItem>
+        </MudGrid>
+    </MudExpansionPanel>
+
+    <MudExpansionPanel Text="Gewichtung der Heuristik">
+        <MudGrid>
+            @foreach (var (label, get, set) in WeightFields)
+            {
+                <MudItem xs="6" md="2">
+                    <MudNumericField T="double" Value="get(_s.Weights)" ValueChanged="v => set(_s.Weights, v)" Label="@label" Variant="Variant.Outlined" />
+                </MudItem>
+            }
+        </MudGrid>
+        <MudGrid Class="mt-2">
+            <MudItem xs="12" md="4"><WeightMap Title="Release-Status" Values="_s.Weights.Status" /></MudItem>
+            <MudItem xs="12" md="4"><WeightMap Title="Primärtyp" Values="_s.Weights.PrimaryType" /></MudItem>
+            <MudItem xs="12" md="4"><WeightMap Title="Sekundärtyp" Values="_s.Weights.SecondaryType" /></MudItem>
+        </MudGrid>
+    </MudExpansionPanel>
+
+    <MudExpansionPanel Text="Metadaten">
+        <MudGrid>
+            <MudItem xs="12" md="4"><MudSwitch @bind-Value="_s.StandardizeArtists" Color="Color.Primary" Label="Künstlernamen standardisieren" /></MudItem>
+            <MudItem xs="12" md="4"><MudSwitch @bind-Value="_s.ConvertPunctuation" Color="Color.Primary" Label="Typografische Satzzeichen umwandeln" /></MudItem>
+            <MudItem xs="6" md="4"><MudTextField @bind-Value="_s.ArtistLocale" Label="Künstlernamen übersetzen (Locale)" Variant="Variant.Outlined" HelperText="z. B. en; leer = aus" /></MudItem>
+            <MudItem xs="12" md="4"><MudSwitch @bind-Value="_s.UseGenres" Color="Color.Primary" Label="Genres übernehmen" /></MudItem>
+            <MudItem xs="12" md="4"><MudSwitch @bind-Value="_s.UseArtistGenres" Color="Color.Primary" Label="Künstler-Genres einbeziehen" /></MudItem>
+            <MudItem xs="6" md="2"><MudNumericField @bind-Value="_s.MaxGenres" Label="Max. Genres" Variant="Variant.Outlined" Min="0" /></MudItem>
+            <MudItem xs="6" md="2"><MudNumericField @bind-Value="_s.MinGenreUsagePercent" Label="Mindestnutzung %" Variant="Variant.Outlined" Min="0" Max="100" /></MudItem>
+            <MudItem xs="12" md="8"><ListField @bind-Values="_s.GenreFilter" Label="Genres ausfiltern" /></MudItem>
+            <MudItem xs="6" md="2"><MudNumericField @bind-Value="_s.CoverSize" Label="Cover-Größe (px)" Variant="Variant.Outlined" Min="100" /></MudItem>
+            <MudItem xs="6" md="2"><MudNumericField @bind-Value="_s.AacBitrateKbps" Label="AAC-Bitrate (kbps)" Variant="Variant.Outlined" Min="64" Max="512" /></MudItem>
+        </MudGrid>
+    </MudExpansionPanel>
+
+    <MudExpansionPanel Text="KI (Claude)">
+        @if (string.IsNullOrWhiteSpace(Options.Value.AnthropicApiKey))
+        {
+            <MudAlert Severity="Severity.Warning" Dense="true" Class="mb-2">Kein API-Key gesetzt (Umgebungsvariable MusicManager__AnthropicApiKey).</MudAlert>
+        }
+        <MudGrid>
+            <MudItem xs="12" md="4"><MudSwitch @bind-Value="_s.AiDecisionEnabled" Color="Color.Primary" Label="Unsichere Fälle zuerst an die KI" /></MudItem>
+            <MudItem xs="12" md="4"><MudSwitch @bind-Value="_s.AiSuggestForUnknown" Color="Color.Primary" Label="Vorschläge für Titel ohne MusicBrainz" /></MudItem>
+            <MudItem xs="12" md="4">
+                <MudSelect @bind-Value="_s.AiCleanupMode" Label="Tag-Bereinigung per KI" Variant="Variant.Outlined">
+                    <MudSelectItem Value="AiCleanupMode.Off">Aus</MudSelectItem>
+                    <MudSelectItem Value="AiCleanupMode.WhenMessy">Nur bei chaotischen Tags</MudSelectItem>
+                    <MudSelectItem Value="AiCleanupMode.Always">Immer</MudSelectItem>
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="6" md="4"><MudNumericField @bind-Value="_s.AiMinConfidence" Label="Mindest-Sicherheit KI (0–1)" Variant="Variant.Outlined" Step="0.05" Min="0" Max="1" /></MudItem>
+            <MudItem xs="6" md="4"><MudTextField @bind-Value="_s.AiModel" Label="Modell" Variant="Variant.Outlined" /></MudItem>
+            <MudItem xs="6" md="4">
+                <MudSelect @bind-Value="_s.AiEffort" Label="Denkaufwand" Variant="Variant.Outlined">
+                    <MudSelectItem Value="@("low")">niedrig</MudSelectItem>
+                    <MudSelectItem Value="@("medium")">mittel</MudSelectItem>
+                    <MudSelectItem Value="@("high")">hoch</MudSelectItem>
+                </MudSelect>
+            </MudItem>
+        </MudGrid>
+    </MudExpansionPanel>
+
+    <MudExpansionPanel Text="Pfade (nur Anzeige, per Umgebungsvariable)">
+        <MudSimpleTable Dense="true">
+            <tbody>
+                <tr><td>Eingang</td><td class="mono">@Options.Value.InboxPath</td><td class="mono">MusicManager__InboxPath</td></tr>
+                <tr><td>Bibliothek</td><td class="mono">@Options.Value.LibraryPath</td><td class="mono">MusicManager__LibraryPath</td></tr>
+                <tr><td>Papierkorb</td><td class="mono">@Options.Value.TrashPath</td><td class="mono">MusicManager__TrashPath</td></tr>
+                <tr><td>Daten</td><td class="mono">@Options.Value.DataPath</td><td class="mono">MusicManager__DataPath</td></tr>
+            </tbody>
+        </MudSimpleTable>
+    </MudExpansionPanel>
+</MudExpansionPanels>
+
+@code {
+    private AppSettings? _s;
+
+    private static readonly (string, Func<ScoringWeights, double>, Action<ScoringWeights, double>)[] WeightFields =
+    [
+        ("Erkennung", w => w.Match, (w, v) => w.Match = v),
+        ("Titel", w => w.TitleSimilarity, (w, v) => w.TitleSimilarity = v),
+        ("Künstler", w => w.ArtistSimilarity, (w, v) => w.ArtistSimilarity = v),
+        ("Album", w => w.AlbumSimilarity, (w, v) => w.AlbumSimilarity = v),
+        ("Album-Künstler", w => w.AlbumArtistSimilarity, (w, v) => w.AlbumArtistSimilarity = v),
+        ("Tracknummer", w => w.TrackNumber, (w, v) => w.TrackNumber = v),
+        ("Ordner: gleiches Release", w => w.GroupSameRelease, (w, v) => w.GroupSameRelease = v),
+        ("Ordner: gleiche Gruppe", w => w.GroupSameReleaseGroup, (w, v) => w.GroupSameReleaseGroup = v),
+        ("Länge passt", w => w.LengthMatch, (w, v) => w.LengthMatch = v),
+        ("Längenabweichung je s", w => w.LengthMismatchPerSecond, (w, v) => w.LengthMismatchPerSecond = v),
+        ("Längenabweichung max.", w => w.LengthMismatchMax, (w, v) => w.LengthMismatchMax = v),
+        ("Frühester Release", w => w.EarliestRelease, (w, v) => w.EarliestRelease = v),
+        ("Datum: Jahre bis 0", w => w.EarliestReleaseYears, (w, v) => w.EarliestReleaseYears = v),
+        ("Land", w => w.Country, (w, v) => w.Country = v),
+        ("Format", w => w.Format, (w, v) => w.Format = v),
+    ];
+
+    protected override async Task OnInitializedAsync() => _s = await SettingsService.GetCopyAsync();
+
+    private async Task Save()
+    {
+        await SettingsService.SaveAsync(_s!);
+        Snackbar.Add("Einstellungen gespeichert", Severity.Success);
+    }
+}

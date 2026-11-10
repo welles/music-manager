@@ -1,0 +1,11 @@
+@* Edits a list of strings as a comma separated text field. *@
+<MudTextField T="string" Value="@string.Join(", ", Values)" ValueChanged="OnChanged" Label="@Label" Variant="Variant.Outlined" HelperText="Kommagetrennt" />
+
+@code {
+    [Parameter] public List<string> Values { get; set; } = [];
+    [Parameter] public EventCallback<List<string>> ValuesChanged { get; set; }
+    [Parameter] public string? Label { get; set; }
+
+    private Task OnChanged(string? value) =>
+        ValuesChanged.InvokeAsync((value ?? "").Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries).ToList());
+}

@@ -1,0 +1,13 @@
+@* Edits a name → points map (e.g. release status weights). *@
+<MudPaper Outlined="true" Class="pa-2">
+    <MudText Typo="Typo.subtitle2" Class="mb-1">@Title</MudText>
+    @foreach (var key in Values.Keys.Order().ToList())
+    {
+        <MudNumericField T="double" Value="Values[key]" ValueChanged="v => Values[key] = v" Label="@key" Variant="Variant.Text" Margin="Margin.Dense" />
+    }
+</MudPaper>
+
+@code {
+    [Parameter, EditorRequired] public string Title { get; set; } = "";
+    [Parameter, EditorRequired] public Dictionary<string, double> Values { get; set; } = [];
+}
