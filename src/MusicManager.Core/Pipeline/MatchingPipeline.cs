@@ -45,6 +45,7 @@ public sealed partial class MatchingPipeline(
 
         // Phase 1: analyze and identify every file.
         var recordings = new Dictionary<int, List<RecordingMatch>>();
+        var assignedByTags = new HashSet<int>();
         foreach (var file in files)
         {
             notifier.SetActivity($"Analysiere {file.FileName}");
@@ -52,7 +53,9 @@ public sealed partial class MatchingPipeline(
             {
                 SetStatus(file, FileStatus.Processing, null);
                 await db.SaveChangesAsync(ct);
-                recordings[file.Id] = await AnalyzeAsync(file, profile, settings, ct);
+                var identification = await AnalyzeAsync(file, profile, settings, ct);
+                recordings[file.Id] = identification.Recordings;
+                if (identification.AssignedByTags) assignedByTags.Add(file.Id);
             }
             catch (Exception ex) when (!ct.IsCancellationRequested)
             {
@@ -86,7 +89,14 @@ public sealed partial class MatchingPipeline(
                 file.Candidates = result.Candidates.Take(40).ToList();
                 AddEvent(file, $"{result.Candidates.Count} Release-Kandidaten bewertet: {result.Reason}");
 
-                if (result.IsCertain)
+                if (assignedByTags.Contains(file.Id) && result.Best != null)
+                {
+                    // Already assigned (e.g. by Picard): use the tagged release, the rest of the pipeline still runs.
+                    file.SelectedCandidateKey = result.Best.Key;
+                    file.Decision = DecisionSource.Automatic;
+                    AddEvent(file, "Direkt über die MusicBrainz-Tags der Datei zugeordnet");
+                }
+                else if (result.IsCertain)
                 {
                     file.SelectedCandidateKey = result.Best!.Key;
                     file.Decision = DecisionSource.Automatic;
@@ -129,7 +139,7 @@ public sealed partial class MatchingPipeline(
         notifier.SetActivity(null);
     }
 
-    private async Task<List<RecordingMatch>> AnalyzeAsync(TrackFile file, SourceProfile? profile, AppSettings settings, CancellationToken ct)
+    private async Task<Identification> AnalyzeAsync(TrackFile file, SourceProfile? profile, AppSettings settings, CancellationToken ct)
     {
         var path = storage.InboxPath(file.RelativePath);
         if (!File.Exists(path))
@@ -186,15 +196,41 @@ public sealed partial class MatchingPipeline(
         return await IdentifyAsync(file, path, settings, ct);
     }
 
-    /// <summary>Recording lookup: existing MBID tag → AcoustID fingerprint → MusicBrainz text search.</summary>
-    private async Task<List<RecordingMatch>> IdentifyAsync(TrackFile file, string path, AppSettings settings, CancellationToken ct)
+    private sealed record Identification(List<RecordingMatch> Recordings, bool AssignedByTags);
+
+    /// <summary>
+    /// Recording lookup: existing MusicBrainz tags → AcoustID fingerprint → MusicBrainz text search.
+    /// Files that already carry recording and release IDs are assigned to that release directly.
+    /// </summary>
+    private async Task<Identification> IdentifyAsync(TrackFile file, string path, AppSettings settings, CancellationToken ct)
     {
         var ids = new List<(string Id, double Score, string Source)>();
 
-        if (Guid.TryParse(file.OriginalTags?.MbRecordingId, out var existing))
-            ids.Add((existing.ToString(), 1.0, "tag"));
+        if (Guid.TryParse(file.OriginalTags?.MbRecordingId, out var taggedRecording))
+        {
+            try
+            {
+                var rec = await musicBrainz.GetRecordingAsync(taggedRecording.ToString(), 1.0, "tag", ct);
+                var taggedRelease = Guid.TryParse(file.OriginalTags?.MbReleaseId, out var rel) ? rel.ToString() : null;
+                var onRelease = rec.Releases.Where(r => r.ReleaseId == taggedRelease).ToList();
+                if (onRelease.Count > 0 && !rec.IsVideo)
+                {
+                    AddEvent(file, $"MusicBrainz-Tags gefunden: Recording \"{rec.Title}\" auf Release \"{onRelease[0].Title}\"");
+                    return new Identification([WithReleases(rec, onRelease)], true);
+                }
 
-        if (acoustId.IsConfigured)
+                AddEvent(file, taggedRelease == null
+                    ? "MusicBrainz-Recording-ID gefunden, Release wird bewertet"
+                    : "Getaggtes Release enthält das Recording nicht – Release wird neu bewertet", EventLevel.Info);
+                ids.Add((rec.RecordingId, 1.0, "tag"));
+            }
+            catch (Exception ex) when (!ct.IsCancellationRequested)
+            {
+                AddEvent(file, $"MusicBrainz-ID aus den Tags ungültig ({ex.Message}) – normale Erkennung", EventLevel.Warning);
+            }
+        }
+
+        if (ids.Count == 0 && acoustId.IsConfigured)
         {
             notifier.SetActivity($"Fingerabdruck für {file.FileName}");
             var fp = await audio.FingerprintAsync(path, ct);
@@ -212,7 +248,7 @@ public sealed partial class MatchingPipeline(
                 AddEvent(file, "Fingerabdruck konnte nicht berechnet werden", EventLevel.Warning);
             }
         }
-        else
+        else if (ids.Count == 0)
         {
             AddEvent(file, "AcoustID-API-Key fehlt – nur Textsuche", EventLevel.Warning);
         }
@@ -260,8 +296,14 @@ public sealed partial class MatchingPipeline(
                 recordings.Add(rec);
         }
 
-        return recordings;
+        return new Identification(recordings, false);
     }
+
+    private static RecordingMatch WithReleases(RecordingMatch r, List<ReleaseAppearance> releases) => new()
+    {
+        RecordingId = r.RecordingId, Title = r.Title, Credits = r.Credits, LengthSeconds = r.LengthSeconds,
+        MatchScore = r.MatchScore, Source = r.Source, IsVideo = r.IsVideo, Releases = releases,
+    };
 
     /// <summary>Text search hits must roughly match the file duration (unknown lengths are accepted).</summary>
     private static bool LengthFits(double? file, double? recording) =>
