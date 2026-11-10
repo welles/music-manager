@@ -311,3 +311,14 @@ public sealed class DuplicateMatch
     public string? MbReleaseId { get; set; }
     public string? TagSource { get; set; }
 }
+
+/// <summary>A group of library files marked as "not a duplicate" in the library check.</summary>
+public sealed class DismissedDuplicateGroup
+{
+    public int Id { get; set; }
+
+    /// <summary>Sorted relative paths of the group, joined with '|'.</summary>
+    public required string Key { get; set; }
+
+    public DateTimeOffset DismissedAt { get; set; } = DateTimeOffset.UtcNow;
+}

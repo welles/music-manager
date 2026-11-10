@@ -1,0 +1,142 @@
+@implements IDisposable
+@using MusicManager.Core.Services
+@inject LibraryDuplicateScanner Scanner
+@inject PipelineNotifier Notifier
+@inject AudioTools Audio
+@inject Storage Storage
+@inject ISnackbar Snackbar
+@inject IDialogService Dialogs
+@* Library check: groups of library files that are the same recording. *@
+
+<MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-3" Wrap="Wrap.Wrap">
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.ManageSearch" OnClick="Scan" Disabled="State.Running">
+        Bibliothek auf Duplikate prüfen
+    </MudButton>
+    @if (State.Running)
+    {
+        <MudProgressLinear Value="@(State.Total == 0 ? 0 : 100.0 * State.Progress / State.Total)" Color="Color.Primary" Style="max-width:300px" />
+        <MudText Typo="Typo.body2">@State.Progress / @State.Total</MudText>
+    }
+    else if (State.Finished is { } finished)
+    {
+        <MudText Typo="Typo.body2">@State.Groups Gruppen gefunden (geprüft @finished.ToLocalTime().ToString("g"))</MudText>
+    }
+</MudStack>
+
+<MudText Typo="Typo.body2" Class="mb-3" Style="opacity:.75">
+    Vergleicht alle Dateien der Bibliothek nach MusicBrainz-ID, Fingerabdruck sowie Künstler/Titel und Dauer. Andere Versionen
+    (Remix, Live, Remaster …) zählen nicht als Duplikat. Für Fingerabdruck-Vergleiche müssen die Fingerabdrücke der Bibliothek berechnet sein.
+</MudText>
+
+@foreach (var group in Scanner.Groups)
+{
+    var selected = _selection.TryGetValue(group.Key, out var chosen) ? chosen : (A: group.Entries[0].Id, B: group.Entries[1].Id);
+    <MudPaper Outlined="true" Class="pa-3 mb-3">
+        <MudText Typo="Typo.subtitle1"><b>@group.Entries[0].Artist – @group.Entries[0].Title</b></MudText>
+        <MudText Typo="Typo.caption" Class="d-block mb-2" Style="opacity:.75">@string.Join(" · ", group.Reasons)</MudText>
+
+        <MudSimpleTable Dense="true" Hover="true">
+            <thead><tr><th></th><th>Album</th><th>Format</th><th>Bitrate</th><th>Dauer</th><th>Größe</th><th>Quelle</th><th>A/B</th><th></th></tr></thead>
+            <tbody>
+                @foreach (var e in group.Entries)
+                {
+                    <tr>
+                        <td><MudImage Src="@($"api/library/{e.Id}/cover")" Width="48" Height="48" ObjectFit="ObjectFit.Cover" Class="rounded" /></td>
+                        <td>
+                            @e.Album @(e.Date != null ? $"({e.Date})" : "")
+                            <MudText Typo="Typo.caption" Class="mono d-block" Style="opacity:.6">@e.RelativePath</MudText>
+                        </td>
+                        <td>@e.Codec</td>
+                        <td>@(e.BitrateKbps != null ? $"{e.BitrateKbps} kbps" : "")</td>
+                        <td>@Length(e.DurationSeconds)</td>
+                        <td>@($"{e.FileSize / 1024.0 / 1024.0:0.0} MB")</td>
+                        <td>@(e.TagSource ?? "–")</td>
+                        <td style="white-space:nowrap">
+                            <MudToggleIconButton Toggled="selected.A == e.Id" ToggledChanged="@(_ => SetSelection(group, e.Id, selected.B))"
+                                                 Icon="@Icons.Material.Outlined.LooksOne" ToggledIcon="@Icons.Material.Filled.LooksOne" Size="Size.Small" title="Als A anhören" />
+                            <MudToggleIconButton Toggled="selected.B == e.Id" ToggledChanged="@(_ => SetSelection(group, selected.A, e.Id))"
+                                                 Icon="@Icons.Material.Outlined.LooksTwo" ToggledIcon="@Icons.Material.Filled.LooksTwo" Size="Size.Small" title="Als B anhören" />
+                        </td>
+                        <td><MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="() => Keep(group, e)">Diese behalten</MudButton></td>
+                    </tr>
+                }
+            </tbody>
+        </MudSimpleTable>
+
+        @if (_open == group.Key)
+        {
+            <div class="mt-2">
+                <AbPlayer UrlA="@($"api/audio/library/{selected.A}")" UrlB="@($"api/audio/library/{selected.B}")" LabelA="Datei A" LabelB="Datei B"
+                          MeasureLoudness="() => MeasureLoudness(group, selected.A, selected.B)" />
+            </div>
+        }
+
+        <MudStack Row="true" Class="mt-2">
+            <MudButton Size="Size.Small" StartIcon="@Icons.Material.Filled.Headphones" OnClick="() => _open = _open == group.Key ? null : group.Key">
+                @(_open == group.Key ? "Player schließen" : "Anhören")
+            </MudButton>
+            <MudButton Size="Size.Small" StartIcon="@Icons.Material.Filled.DoNotDisturb" OnClick="() => Dismiss(group)">Kein Duplikat</MudButton>
+        </MudStack>
+    </MudPaper>
+}
+
+@code {
+    private readonly Dictionary<string, (int A, int B)> _selection = [];
+    private string? _open;
+
+    private LibraryDuplicateScanState State => Scanner.State;
+
+    protected override void OnAfterRender(bool firstRender)
+    {
+        if (firstRender) Notifier.Changed += OnChanged;
+    }
+
+    private async void OnChanged()
+    {
+        try
+        {
+            await InvokeAsync(StateHasChanged);
+        }
+        catch
+        {
+            // Circuit gone.
+        }
+    }
+
+    private void Scan() => _ = Task.Run(() => Scanner.ScanAsync(CancellationToken.None));
+
+    private void SetSelection(LibraryDuplicateGroup group, int a, int b) => _selection[group.Key] = (a, b);
+
+    private async Task<(double?, double?)> MeasureLoudness(LibraryDuplicateGroup group, int a, int b)
+    {
+        async Task<double?> Measure(int id)
+        {
+            var e = group.Entries.First(x => x.Id == id);
+            var path = Storage.LibraryPath(e.RelativePath);
+            return File.Exists(path) ? await Audio.LoudnessAsync(path, CancellationToken.None) : null;
+        }
+
+        return (await Measure(a), await Measure(b));
+    }
+
+    private async Task Keep(LibraryDuplicateGroup group, LibraryEntry keep)
+    {
+        var others = group.Entries.Where(e => e.Id != keep.Id).Select(e => e.RelativePath).ToList();
+        var ok = await Dialogs.ShowMessageBoxAsync("Diese Datei behalten",
+            $"{keep.RelativePath} bleibt. In den Papierkorb: {string.Join(", ", others)}", yesText: "Behalten", cancelText: "Abbrechen");
+        if (ok != true) return;
+        if (_open == group.Key) _open = null;
+        await Scanner.KeepAsync(group, keep.Id, CancellationToken.None);
+        Snackbar.Add($"{others.Count} Datei(en) in den Papierkorb verschoben.", Severity.Success);
+    }
+
+    private async Task Dismiss(LibraryDuplicateGroup group)
+    {
+        await Scanner.DismissAsync(group, CancellationToken.None);
+        Snackbar.Add("Gruppe als „kein Duplikat“ markiert.", Severity.Info);
+    }
+
+    private static string Length(double? s) => s is > 0 ? TimeSpan.FromSeconds(s.Value).ToString(@"m\:ss") : "–";
+
+    public void Dispose() => Notifier.Changed -= OnChanged;
+}

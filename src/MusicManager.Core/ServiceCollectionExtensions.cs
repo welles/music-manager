@@ -43,6 +43,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<WorkQueue>();
         services.AddSingleton<PipelineNotifier>();
         services.AddSingleton<DuplicateDetector>();
+        services.AddSingleton<LibraryDuplicateScanner>();
         services.AddSingleton<MatchingPipeline>();
         services.AddSingleton<ReviewService>();
 

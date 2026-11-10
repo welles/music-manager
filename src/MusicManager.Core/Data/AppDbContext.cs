@@ -15,6 +15,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
     public DbSet<SourceProfile> SourceProfiles => Set<SourceProfile>();
     public DbSet<SettingsEntry> Settings => Set<SettingsEntry>();
     public DbSet<LibraryEntry> Library => Set<LibraryEntry>();
+    public DbSet<DismissedDuplicateGroup> DismissedDuplicates => Set<DismissedDuplicateGroup>();
 
     protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
     {
@@ -49,6 +50,8 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
             e.Property(x => x.DuplicateDecision).HasConversion<string>();
             e.HasMany(x => x.Events).WithOne().HasForeignKey(x => x.TrackFileId).OnDelete(DeleteBehavior.Cascade);
         });
+
+        b.Entity<DismissedDuplicateGroup>(e => e.HasIndex(x => x.Key).IsUnique());
 
         b.Entity<LibraryEntry>(e =>
         {

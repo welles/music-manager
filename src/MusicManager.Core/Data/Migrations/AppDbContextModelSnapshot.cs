@@ -42,6 +42,27 @@ namespace MusicManager.Core.Data.Migrations
                     b.ToTable("ArtistRules");
                 });
 
+            modelBuilder.Entity("MusicManager.Core.Data.DismissedDuplicateGroup", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("DismissedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Key")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Key")
+                        .IsUnique();
+
+                    b.ToTable("DismissedDuplicates");
+                });
+
             modelBuilder.Entity("MusicManager.Core.Data.FileEvent", b =>
                 {
                     b.Property<long>("Id")

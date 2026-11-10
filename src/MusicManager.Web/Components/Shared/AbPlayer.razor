@@ -1,0 +1,146 @@
+@implements IAsyncDisposable
+@inject IJSRuntime Js
+@inject ISnackbar Snackbar
+@* A/B comparison player: two versions on one timeline, optional loudness match. *@
+
+<MudPaper Outlined="true" Class="pa-3">
+    <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap">
+        <MudIconButton Icon="@(_state.Playing ? Icons.Material.Filled.Pause : Icons.Material.Filled.PlayArrow)" Color="Color.Primary"
+                       Variant="Variant.Filled" OnClick="PlayPause" aria-label="Abspielen/Pause" />
+        <MudToggleGroup T="string" Value="_state.Active" ValueChanged="Toggle" SelectionMode="SelectionMode.SingleSelection" Color="Color.Primary">
+            <MudToggleItem Value="@("a")" Text="@($"A · {LabelA}")" />
+            <MudToggleItem Value="@("b")" Text="@($"B · {LabelB}")" />
+        </MudToggleGroup>
+        <MudText Typo="Typo.body2" Class="mono">@Length(_state.Time) / @Length(_state.Duration)</MudText>
+        <MudSpacer />
+        @if (MeasureLoudness != null)
+        {
+            <MudSwitch T="bool" Value="_match" ValueChanged="SetMatch" Color="Color.Primary" Label="Lautstärke angleichen" />
+        }
+    </MudStack>
+    <MudSlider T="double" Value="_state.Time" ValueChanged="Seek" Min="0" Max="@Math.Max(1, _state.Duration)" Step="0.5" Immediate="false" />
+    <MudText Typo="Typo.caption" Style="opacity:.7">
+        Beim Umschalten spielt die andere Version an derselben Stelle weiter.
+        @if (_measuring)
+        {
+            <span> Lautheit wird gemessen …</span>
+        }
+        else if (_loudness is { } l)
+        {
+            <span> Lautheit: A @Lufs(l.A), B @Lufs(l.B).</span>
+        }
+    </MudText>
+</MudPaper>
+
+@code {
+    private sealed record PlayerState(double Time, double Duration, bool Playing, string Active);
+
+    [Parameter, EditorRequired] public string UrlA { get; set; } = "";
+    [Parameter, EditorRequired] public string UrlB { get; set; } = "";
+    [Parameter] public string LabelA { get; set; } = "Neu";
+    [Parameter] public string LabelB { get; set; } = "Vorhanden";
+
+    /// <summary>Returns the integrated loudness (LUFS) of A and B.</summary>
+    [Parameter] public Func<Task<(double? A, double? B)>>? MeasureLoudness { get; set; }
+
+    private PlayerState _state = new(0, 0, false, "a");
+    private System.Threading.Timer? _timer;
+    private string? _loadedA, _loadedB;
+    private bool _match, _measuring;
+    private (double? A, double? B)? _loudness;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+            _timer = new System.Threading.Timer(_ => InvokeAsync(PollAsync), null, 300, 300);
+
+        if (_loadedA != UrlA || _loadedB != UrlB)
+        {
+            _loadedA = UrlA;
+            _loadedB = UrlB;
+            _loudness = null;
+            await Js.InvokeVoidAsync("abPlayer.init", UrlA, UrlB);
+            _state = new PlayerState(0, 0, false, "a");
+            if (_match) await SetMatch(true);
+        }
+    }
+
+    private async Task PollAsync()
+    {
+        try
+        {
+            var s = await Js.InvokeAsync<PlayerState>("abPlayer.state");
+            if (s != _state)
+            {
+                _state = s;
+                StateHasChanged();
+            }
+        }
+        catch
+        {
+            // Circuit gone.
+        }
+    }
+
+    private async Task PlayPause() => await Js.InvokeVoidAsync("abPlayer.playPause");
+    private async Task Toggle(string target) => await Js.InvokeVoidAsync("abPlayer.toggle", target);
+    private async Task Seek(double seconds) => await Js.InvokeVoidAsync("abPlayer.seek", seconds);
+
+    private async Task SetMatch(bool on)
+    {
+        _match = on;
+        if (!on || MeasureLoudness == null)
+        {
+            await Js.InvokeVoidAsync("abPlayer.setVolumes", 1.0, 1.0);
+            return;
+        }
+
+        if (_loudness == null)
+        {
+            _measuring = true;
+            StateHasChanged();
+            try
+            {
+                _loudness = await MeasureLoudness();
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add($"Lautheit konnte nicht gemessen werden: {ex.Message}", Severity.Warning);
+            }
+            finally
+            {
+                _measuring = false;
+            }
+        }
+
+        // Only attenuation is possible in the browser: the louder version is turned down.
+        if (_loudness is { A: { } a, B: { } b })
+        {
+            var diff = a - b;
+            await Js.InvokeVoidAsync("abPlayer.setVolumes", diff > 0 ? Math.Pow(10, -diff / 20) : 1, diff < 0 ? Math.Pow(10, diff / 20) : 1);
+        }
+    }
+
+    /// <summary>Stops playback (e.g. before a decision moves the files).</summary>
+    public async Task StopAsync()
+    {
+        await Js.InvokeVoidAsync("abPlayer.dispose");
+        _loadedA = _loadedB = null;
+    }
+
+    private static string Lufs(double? v) => v == null ? "–" : $"{v:0.0} LUFS";
+    private static string Length(double? s) => s is > 0 ? TimeSpan.FromSeconds(s.Value).ToString(s >= 3600 ? @"h\:mm\:ss" : @"m\:ss") : "–";
+
+    public async ValueTask DisposeAsync()
+    {
+        _timer?.Dispose();
+        try
+        {
+            await Js.InvokeVoidAsync("abPlayer.dispose");
+        }
+        catch
+        {
+            // Circuit gone.
+        }
+    }
+}
