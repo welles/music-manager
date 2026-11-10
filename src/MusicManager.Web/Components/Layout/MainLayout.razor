@@ -39,9 +39,31 @@
     private bool _drawer = true;
     private bool _dark;
 
-    protected override void OnInitialized() => Notifier.Changed += OnChanged;
+    private bool _subscribed;
 
-    private void OnChanged() => InvokeAsync(StateHasChanged);
+    protected override void OnAfterRender(bool firstRender)
+    {
+        if (firstRender && !_subscribed)
+        {
+            Notifier.Changed += OnChanged;
+            _subscribed = true;
+        }
+    }
 
-    public void Dispose() => Notifier.Changed -= OnChanged;
+    private async void OnChanged()
+    {
+        try
+        {
+            await InvokeAsync(StateHasChanged);
+        }
+        catch
+        {
+            // Circuit already gone.
+        }
+    }
+
+    public void Dispose()
+    {
+        if (_subscribed) Notifier.Changed -= OnChanged;
+    }
 }

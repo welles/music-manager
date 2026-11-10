@@ -10,33 +10,51 @@ public abstract class LivePage : ComponentBase, IDisposable
 
     private DateTime _lastReload = DateTime.MinValue;
     private bool _reloadPending;
+    private bool _subscribed;
+    private volatile bool _disposed;
 
-    protected override async Task OnInitializedAsync()
+    protected override async Task OnInitializedAsync() => await ReloadAsync();
+
+    protected override void OnAfterRender(bool firstRender)
     {
-        Notifier.Changed += OnChanged;
-        await ReloadAsync();
+        // Only interactive renders subscribe; prerendered instances are thrown away.
+        if (firstRender && !_subscribed)
+        {
+            Notifier.Changed += OnChanged;
+            _subscribed = true;
+        }
     }
 
     protected abstract Task ReloadAsync();
 
     private async void OnChanged()
     {
-        if (_reloadPending) return;
-        _reloadPending = true;
-        var wait = _lastReload.AddSeconds(1) - DateTime.UtcNow;
-        if (wait > TimeSpan.Zero) await Task.Delay(wait);
-        _reloadPending = false;
-        _lastReload = DateTime.UtcNow;
-        await InvokeAsync(async () =>
+        // async void: must never throw, otherwise the whole process goes down.
+        try
         {
-            await ReloadAsync();
-            StateHasChanged();
-        });
+            if (_reloadPending || _disposed) return;
+            _reloadPending = true;
+            var wait = _lastReload.AddSeconds(1) - DateTime.UtcNow;
+            if (wait > TimeSpan.Zero) await Task.Delay(wait);
+            _reloadPending = false;
+            _lastReload = DateTime.UtcNow;
+            if (_disposed) return;
+            await InvokeAsync(async () =>
+            {
+                await ReloadAsync();
+                StateHasChanged();
+            });
+        }
+        catch
+        {
+            // The circuit is gone or the page was disposed in the meantime.
+        }
     }
 
     public virtual void Dispose()
     {
-        Notifier.Changed -= OnChanged;
+        _disposed = true;
+        if (_subscribed) Notifier.Changed -= OnChanged;
         GC.SuppressFinalize(this);
     }
 }

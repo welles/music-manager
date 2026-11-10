@@ -38,5 +38,13 @@ public sealed class PipelineNotifier
         Notify();
     }
 
-    public void Notify() => Changed?.Invoke();
+    public void Notify()
+    {
+        // A failing subscriber (e.g. a disconnected page) must not break the pipeline.
+        foreach (var handler in Changed?.GetInvocationList() ?? [])
+        {
+            try { ((Action)handler)(); }
+            catch { /* ignored */ }
+        }
+    }
 }
