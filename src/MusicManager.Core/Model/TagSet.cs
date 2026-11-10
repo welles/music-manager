@@ -18,6 +18,9 @@ public sealed class TagSet
     /// <summary>Display album artist string.</summary>
     public string? AlbumArtist { get; set; }
 
+    /// <summary>Main album artist, used for the folder name (not written as a tag).</summary>
+    public string? FolderArtist { get; set; }
+
     /// <summary>Individual album artists (multi-value tag ALBUMARTISTS).</summary>
     public List<string> AlbumArtists { get; set; } = [];
 

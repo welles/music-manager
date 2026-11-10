@@ -25,7 +25,8 @@ public static class PathBuilder
         var album = tags.Album.NullIfEmpty() ?? NonAlbumFolder;
         var title = tags.Title.NullIfEmpty() ?? "Unknown Title";
 
-        var dir1 = SanitizeComponent(albumArtist);
+        // Folder: main album artist only ("Bou" instead of "Bou & Friction & MC Eksman & …").
+        var dir1 = SanitizeComponent(tags.FolderArtist.NullIfEmpty() ?? albumArtist);
         var dir2 = SanitizeComponent(album);
         var file = SanitizeComponent($"{albumArtist} - {title}");
 

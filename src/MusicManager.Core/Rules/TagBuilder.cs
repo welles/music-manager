@@ -42,6 +42,7 @@ public static class TagBuilder
             Album = release.Title,
             AlbumArtist = CreditFormatter.Join(release.Credits, Name),
             AlbumArtists = release.Credits.Select(Name).ToList(),
+            FolderArtist = release.Credits.Count > 0 ? Name(release.Credits[0]) : null,
             TrackNumber = track.Position,
             TrackCount = medium.Tracks.Count,
             DiscNumber = medium.Position,

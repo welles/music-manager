@@ -40,14 +40,26 @@ public sealed class ArtistRuleSet
     /// Splits a composed artist string ("A feat. B & C") into individual artists.
     /// Names on the exception list are never split.
     /// </summary>
-    public List<string> Split(string? artist)
+    public List<string> Split(string? artist) => SplitCore(artist, NoSplit);
+
+    /// <summary>
+    /// Main artist of a composed string (used for folder names). Names on the force-split and
+    /// replacement lists count as one artist here: "Audio88 &amp; Yassin feat. X" → "Audio88 &amp; Yassin".
+    /// </summary>
+    public string? MainArtist(string? artist)
+    {
+        var first = SplitCore(artist, NoSplit.Concat(ForceSplit).Concat(ForceReplace.Select(r => r.From)).ToList()).FirstOrDefault();
+        return first == null ? null : ReplaceName(first);
+    }
+
+    private List<string> SplitCore(string? artist, IReadOnlyList<string> keepTogether)
     {
         if (string.IsNullOrWhiteSpace(artist)) return [];
 
         // Protect exception names by replacing them with placeholders.
         var protectedNames = new List<string>();
         var text = artist;
-        foreach (var name in NoSplit.OrderByDescending(n => n.Length))
+        foreach (var name in keepTogether.OrderByDescending(n => n.Length))
         {
             var idx = text.IndexOf(name, StringComparison.OrdinalIgnoreCase);
             while (idx >= 0)
