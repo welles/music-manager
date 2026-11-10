@@ -154,6 +154,13 @@ public static class ReleaseScorer
             certain = false;
             reason = $"Beste Bewertung zu niedrig ({best.Confidence:P0} < {settings.MinCandidateConfidence:P0})";
         }
+        else if (!string.IsNullOrWhiteSpace(oldTags.Album) && TextUtil.Similarity(oldTags.Album, best.Release.Title) < 0.5)
+        {
+            // The file says which album it belongs to, but the best candidate is something else
+            // (e.g. only compilations were found) – do not file automatically.
+            certain = false;
+            reason = $"Album-Tag \"{oldTags.Album}\" passt nicht zum besten Kandidaten \"{best.Release.Title}\"";
+        }
         else if (margin < settings.ScoreMarginThreshold)
         {
             certain = false;

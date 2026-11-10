@@ -222,9 +222,25 @@ public sealed partial class MatchingPipeline(
         {
             notifier.SetActivity($"Textsuche für {file.FileName}");
             var artist = tags.Artists.FirstOrDefault() ?? tags.Artist;
-            var results = await musicBrainz.SearchRecordingsAsync(artist, tags.Title, 15, ct);
-            var usable = results.Where(r => r.Score >= settings.TextSearchMinScore).ToList();
-            AddEvent(file, $"MusicBrainz-Textsuche \"{artist} – {tags.Title}\": {results.Count} Treffer, {usable.Count} über Schwellwert");
+
+            // With an album tag first search on that album, then without.
+            var usable = new List<RecordingSearchHit>();
+            foreach (var album in new[] { tags.Album, null }.Distinct())
+            {
+                if (album == null && usable.Count > 0) break;
+                var results = await musicBrainz.SearchRecordingsAsync(artist, tags.Title, album, 50, ct);
+                usable = results
+                    .Where(r => r.Score >= settings.TextSearchMinScore && !r.IsVideo)
+                    .Where(r => TextUtil.Similarity(tags.Title, r.Title) >= 0.7)
+                    .Where(r => LengthFits(file.DurationSeconds, r.LengthSeconds))
+                    .OrderByDescending(r => r.Score)
+                    .ThenByDescending(r => r.ReleaseCount)
+                    .ThenBy(r => file.DurationSeconds is { } d && r.LengthSeconds is { } l ? Math.Abs(d - l) : 999)
+                    .ToList();
+                AddEvent(file, $"MusicBrainz-Textsuche \"{artist} – {tags.Title}\"{(album != null ? $" auf \"{album}\"" : "")}: " +
+                               $"{results.Count} Treffer, {usable.Count} passend (Titel, Länge, kein Video)");
+            }
+
             ids.AddRange(usable.Select(r => (r.RecordingId, r.Score / 100.0, "search")));
         }
 
@@ -234,13 +250,10 @@ public sealed partial class MatchingPipeline(
             notifier.SetActivity($"MusicBrainz-Abfrage für {file.FileName}");
             var rec = await musicBrainz.GetRecordingAsync(id, score, source, ct);
 
-            // Text search hits must also fit by title and length, otherwise they are noise.
-            if (source == "search")
+            if (rec.IsVideo)
             {
-                var titleOk = TextUtil.Similarity(tags.Title, rec.Title) >= 0.7;
-                var lengthOk = file.DurationSeconds == null || rec.LengthSeconds == null
-                               || Math.Abs(file.DurationSeconds.Value - rec.LengthSeconds.Value) <= 10;
-                if (!titleOk || !lengthOk) continue;
+                AddEvent(file, $"Recording {rec.Title} ist ein Video – ignoriert");
+                continue;
             }
 
             if (rec.Releases.Count > 0)
@@ -249,6 +262,10 @@ public sealed partial class MatchingPipeline(
 
         return recordings;
     }
+
+    /// <summary>Text search hits must roughly match the file duration (unknown lengths are accepted).</summary>
+    private static bool LengthFits(double? file, double? recording) =>
+        file == null || recording == null || Math.Abs(file.Value - recording.Value) <= 10;
 
     private async Task HandleNotInMusicBrainzAsync(TrackFile file, AppSettings settings, CancellationToken ct)
     {

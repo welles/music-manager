@@ -49,7 +49,7 @@ public sealed class MusicBrainzService : IDisposable
                 return (T)cached;
 
             Exception? last = null;
-            for (var attempt = 0; attempt < 3; attempt++)
+            for (var attempt = 0; attempt < 5; attempt++)
             {
                 try
                 {
@@ -57,10 +57,11 @@ public sealed class MusicBrainzService : IDisposable
                     _cache[cacheKey] = result;
                     return result;
                 }
-                catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException && !ct.IsCancellationRequested)
+                catch (Exception ex) when (IsTransient(ex) && !ct.IsCancellationRequested)
                 {
+                    // 503 = rate limit / server busy; back off and try again.
                     last = ex;
-                    _logger.LogWarning(ex, "MusicBrainz request {Key} failed (attempt {Attempt})", cacheKey, attempt + 1);
+                    _logger.LogWarning("MusicBrainz request {Key} failed (attempt {Attempt}): {Message}", cacheKey, attempt + 1, ex.Message);
                     await Task.Delay(TimeSpan.FromSeconds(2 * (attempt + 1)), ct);
                 }
             }
@@ -89,13 +90,14 @@ public sealed class MusicBrainzService : IDisposable
     private static RecordingMatch WithScore(RecordingMatch r, double score, string source) => new()
     {
         RecordingId = r.RecordingId, Title = r.Title, Credits = r.Credits, LengthSeconds = r.LengthSeconds,
-        Releases = r.Releases, MatchScore = score, Source = source,
+        Releases = r.Releases, MatchScore = score, Source = source, IsVideo = r.IsVideo,
     };
 
     private static RecordingMatch MapRecording(IRecording r, double score, string source) => new()
     {
         RecordingId = r.Id.ToString(),
         Title = r.Title ?? "",
+        IsVideo = r.Video,
         Credits = MapCredits(r.ArtistCredit),
         LengthSeconds = r.Length?.TotalSeconds,
         MatchScore = score,
@@ -123,16 +125,24 @@ public sealed class MusicBrainzService : IDisposable
         }).ToList(),
     };
 
+    private static bool IsTransient(Exception ex) =>
+        ex is HttpRequestException or TaskCanceledException
+        || ex is MetaBrainz.Common.HttpError { Status: System.Net.HttpStatusCode.ServiceUnavailable or System.Net.HttpStatusCode.TooManyRequests
+            or System.Net.HttpStatusCode.BadGateway or System.Net.HttpStatusCode.GatewayTimeout };
+
     /// <summary>Text search for recordings (fallback when the fingerprint gives no result).</summary>
-    public Task<List<(string RecordingId, int Score)>> SearchRecordingsAsync(string? artist, string title, int limit, CancellationToken ct)
+    public Task<List<RecordingSearchHit>> SearchRecordingsAsync(string? artist, string title, string? album, int limit, CancellationToken ct)
     {
         var q = $"recording:\"{Escape(title)}\"";
         if (!string.IsNullOrWhiteSpace(artist))
             q += $" AND artist:\"{Escape(artist)}\"";
-        return Run($"search-rec:{q}", async () =>
+        if (!string.IsNullOrWhiteSpace(album))
+            q += $" AND release:\"{Escape(album)}\"";
+        return Run($"search-rec:{q}:{limit}", async () =>
         {
             var results = await _query.FindRecordingsAsync(q, limit, cancellationToken: ct);
-            return results.Results.Select(r => (r.Item.Id.ToString(), (int)r.Score)).ToList();
+            return results.Results.Select(r => new RecordingSearchHit(
+                r.Item.Id.ToString(), r.Score, r.Item.Title ?? "", r.Item.Length?.TotalSeconds, r.Item.Video, r.Item.Releases?.Count ?? 0)).ToList();
         }, ct);
     }
 

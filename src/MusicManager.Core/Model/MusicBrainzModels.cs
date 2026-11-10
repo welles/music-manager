@@ -19,8 +19,14 @@ public sealed class RecordingMatch
 
     public List<ReleaseAppearance> Releases { get; init; } = [];
 
+    /// <summary>Video recordings (music videos) never match an audio file.</summary>
+    public bool IsVideo { get; init; }
+
     public string ArtistString => CreditFormatter.Join(Credits);
 }
+
+/// <summary>Result of a MusicBrainz recording text search.</summary>
+public sealed record RecordingSearchHit(string RecordingId, int Score, string Title, double? LengthSeconds, bool IsVideo, int ReleaseCount);
 
 /// <summary>A release the recording appears on, with the data needed for scoring.</summary>
 public sealed class ReleaseAppearance

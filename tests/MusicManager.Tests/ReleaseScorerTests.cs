@@ -74,6 +74,18 @@ public class ReleaseScorerTests
     }
 
     [Fact]
+    public void AlbumTagNotMatchingBestCandidateIsUncertain()
+    {
+        var recs = new[] { Rec(Rel("comp", "Vintage FG", "rg-comp", secondary: "Compilation")) };
+
+        var result = ReleaseScorer.Score(new TagSet { Title = "Song", Artist = "Artist", Album = "Homework" }, 200, recs,
+            GroupContext.Empty, new AppSettings());
+
+        Assert.False(result.IsCertain);
+        Assert.Contains("Homework", result.Reason);
+    }
+
+    [Fact]
     public void ReleasesOfTheSameReleaseGroupDoNotCauseUncertainty()
     {
         var recs = new[] { Rec(Rel("cd", "The Album", "rg", country: "DE"), Rel("digital", "The Album", "rg")) };
