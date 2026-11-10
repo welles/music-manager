@@ -67,13 +67,18 @@ internal static class JsonPropertyExtensions
 {
     private static readonly JsonSerializerOptions Options = new(JsonSerializerDefaults.General);
 
+    /// <summary>Empty list for collection properties, null otherwise.</summary>
+    private static T Empty<T>() =>
+        typeof(T).IsGenericType && typeof(T).GetGenericTypeDefinition() == typeof(List<>) ? (T)Activator.CreateInstance(typeof(T))! : default!;
+
     public static void Json<TEntity, TProp>(this EntityTypeBuilder<TEntity> e, System.Linq.Expressions.Expression<Func<TEntity, TProp>> prop)
         where TEntity : class
     {
         e.Property(prop)
             .HasConversion(
                 v => JsonSerializer.Serialize(v, Options),
-                s => JsonSerializer.Deserialize<TProp>(s, Options)!,
+                // Columns added by a migration start out empty for existing rows.
+                s => string.IsNullOrEmpty(s) ? Empty<TProp>() : JsonSerializer.Deserialize<TProp>(s, Options)!,
                 new ValueComparer<TProp>(
                     (a, c) => JsonSerializer.Serialize(a, Options) == JsonSerializer.Serialize(c, Options),
                     v => JsonSerializer.Serialize(v, Options).GetHashCode(),
