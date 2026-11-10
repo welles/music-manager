@@ -98,6 +98,79 @@ namespace MusicManager.Core.Data.Migrations
                     b.ToTable("Groups");
                 });
 
+            modelBuilder.Entity("MusicManager.Core.Data.LibraryEntry", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("AcoustId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Album")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("AlbumArtist")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Artist")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("BitrateKbps")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Codec")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Date")
+                        .HasColumnType("TEXT");
+
+                    b.Property<double?>("DurationSeconds")
+                        .HasColumnType("REAL");
+
+                    b.Property<DateTime>("FileModifiedUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("FileSize")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Fingerprint")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("FingerprintFailed")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("IndexedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("MbRecordingId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("MbReleaseId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("RelativePath")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("TagSource")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Title")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DurationSeconds");
+
+                    b.HasIndex("MbRecordingId");
+
+                    b.HasIndex("RelativePath")
+                        .IsUnique();
+
+                    b.ToTable("Library");
+                });
+
             modelBuilder.Entity("MusicManager.Core.Data.SettingsEntry", b =>
                 {
                     b.Property<int>("Id")

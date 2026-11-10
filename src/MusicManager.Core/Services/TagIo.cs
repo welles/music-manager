@@ -89,6 +89,23 @@ public static class TagIo
         }
     }
 
+    /// <summary>Tags plus audio properties for the library index (one file open).</summary>
+    public static (TagSet Tags, double? Duration, int? BitrateKbps, string? Codec) ReadForIndex(string path)
+    {
+        var tags = Read(path);
+        try
+        {
+            using var file = File.Create(path, ReadStyle.Average);
+            var p = file.Properties;
+            return (tags, p?.Duration.TotalSeconds > 0 ? p.Duration.TotalSeconds : null, p?.AudioBitrate > 0 ? p.AudioBitrate : null,
+                p?.Codecs.OfType<ICodec>().FirstOrDefault()?.Description);
+        }
+        catch (Exception ex) when (ex is CorruptFileException or UnsupportedFormatException)
+        {
+            return (tags, null, null, null);
+        }
+    }
+
     public static byte[]? ReadEmbeddedCover(string path)
     {
         try

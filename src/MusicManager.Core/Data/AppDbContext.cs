@@ -14,6 +14,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
     public DbSet<ArtistRule> ArtistRules => Set<ArtistRule>();
     public DbSet<SourceProfile> SourceProfiles => Set<SourceProfile>();
     public DbSet<SettingsEntry> Settings => Set<SettingsEntry>();
+    public DbSet<LibraryEntry> Library => Set<LibraryEntry>();
 
     protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
     {
@@ -45,6 +46,13 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
             e.Json(x => x.AiSuggestion);
             e.Json(x => x.ExternalMatches);
             e.HasMany(x => x.Events).WithOne().HasForeignKey(x => x.TrackFileId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        b.Entity<LibraryEntry>(e =>
+        {
+            e.HasIndex(x => x.RelativePath).IsUnique();
+            e.HasIndex(x => x.MbRecordingId);
+            e.HasIndex(x => x.DurationSeconds);
         });
 
         b.Entity<FileEvent>(e => e.Property(x => x.Level).HasConversion<string>());

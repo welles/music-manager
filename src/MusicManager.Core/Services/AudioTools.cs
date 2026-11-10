@@ -105,6 +105,21 @@ public sealed class AudioTools(IOptions<MusicManagerOptions> options, ILogger<Au
         return new Fingerprint(doc.RootElement.GetProperty("duration").GetDouble(), doc.RootElement.GetProperty("fingerprint").GetString()!);
     }
 
+    /// <summary>Raw Chromaprint values (first 120 s) for local duplicate comparisons.</summary>
+    public async Task<(double Duration, uint[] Values)?> RawFingerprintAsync(string path, CancellationToken ct)
+    {
+        var r = await ProcessRunner.RunAsync(_o.FpcalcPath, ["-raw", "-json", path], ct);
+        if (r.ExitCode != 0)
+        {
+            logger.LogWarning("fpcalc -raw failed for {Path}: {Error}", path, r.StdErr.Trim());
+            return null;
+        }
+
+        using var doc = JsonDocument.Parse(r.StdOut);
+        var values = doc.RootElement.GetProperty("fingerprint").EnumerateArray().Select(v => unchecked((uint)v.GetInt64())).ToArray();
+        return (doc.RootElement.GetProperty("duration").GetDouble(), values);
+    }
+
     /// <summary>
     /// Converts any input to M4A/AAC. AAC streams are only remuxed (no re-encoding);
     /// everything else is encoded with the native AAC encoder. The moov atom is moved to

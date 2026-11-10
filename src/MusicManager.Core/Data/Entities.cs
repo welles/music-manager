@@ -222,3 +222,39 @@ public sealed class SettingsEntry
     public int Id { get; set; }
     public required string Json { get; set; }
 }
+
+/// <summary>A file in the music library (index for duplicate detection).</summary>
+public sealed class LibraryEntry
+{
+    public int Id { get; set; }
+
+    /// <summary>Path relative to the library root.</summary>
+    public required string RelativePath { get; set; }
+
+    public long FileSize { get; set; }
+    public DateTime FileModifiedUtc { get; set; }
+
+    public string? Codec { get; set; }
+    public int? BitrateKbps { get; set; }
+    public double? DurationSeconds { get; set; }
+
+    public string? Title { get; set; }
+    public string? Artist { get; set; }
+    public string? Album { get; set; }
+    public string? AlbumArtist { get; set; }
+    public string? Date { get; set; }
+    public string? MbRecordingId { get; set; }
+    public string? MbReleaseId { get; set; }
+    public string? AcoustId { get; set; }
+
+    /// <summary>Value of the MUSICMANAGER_SOURCE tag (null = not written by this tool).</summary>
+    public string? TagSource { get; set; }
+
+    /// <summary>Raw Chromaprint fingerprint (base64 of the uint values), see <see cref="Rules.FingerprintMatcher"/>.</summary>
+    public string? Fingerprint { get; set; }
+
+    /// <summary>Fingerprinting failed (e.g. unreadable file); not retried until the file changes.</summary>
+    public bool FingerprintFailed { get; set; }
+
+    public DateTimeOffset IndexedAt { get; set; } = DateTimeOffset.UtcNow;
+}

@@ -47,6 +47,8 @@ public static class ServiceCollectionExtensions
 
         services.AddSingleton<InboxScanner>();
         services.AddHostedService(sp => sp.GetRequiredService<InboxScanner>());
+        services.AddSingleton<LibraryIndexer>();
+        services.AddHostedService(sp => sp.GetRequiredService<LibraryIndexer>());
         services.AddHostedService<PipelineWorker>();
         services.AddHostedService<TrashCleanupService>();
         return services;

@@ -90,6 +90,16 @@ public sealed class AppSettings
     /// <summary>Minimum similarity (title, artist, duration; 0..1) of an external hit.</summary>
     public double ExternalMinScore { get; set; } = 0.75;
 
+    // --- Library index and duplicates -------------------------------------------------
+    /// <summary>Interval for re-scanning the library (changes made outside the tool).</summary>
+    public int LibraryScanIntervalMinutes { get; set; } = 60;
+
+    /// <summary>Compute fingerprints of library files in the background (needed for duplicates without MusicBrainz ID).</summary>
+    public bool LibraryFingerprinting { get; set; } = true;
+
+    /// <summary>Fingerprint similarity (0..1) from which two files count as the same recording.</summary>
+    public double DuplicateFingerprintThreshold { get; set; } = 0.85;
+
     // --- Trash --------------------------------------------------------------------------
     public int TrashRetentionDays { get; set; } = 30;
 
