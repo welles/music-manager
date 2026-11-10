@@ -24,8 +24,13 @@ public sealed partial class MatchingPipeline(
     CoverArtService coverArt,
     AiService ai,
     PipelineNotifier notifier,
+    WorkQueue queue,
     ILogger<MatchingPipeline> logger)
 {
+    private const int MaxTransientRetries = 5;
+    private static readonly TimeSpan TransientRetryDelay = TimeSpan.FromMinutes(1);
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<int, int> _transientRetries = new();
+
     // =====================================================================================
     // Group processing
     // =====================================================================================
@@ -649,6 +654,21 @@ public sealed partial class MatchingPipeline(
 
     private void Fail(TrackFile file, Exception ex)
     {
+        // MusicBrainz busy / network hiccup: queue the file again instead of failing it.
+        if (MusicBrainzService.IsTransient(ex) && _transientRetries.AddOrUpdate(file.Id, 1, (_, n) => n + 1) <= MaxTransientRetries)
+        {
+            logger.LogWarning("Transient error for {File}, retrying later: {Message}", file.RelativePath, ex.Message);
+            SetStatus(file, FileStatus.Queued, $"Vorübergehender Fehler, neuer Versuch in {TransientRetryDelay.TotalMinutes:0} Minute(n)");
+            AddEvent(file, $"Vorübergehender Fehler ({ex.Message}) – wird später erneut verarbeitet", EventLevel.Warning);
+            var groupId = file.GroupId;
+            _ = Task.Run(async () =>
+            {
+                await Task.Delay(TransientRetryDelay);
+                queue.Enqueue(new WorkItem(WorkKind.ProcessGroup, groupId));
+            });
+            return;
+        }
+
         logger.LogError(ex, "Processing {File} failed", file.RelativePath);
         SetStatus(file, FileStatus.Error, ex.Message);
         file.Error = ex.ToString();

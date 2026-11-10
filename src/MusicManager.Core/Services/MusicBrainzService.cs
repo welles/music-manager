@@ -32,7 +32,8 @@ public sealed class MusicBrainzService : IDisposable
             Query.DefaultUrlScheme = uri.Scheme;
         }
 
-        Query.DelayBetweenRequests = 1.0;
+        // Slightly above the documented 1 request/second to stay clear of 503 responses.
+        Query.DelayBetweenRequests = 1.2;
         var version = Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "1.0.0";
         _query = new Query("MusicManager", version, o.MusicBrainzContact);
     }
@@ -62,7 +63,7 @@ public sealed class MusicBrainzService : IDisposable
                     // 503 = rate limit / server busy; back off and try again.
                     last = ex;
                     _logger.LogWarning("MusicBrainz request {Key} failed (attempt {Attempt}): {Message}", cacheKey, attempt + 1, ex.Message);
-                    await Task.Delay(TimeSpan.FromSeconds(2 * (attempt + 1)), ct);
+                    await Task.Delay(TimeSpan.FromSeconds(5 * (attempt + 1)), ct);
                 }
             }
 
@@ -125,10 +126,19 @@ public sealed class MusicBrainzService : IDisposable
         }).ToList(),
     };
 
-    private static bool IsTransient(Exception ex) =>
-        ex is HttpRequestException or TaskCanceledException
-        || ex is MetaBrainz.Common.HttpError { Status: System.Net.HttpStatusCode.ServiceUnavailable or System.Net.HttpStatusCode.TooManyRequests
-            or System.Net.HttpStatusCode.BadGateway or System.Net.HttpStatusCode.GatewayTimeout };
+    /// <summary>Server busy, rate limited or network problems – worth trying again later.</summary>
+    public static bool IsTransient(Exception? ex)
+    {
+        for (; ex != null; ex = ex.InnerException)
+        {
+            if (ex is HttpRequestException or TaskCanceledException) return true;
+            if (ex is MetaBrainz.Common.HttpError { Status: System.Net.HttpStatusCode.ServiceUnavailable or System.Net.HttpStatusCode.TooManyRequests
+                    or System.Net.HttpStatusCode.BadGateway or System.Net.HttpStatusCode.GatewayTimeout })
+                return true;
+        }
+
+        return false;
+    }
 
     /// <summary>Text search for recordings (fallback when the fingerprint gives no result).</summary>
     public Task<List<RecordingSearchHit>> SearchRecordingsAsync(string? artist, string title, string? album, int limit, CancellationToken ct)
