@@ -140,6 +140,9 @@ namespace MusicManager.Core.Data.Migrations
                     b.Property<bool>("FingerprintFailed")
                         .HasColumnType("INTEGER");
 
+                    b.Property<int>("IndexVersion")
+                        .HasColumnType("INTEGER");
+
                     b.Property<long>("IndexedAt")
                         .HasColumnType("INTEGER");
 

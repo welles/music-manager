@@ -22,6 +22,9 @@ public sealed class LibraryIndexer(
     PipelineNotifier notifier,
     ILogger<LibraryIndexer> logger) : BackgroundService
 {
+    /// <summary>Raise when <see cref="Fill"/> reads more or different data, so existing entries are re-read.</summary>
+    public const int CurrentIndexVersion = 2;
+
     private readonly SemaphoreSlim _trigger = new(0, 1);
     private readonly SemaphoreSlim _lock = new(1, 1);
     private volatile bool _scanning;
@@ -102,7 +105,8 @@ public sealed class LibraryIndexer(
                 var relative = Path.GetRelativePath(storage.LibraryRoot, path);
                 seen.Add(relative);
                 var info = new FileInfo(path);
-                if (existing.TryGetValue(relative, out var entry) && entry.FileSize == info.Length && entry.FileModifiedUtc == info.LastWriteTimeUtc)
+                var unchanged = existing.TryGetValue(relative, out var entry) && entry.FileSize == info.Length && entry.FileModifiedUtc == info.LastWriteTimeUtc;
+                if (unchanged && entry!.IndexVersion >= CurrentIndexVersion)
                     continue;
 
                 if (entry == null)
@@ -117,7 +121,7 @@ public sealed class LibraryIndexer(
                     updated++;
                 }
 
-                Fill(entry, path, info);
+                Fill(entry, path, info, resetFingerprint: !unchanged);
                 if (++count % 200 == 0)
                 {
                     _activity = $"Bibliothek: {count} Dateien eingelesen";
@@ -142,7 +146,7 @@ public sealed class LibraryIndexer(
         }
     }
 
-    private static void Fill(LibraryEntry entry, string path, FileInfo info)
+    private static void Fill(LibraryEntry entry, string path, FileInfo info, bool resetFingerprint = true)
     {
         var (tags, duration, bitrate, codec) = TagIo.ReadForIndex(path);
         entry.FileSize = info.Length;
@@ -159,8 +163,13 @@ public sealed class LibraryIndexer(
         entry.MbReleaseId = tags.MbReleaseId;
         entry.AcoustId = tags.AcoustId;
         entry.TagSource = tags.Extra.GetValueOrDefault(TagIo.SourceMarker);
-        entry.Fingerprint = null;
-        entry.FingerprintFailed = false;
+        if (resetFingerprint)
+        {
+            entry.Fingerprint = null;
+            entry.FingerprintFailed = false;
+        }
+
+        entry.IndexVersion = CurrentIndexVersion;
         entry.IndexedAt = DateTimeOffset.UtcNow;
     }
 

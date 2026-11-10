@@ -44,6 +44,7 @@ public static class TagIo
             t.MbReleaseId = tag.MusicBrainzReleaseId.NullIfEmpty();
             t.MbReleaseGroupId = tag.MusicBrainzReleaseGroupId.NullIfEmpty();
 
+            t.Date = FullDate(file) ?? t.Date;
             ReadExtra(file, t);
             t.AcoustId = (t.Extra.GetValueOrDefault("Acoustid Id") ?? t.Extra.GetValueOrDefault("acoustid_id")).NullIfEmpty();
         }
@@ -53,6 +54,19 @@ public static class TagIo
         }
 
         return t;
+    }
+
+    /// <summary>Full release date (YYYY-MM-DD) where the format stores it; TagLib's Year only has the year.</summary>
+    private static string? FullDate(File file)
+    {
+        string? value = null;
+        if (file.GetTag(TagTypes.Apple) is AppleTag apple)
+            value = apple.GetText(DayBox).FirstOrDefault();
+        else if (file.GetTag(TagTypes.Id3v2) is TagLib.Id3v2.Tag id3)
+            value = id3.GetFrames<TagLib.Id3v2.TextInformationFrame>("TDRC").FirstOrDefault()?.Text.FirstOrDefault();
+        else if (file.GetTag(TagTypes.Xiph) is TagLib.Ogg.XiphComment xiph)
+            value = xiph.GetFirstField("DATE");
+        return value is { Length: >= 4 } && char.IsDigit(value[0]) ? value.Trim() : null;
     }
 
     private static void ReadExtra(File file, TagSet t)
@@ -98,12 +112,31 @@ public static class TagIo
             using var file = File.Create(path, ReadStyle.Average);
             var p = file.Properties;
             return (tags, p?.Duration.TotalSeconds > 0 ? p.Duration.TotalSeconds : null, p?.AudioBitrate > 0 ? p.AudioBitrate : null,
-                p?.Codecs.OfType<ICodec>().FirstOrDefault()?.Description);
+                ShortCodec(p?.Codecs.OfType<ICodec>().FirstOrDefault()?.Description));
         }
         catch (Exception ex) when (ex is CorruptFileException or UnsupportedFormatException)
         {
             return (tags, null, null, null);
         }
+    }
+
+    /// <summary>Same short names as ffprobe ("aac", "mp3", "flac" …) so both sides of a comparison match.</summary>
+    public static string? ShortCodec(string? description)
+    {
+        if (string.IsNullOrWhiteSpace(description)) return null;
+        var d = description.ToLowerInvariant();
+        return d switch
+        {
+            _ when d.Contains("aac") || d.Contains("mp4a") => "aac",
+            _ when d.Contains("layer 3") => "mp3",
+            _ when d.Contains("alac") || d.Contains("apple lossless") => "alac",
+            _ when d.Contains("flac") => "flac",
+            _ when d.Contains("vorbis") => "vorbis",
+            _ when d.Contains("opus") => "opus",
+            _ when d.Contains("pcm") || d.Contains("wave") => "pcm",
+            _ when d.Contains("wma") || d.Contains("windows media") => "wma",
+            _ => description,
+        };
     }
 
     public static byte[]? ReadEmbeddedCover(string path)

@@ -268,6 +268,9 @@ public sealed class LibraryEntry
     /// <summary>Fingerprinting failed (e.g. unreadable file); not retried until the file changes.</summary>
     public bool FingerprintFailed { get; set; }
 
+    /// <summary>Version of the index logic that read this entry (older entries are re-read).</summary>
+    public int IndexVersion { get; set; }
+
     public DateTimeOffset IndexedAt { get; set; } = DateTimeOffset.UtcNow;
 }
 
