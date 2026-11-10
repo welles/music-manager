@@ -134,22 +134,52 @@ public class MatchingFixTests
 {
     private static readonly ArtistRuleSet Rules = new();
 
+    private static TagSet Mb(string artist) => new() { Title = "x", Artist = artist, Artists = [artist] };
+
     [Fact]
-    public void FeaturesFromOriginalTitleAreAddedWhenMusicBrainzOmitsThem()
+    public void FeaturesFromSourceAreAddedWhenMusicBrainzHasOnlyTheMainArtist()
     {
-        var mb = new TagSet { Title = "Shutdown", Artist = "Chase & Status", Artists = ["Chase & Status"] };
-        var t = TaggingRules.AddFeaturesFromOriginalTitle(mb, "Shutdown (feat. IRAH & Col3trane)",
-            ArtistRuleSet.FromRules([new ArtistRule { Kind = ArtistRuleKind.NoSplit, Pattern = "Chase & Status" }]));
+        var t = TaggingRules.AddSourceArtists(Mb("Chase & Status"),
+            new TagSet { Title = "Shutdown (feat. IRAH & Col3trane)", Artist = "Chase & Status, IRAH, Col3trane", Artists = ["Chase & Status", "IRAH", "Col3trane"] }, Rules);
         Assert.Equal("Chase & Status feat. IRAH & Col3trane", t.Artist);
         Assert.Equal(["Chase & Status", "IRAH", "Col3trane"], t.Artists);
     }
 
     [Fact]
-    public void FeaturesAlreadyCreditedAreNotDuplicated()
+    public void OtherSourceArtistsAreAddedAsCollaborators()
     {
-        var mb = new TagSet { Title = "Song", Artist = "A feat. B", Artists = ["A", "B"] };
-        var t = TaggingRules.AddFeaturesFromOriginalTitle(mb, "Song (feat. B)", Rules);
-        Assert.Equal("A feat. B", t.Artist);
+        var t = TaggingRules.AddSourceArtists(Mb("Me&You"),
+            new TagSet { Title = "The Hoop Loop", Artists = ["Me&You", "TM Juke", "Robert Luis"] }, Rules);
+        Assert.Equal("Me&You, TM Juke & Robert Luis", t.Artist);
+        Assert.Equal(["Me&You", "TM Juke", "Robert Luis"], t.Artists);
+    }
+
+    [Fact]
+    public void MusicBrainzCreditsWinWhenTheyHaveAdditionalArtists()
+    {
+        var mb = new TagSet { Artist = "Czarface & Frankie Pulitzer feat. Method Man", Artists = ["Czarface", "Frankie Pulitzer", "Method Man"] };
+        var t = TaggingRules.AddSourceArtists(mb, new TagSet { Artists = ["CZARFACE", "Frankie Pulitzer", "Someone Else"] }, Rules);
+        Assert.Same(mb, t);
+    }
+
+    [Fact]
+    public void SourceArtistsAreIgnoredWhenTheMainArtistDiffers()
+    {
+        var mb = Mb("Musica Nuda");
+        var t = TaggingRules.AddSourceArtists(mb, new TagSet { Artists = ["Petra Magoni", "Ferruccio Spinetti"] }, Rules);
+        Assert.Same(mb, t);
+    }
+
+    [Fact]
+    public void FolderUsesOnlyTheMainAlbumArtist()
+    {
+        var rules = ArtistRuleSet.FromRules([new ArtistRule { Kind = ArtistRuleKind.ForceSplit, Pattern = "Audio88 & Yassin" }]);
+        var t = TaggingRules.Apply(new TagSet { Title = "t", Album = "a", Artist = "Audio88 & Yassin feat. X", AlbumArtist = "Audio88 & Yassin" }, rules);
+        Assert.Equal("Audio88 & Yassin", t.FolderArtist);
+        Assert.StartsWith("Audio88 & Yassin" + Path.DirectorySeparatorChar, PathBuilder.Build(t));
+
+        var many = TaggingRules.Apply(new TagSet { Title = "War Starter", Album = "Wrong Crowd EP", AlbumArtist = "Bou & Friction & MC Eksman" }, Rules);
+        Assert.Equal(Path.Combine("Bou", "Wrong Crowd EP", "Bou & Friction & MC Eksman - War Starter.m4a"), PathBuilder.Build(many));
     }
 
     [Theory]

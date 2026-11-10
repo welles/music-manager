@@ -419,7 +419,7 @@ public sealed partial class MatchingPipeline(
         }
 
         file.FinalTags = TagBuilder.Build(release, candidate.RecordingId, artists, settings, rules);
-        file.FinalTags = TaggingRules.AddFeaturesFromOriginalTitle(file.FinalTags, file.CleanedTags?.Title, rules);
+        file.FinalTags = TaggingRules.AddSourceArtists(file.FinalTags, file.CleanedTags, rules);
         file.FinalTags.AcoustId = file.AcoustId;
         await TranslateForeignTitlesAsync(file, settings, ct);
         file.TargetPath = PathBuilder.Build(file.FinalTags);

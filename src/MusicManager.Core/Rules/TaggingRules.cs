@@ -91,31 +91,46 @@ public static partial class TaggingRules
         if (string.IsNullOrWhiteSpace(t.Artist) && t.Artists.Count > 0)
             t.Artist = string.Join(" & ", t.Artists);
 
+        // Folder: only the main album artist (or main artist).
+        t.FolderArtist ??= rules.MainArtist(t.AlbumArtist) ?? rules.MainArtist(t.Artist) ?? t.Artists.FirstOrDefault();
+
         return t;
     }
 
     /// <summary>
-    /// Adds featured artists named in the original title ("Song (feat. B)") that the MusicBrainz
-    /// credits do not contain, so features are not lost when MusicBrainz omits them.
+    /// Additional artists: if MusicBrainz credits more than one artist for the track, only those
+    /// count. If MusicBrainz only knows the main artist, the additional artists of the source
+    /// (artist list and "feat." in the title) are added – but only if the source's first artist
+    /// is the same as the MusicBrainz main artist (otherwise e.g. band members of a duo would
+    /// show up next to the duo name).
     /// </summary>
-    public static TagSet AddFeaturesFromOriginalTitle(TagSet tags, string? originalTitle, ArtistRuleSet rules)
+    public static TagSet AddSourceArtists(TagSet mb, TagSet? source, ArtistRuleSet rules)
     {
-        if (string.IsNullOrWhiteSpace(originalTitle)) return tags;
-        var (_, featured) = ExtractFeatures(originalTitle);
-        if (featured == null) return tags;
+        if (source == null || mb.Artists.Count != 1) return mb;
+        var main = mb.Artists[0];
 
-        var known = tags.Artists.Select(TextUtil.Normalize).ToHashSet();
-        var missing = rules.Split(featured).Where(f => !known.Contains(TextUtil.Normalize(f))).ToList();
-        if (missing.Count == 0) return tags;
+        var sourceArtists = (source.Artists.Count > 0 ? source.Artists : rules.Split(source.Artist)).Select(rules.ReplaceName).ToList();
+        var (_, featuredText) = ExtractFeatures(source.Title ?? "");
+        var featured = featuredText == null ? [] : rules.Split(featuredText).Select(rules.ReplaceName).ToList();
 
-        var t = tags.Clone();
-        t.Artists.AddRange(missing);
-        var joined = string.Join(" & ", missing);
-        t.Artist = string.IsNullOrWhiteSpace(t.Artist)
-            ? string.Join(" & ", t.Artists)
-            : FeatureMarker().IsMatch(t.Artist) ? $"{t.Artist} & {joined}" : $"{t.Artist} feat. {joined}";
+        var first = sourceArtists.FirstOrDefault();
+        if (first == null || TextUtil.Similarity(first, main) < 0.8) return mb;
+
+        var known = new HashSet<string> { TextUtil.Normalize(main) };
+        var feats = featured.Where(f => known.Add(TextUtil.Normalize(f))).ToList();
+        var others = sourceArtists.Skip(1).Where(a => known.Add(TextUtil.Normalize(a))).ToList();
+        if (feats.Count == 0 && others.Count == 0) return mb;
+
+        var t = mb.Clone();
+        t.Artists = [main, .. others, .. feats];
+        var display = others.Count > 0 ? JoinList([mb.Artist ?? main, .. others]) : mb.Artist ?? main;
+        t.Artist = feats.Count > 0 ? $"{display} feat. {JoinList(feats)}" : display;
         return t;
     }
+
+    /// <summary>"A", "A & B", "A, B & C".</summary>
+    private static string JoinList(IReadOnlyList<string> items) =>
+        items.Count <= 1 ? string.Concat(items) : $"{string.Join(", ", items.Take(items.Count - 1))} & {items[^1]}";
 
     /// <summary>Removes "(feat. X)" / " ft. X" from a title and returns the featured artist string.</summary>
     public static (string Title, string? Featured) ExtractFeatures(string title)
@@ -152,6 +167,4 @@ public static partial class TaggingRules
     [GeneratedRegex(@"\s{2,}")]
     private static partial Regex MultiSpace();
 
-    [GeneratedRegex(@"\s(feat\.|ft\.|featuring)\s", RegexOptions.IgnoreCase)]
-    private static partial Regex FeatureMarker();
 }
