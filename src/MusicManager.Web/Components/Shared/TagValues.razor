@@ -37,7 +37,8 @@ else
     [Parameter] public TagField? Field { get; set; }
     [Parameter] public bool Removed { get; set; }
 
-    private static readonly string[] Separators = [",", ";", " / ", " & "];
+    // "&" is left out on purpose: band names like "Chase & Status" are common single values.
+    private static readonly string[] Separators = [",", ";", "/"];
 
     private string? Strike => Removed ? "text-decoration:line-through;opacity:.7" : null;
 }
