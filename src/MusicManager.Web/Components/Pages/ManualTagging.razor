@@ -1,0 +1,170 @@
+@page "/manuell"
+@using MusicManager.Core.Rules
+@inject IDbContextFactory<AppDbContext> DbFactory
+@inject ReviewService Review
+@inject SettingsService SettingsService
+@inject ISnackbar Snackbar
+@inject NavigationManager Nav
+
+<PageTitle>Manuell taggen – Music Manager</PageTitle>
+
+<MudText Typo="Typo.h5" Class="mb-2">Manuell taggen</MudText>
+<MudText Typo="Typo.body2" Class="mb-4">
+    Für Titel, die nicht in MusicBrainz stehen. Die eigenen Regeln (Künstler-Aufteilung, Titelbereinigung,
+    Dateibenennung, Konvertierung) werden genauso angewendet. Die Dateien werden als „manuell getaggt“ markiert.
+</MudText>
+
+@if (_rows.Count == 0)
+{
+    <MudProgressLinear Indeterminate="true" />
+    return;
+}
+
+<MudPaper Outlined="true" Class="pa-4 mb-4">
+    <MudText Typo="Typo.h6" Class="mb-2">Gemeinsam für alle @_rows.Count Datei(en)</MudText>
+    <MudGrid>
+        <MudItem xs="12" md="4"><MudTextField @bind-Value="_album" Label="Album" Variant="Variant.Outlined" /></MudItem>
+        <MudItem xs="12" md="4"><MudTextField @bind-Value="_albumArtist" Label="Album-Künstler" Variant="Variant.Outlined" HelperText="Leer = erster Künstler" /></MudItem>
+        <MudItem xs="6" md="2"><MudTextField @bind-Value="_date" Label="Jahr / Datum" Variant="Variant.Outlined" /></MudItem>
+        <MudItem xs="6" md="2"><MudTextField @bind-Value="_genres" Label="Genres" Variant="Variant.Outlined" HelperText="Kommagetrennt" /></MudItem>
+        <MudItem xs="12">
+            <MudStack Row="true" AlignItems="AlignItems.Center">
+                <MudFileUpload T="IBrowserFile" FilesChanged="UploadCover" Accept="image/*">
+                    <CustomContent>
+                        <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Image" OnClick="@context.OpenFilePickerAsync">Cover hochladen</MudButton>
+                    </CustomContent>
+                </MudFileUpload>
+                <MudText Typo="Typo.body2">
+                    @(_cover != null ? $"{_coverName} ({_cover.Length / 1024} KB)" : "Ohne Upload wird ein Cover aus dem Ordner oder der Originaldatei übernommen.")
+                </MudText>
+                @if (_cover != null)
+                {
+                    <MudIconButton Icon="@Icons.Material.Filled.Clear" Size="Size.Small" OnClick="() => _cover = null" />
+                }
+            </MudStack>
+        </MudItem>
+    </MudGrid>
+</MudPaper>
+
+<MudTable Items="_rows" Dense="true" Outlined="true" T="Row">
+    <HeaderContent>
+        <MudTh Style="width:80px">Nr.</MudTh>
+        <MudTh>Künstler</MudTh>
+        <MudTh>Titel</MudTh>
+        <MudTh>Datei</MudTh>
+        <MudTh>Ziel (Vorschau)</MudTh>
+    </HeaderContent>
+    <RowTemplate>
+        <MudTd><MudNumericField @bind-Value="context.Track" HideSpinButtons="true" Variant="Variant.Text" /></MudTd>
+        <MudTd><MudTextField @bind-Value="context.Artist" Variant="Variant.Text" /></MudTd>
+        <MudTd><MudTextField @bind-Value="context.Title" Variant="Variant.Text" /></MudTd>
+        <MudTd><MudText Typo="Typo.caption">@context.File.FileName</MudText></MudTd>
+        <MudTd><MudText Typo="Typo.caption" Class="mono">@PreviewPath(context)</MudText></MudTd>
+    </RowTemplate>
+</MudTable>
+
+<MudStack Row="true" Class="mt-4">
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Save" OnClick="Save" Disabled="_busy">
+        Taggen und einsortieren
+    </MudButton>
+    <MudButton Variant="Variant.Text" OnClick="@(() => Nav.NavigateTo("pruefung"))">Abbrechen</MudButton>
+</MudStack>
+
+@code {
+    [SupplyParameterFromQuery] public string? Ids { get; set; }
+
+    private sealed class Row
+    {
+        public required TrackFile File { get; init; }
+        public int? Track { get; set; }
+        public string? Artist { get; set; }
+        public string? Title { get; set; }
+    }
+
+    private List<Row> _rows = [];
+    private string? _album, _albumArtist, _date, _genres;
+    private byte[]? _cover;
+    private string? _coverName;
+    private bool _busy;
+    private ArtistRuleSet _rules = new();
+    private bool _convertPunctuation = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var ids = (Ids ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries).Select(int.Parse).ToList();
+        await using var db = await DbFactory.CreateDbContextAsync();
+        var files = await db.Files.AsNoTracking().Where(f => ids.Contains(f.Id)).OrderBy(f => f.RelativePath).ToListAsync();
+        _rules = await SettingsService.GetArtistRulesAsync();
+        _convertPunctuation = (await SettingsService.GetAsync()).ConvertPunctuation;
+
+        _rows = files.Select(f =>
+        {
+            var t = f.CleanedTags ?? new TagSet();
+            var ai = f.AiSuggestion;
+            return new Row
+            {
+                File = f,
+                Track = t.TrackNumber,
+                Artist = ai?.Artist ?? t.Artist,
+                Title = ai?.Title ?? t.Title,
+            };
+        }).ToList();
+
+        var first = files.FirstOrDefault();
+        _album = MostCommon(files.Select(f => f.AiSuggestion?.Album ?? f.CleanedTags?.Album));
+        _albumArtist = MostCommon(files.Select(f => f.CleanedTags?.AlbumArtist));
+        _date = MostCommon(files.Select(f => f.CleanedTags?.Date));
+        _genres = first?.CleanedTags?.Genres is { Count: > 0 } g ? string.Join(", ", g) : null;
+    }
+
+    private static string? MostCommon(IEnumerable<string?> values) =>
+        values.Where(v => !string.IsNullOrWhiteSpace(v)).GroupBy(v => v).OrderByDescending(g => g.Count()).Select(g => g.Key).FirstOrDefault();
+
+    private TagSet BuildTags(Row r) => new()
+    {
+        Title = r.Title,
+        Artist = r.Artist,
+        Album = _album,
+        AlbumArtist = string.IsNullOrWhiteSpace(_albumArtist) ? null : _albumArtist,
+        TrackNumber = r.Track,
+        TrackCount = r.Track != null ? _rows.Count : null,
+        Date = string.IsNullOrWhiteSpace(_date) ? null : _date.Trim(),
+        Genres = (_genres ?? "").Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries).ToList(),
+    };
+
+    private string PreviewPath(Row r) => PathBuilder.Build(TaggingRules.Apply(BuildTags(r), _rules, _convertPunctuation));
+
+    private async Task UploadCover(IBrowserFile file)
+    {
+        await using var stream = file.OpenReadStream(20 * 1024 * 1024);
+        using var ms = new MemoryStream();
+        await stream.CopyToAsync(ms);
+        _cover = ms.ToArray();
+        _coverName = file.Name;
+    }
+
+    private async Task Save()
+    {
+        if (_rows.Any(r => string.IsNullOrWhiteSpace(r.Artist) || string.IsNullOrWhiteSpace(r.Title)))
+        {
+            Snackbar.Add("Künstler und Titel sind Pflichtfelder.", Severity.Warning);
+            return;
+        }
+
+        _busy = true;
+        try
+        {
+            await Review.ApplyManualTagsAsync(_rows.Select(r => (r.File.Id, BuildTags(r))).ToList(), _cover);
+            Snackbar.Add($"{_rows.Count} Datei(en) werden geschrieben und einsortiert.", Severity.Success);
+            Nav.NavigateTo("pruefung");
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Fehler: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

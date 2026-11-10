@@ -1,0 +1,100 @@
+@page "/"
+@inherits LivePage
+@inject IDbContextFactory<AppDbContext> DbFactory
+@inject InboxScanner Scanner
+@inject WorkQueue Queue
+@inject ISnackbar Snackbar
+@inject Microsoft.Extensions.Options.IOptions<MusicManagerOptions> Options
+
+<PageTitle>Übersicht – Music Manager</PageTitle>
+
+<MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-4">
+    <MudText Typo="Typo.h5">Übersicht</MudText>
+    <MudSpacer />
+    <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Refresh" OnClick="() => Scan(false)">Eingang scannen</MudButton>
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.PlayArrow" OnClick="() => Scan(true)">
+        Sofort verarbeiten
+    </MudButton>
+</MudStack>
+
+@foreach (var warning in _warnings)
+{
+    <MudAlert Severity="Severity.Warning" Class="mb-2" Dense="true">@warning</MudAlert>
+}
+
+<MudGrid Class="mb-4">
+    @foreach (var (label, statuses, color, href) in Tiles)
+    {
+        <MudItem xs="6" sm="4" md="2">
+            <MudPaper Class="pa-4" Outlined="true" Style="cursor:pointer" @onclick="() => Nav.NavigateTo(href)">
+                <MudText Typo="Typo.h4" Color="@(Count(statuses) > 0 ? color : Color.Default)">@Count(statuses)</MudText>
+                <MudText Typo="Typo.body2">@label</MudText>
+            </MudPaper>
+        </MudItem>
+    }
+</MudGrid>
+
+<MudText Typo="Typo.body2" Class="mb-2">
+    Warteschlange: @Queue.Count Aufträge · Letzter Scan: @(Scanner.LastScan?.ToLocalTime().ToString("HH:mm:ss") ?? "–")
+</MudText>
+
+<MudTable Items="_recent" Dense="true" Hover="true" Outlined="true" OnRowClick="@((TableRowClickEventArgs<TrackFile> e) => Nav.NavigateTo($"datei/{e.Item!.Id}"))" T="TrackFile">
+    <ToolBarContent>
+        <MudText Typo="Typo.h6">Zuletzt bearbeitet</MudText>
+    </ToolBarContent>
+    <HeaderContent>
+        <MudTh>Datei</MudTh>
+        <MudTh>Status</MudTh>
+        <MudTh>Ergebnis</MudTh>
+        <MudTh>Zeit</MudTh>
+    </HeaderContent>
+    <RowTemplate>
+        <MudTd>@context.RelativePath</MudTd>
+        <MudTd><StatusChip Status="context.Status" /> <DecisionChip Decision="context.Decision" /></MudTd>
+        <MudTd>@(context.TargetPath ?? context.StatusReason)</MudTd>
+        <MudTd>@context.UpdatedAt.ToLocalTime().ToString("g")</MudTd>
+    </RowTemplate>
+</MudTable>
+
+@code {
+    [Inject] private NavigationManager Nav { get; set; } = null!;
+    private Dictionary<FileStatus, int> _counts = [];
+    private List<TrackFile> _recent = [];
+    private List<string> _warnings = [];
+
+    private static readonly (string, FileStatus[], Color, string)[] Tiles =
+    [
+        ("Im Eingang", [FileStatus.Waiting, FileStatus.Queued], Color.Default, "dateien"),
+        ("In Bearbeitung", [FileStatus.Processing, FileStatus.Approved], Color.Info, "dateien"),
+        ("Zu prüfen", [FileStatus.NeedsReview], Color.Warning, "pruefung"),
+        ("Nicht in MusicBrainz", [FileStatus.NotInMusicBrainz], Color.Warning, "pruefung"),
+        ("Fehler", [FileStatus.Error], Color.Error, "pruefung"),
+        ("Einsortiert", [FileStatus.Done], Color.Success, "dateien"),
+    ];
+
+    private int Count(FileStatus[] statuses) => statuses.Sum(s => _counts.GetValueOrDefault(s));
+
+    protected override async Task ReloadAsync()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        _counts = await db.Files.GroupBy(f => f.Status).Select(g => new { g.Key, Count = g.Count() })
+            .ToDictionaryAsync(x => x.Key, x => x.Count);
+        _recent = await db.Files.AsNoTracking().OrderByDescending(f => f.UpdatedAt).Take(20).ToListAsync();
+
+        var o = Options.Value;
+        _warnings = [];
+        if (string.IsNullOrWhiteSpace(o.AcoustIdApiKey))
+            _warnings.Add("Kein AcoustID-API-Key gesetzt (MusicManager__AcoustIdApiKey) – Erkennung nur über Textsuche.");
+        if (string.IsNullOrWhiteSpace(o.AnthropicApiKey))
+            _warnings.Add("Kein Anthropic-API-Key gesetzt (MusicManager__AnthropicApiKey) – KI-Funktionen sind deaktiviert.");
+        if (!Directory.Exists(o.InboxPath)) _warnings.Add($"Eingangsordner {o.InboxPath} existiert nicht.");
+        if (!Directory.Exists(o.LibraryPath)) _warnings.Add($"Bibliothek {o.LibraryPath} existiert nicht.");
+    }
+
+    private async Task Scan(bool now)
+    {
+        await Scanner.ScanNowAsync(now);
+        Snackbar.Add(now ? "Alle wartenden Gruppen wurden in die Warteschlange gestellt." : "Eingang gescannt.", Severity.Info);
+        await ReloadAsync();
+    }
+}

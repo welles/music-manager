@@ -1,0 +1,112 @@
+@page "/pruefung"
+@inherits LivePage
+@inject IDbContextFactory<AppDbContext> DbFactory
+@inject ReviewService Review
+@inject IDialogService Dialogs
+@inject ISnackbar Snackbar
+@inject NavigationManager Nav
+
+<PageTitle>Prüfwarteschlange – Music Manager</PageTitle>
+
+<MudDataGrid T="TrackFile" Items="_files" Dense="true" Hover="true" MultiSelection="true" @bind-SelectedItems="_selected"
+             Groupable="true" GroupExpanded="true" RowsPerPage="100">
+    <ToolBarContent>
+        <MudText Typo="Typo.h5">Prüfwarteschlange</MudText>
+        <MudSpacer />
+        <MudButtonGroup Variant="Variant.Outlined" Size="Size.Small">
+            <MudButton StartIcon="@Icons.Material.Filled.Search" Disabled="_selected.Count == 0" OnClick="SearchRelease">Release zuweisen</MudButton>
+            <MudButton StartIcon="@Icons.Material.Filled.Edit" Disabled="_selected.Count == 0" OnClick="ManualTag">Manuell taggen</MudButton>
+            <MudButton StartIcon="@Icons.Material.Filled.Replay" Disabled="_selected.Count == 0" OnClick="Retry">Erneut verarbeiten</MudButton>
+            <MudButton StartIcon="@Icons.Material.Filled.Delete" Color="Color.Error" Disabled="_selected.Count == 0" OnClick="Discard">Verwerfen</MudButton>
+        </MudButtonGroup>
+    </ToolBarContent>
+    <Columns>
+        <SelectColumn T="TrackFile" />
+        <PropertyColumn Property="x => x.Group!.RelativeFolder" Title="Gruppe" Grouping="true" Hidden="true">
+            <GroupTemplate>
+                <MudText Typo="Typo.subtitle2">@(string.IsNullOrEmpty(context.Grouping.Key?.ToString()) ? "Eingang (lose Dateien)" : context.Grouping.Key) (@context.Grouping.Count())</MudText>
+            </GroupTemplate>
+        </PropertyColumn>
+        <TemplateColumn Title="Datei" SortBy="x => x.FileName">
+            <CellTemplate>
+                <MudLink Href="@($"datei/{context.Item.Id}")">@context.Item.FileName</MudLink>
+                <MudText Typo="Typo.caption" Class="d-block">@Describe(context.Item.CleanedTags)</MudText>
+            </CellTemplate>
+        </TemplateColumn>
+        <PropertyColumn Property="x => x.Status" Title="Status">
+            <CellTemplate><StatusChip Status="context.Item.Status" /></CellTemplate>
+        </PropertyColumn>
+        <PropertyColumn Property="x => x.StatusReason" Title="Grund" />
+        <TemplateColumn Title="Bester Kandidat">
+            <CellTemplate>
+                @if (context.Item.Candidates.FirstOrDefault() is { } best)
+                {
+                    <MudText Typo="Typo.body2">@best.Release.Title (@best.Release.Date, @best.Release.Country)</MudText>
+                    <MudText Typo="Typo.caption">@best.Score.ToString("0.#") Punkte · @context.Item.Candidates.Count Kandidaten</MudText>
+                }
+                else if (context.Item.AiSuggestion is { } s)
+                {
+                    <MudText Typo="Typo.body2"><MudIcon Icon="@Icons.Material.Filled.AutoAwesome" Size="Size.Small" /> @s.Artist – @s.Title</MudText>
+                }
+            </CellTemplate>
+        </TemplateColumn>
+    </Columns>
+    <NoRecordsContent>
+        <MudText>Nichts zu prüfen. 🎉</MudText>
+    </NoRecordsContent>
+</MudDataGrid>
+
+@code {
+    private List<TrackFile> _files = [];
+    private HashSet<TrackFile> _selected = [];
+
+    protected override async Task ReloadAsync()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        _files = await db.Files.AsNoTracking().Include(f => f.Group)
+            .Where(f => ReviewService.OpenStatuses.Contains(f.Status))
+            .OrderBy(f => f.Group!.RelativeFolder).ThenBy(f => f.RelativePath)
+            .ToListAsync();
+        var ids = _files.Select(f => f.Id).ToHashSet();
+        _selected = _files.Where(f => _selected.Any(s => s.Id == f.Id)).ToHashSet();
+    }
+
+    private static string Describe(TagSet? t) =>
+        t == null ? "" : string.Join(" · ", new[] { t.Artist, t.Title, t.Album }.Where(x => !string.IsNullOrWhiteSpace(x)));
+
+    private List<int> SelectedIds => _selected.Select(f => f.Id).ToList();
+
+    private async Task SearchRelease()
+    {
+        var first = _selected.First();
+        var t = first.CleanedTags;
+        var query = string.Join(" ", new[] { t?.Album ?? t?.Title, t?.AlbumArtist ?? t?.Artist }.Where(x => !string.IsNullOrWhiteSpace(x)));
+        var parameters = new DialogParameters<ReleaseSearchDialog>
+        {
+            { x => x.FileIds, SelectedIds },
+            { x => x.Query, query },
+        };
+        var dialog = await Dialogs.ShowAsync<ReleaseSearchDialog>("Release suchen", parameters,
+            new DialogOptions { MaxWidth = MaxWidth.Large, FullWidth = true });
+        var result = await dialog.Result;
+        if (result is { Canceled: false }) _selected.Clear();
+    }
+
+    private void ManualTag() => Nav.NavigateTo($"manuell?ids={string.Join(",", SelectedIds)}");
+
+    private async Task Retry()
+    {
+        foreach (var id in SelectedIds) await Review.RetryAsync(id);
+        Snackbar.Add($"{_selected.Count} Datei(en) werden erneut verarbeitet.", Severity.Info);
+        _selected.Clear();
+    }
+
+    private async Task Discard()
+    {
+        var ok = await Dialogs.ShowMessageBoxAsync("Verwerfen",
+            $"{_selected.Count} Datei(en) in den Papierkorb verschieben, ohne sie einzusortieren?", yesText: "Verwerfen", cancelText: "Abbrechen");
+        if (ok != true) return;
+        foreach (var id in SelectedIds) await Review.DiscardAsync(id);
+        _selected.Clear();
+    }
+}

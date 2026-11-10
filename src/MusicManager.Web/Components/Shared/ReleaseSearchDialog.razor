@@ -1,0 +1,111 @@
+@inject ReviewService Review
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <TitleContent>Release in MusicBrainz suchen</TitleContent>
+    <DialogContent>
+        <MudText Typo="Typo.body2" Class="mb-2">
+            Suche nach Album und Künstler, oder füge eine MusicBrainz-Release-URL bzw. -ID ein.
+            Die Tracks werden über Recording-ID oder Titel und Länge zugeordnet (@FileIds.Count Datei(en)).
+        </MudText>
+        <MudStack Row="true" AlignItems="AlignItems.Center">
+            <MudTextField @bind-Value="Query" Label="Suche" Variant="Variant.Outlined" Immediate="true" OnKeyUp="OnKey" />
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="Search" Disabled="_busy">Suchen</MudButton>
+        </MudStack>
+        @if (_busy)
+        {
+            <MudProgressLinear Indeterminate="true" Class="my-2" />
+        }
+        <MudTable Items="_results" Dense="true" Hover="true" Class="mt-2" Height="400px" FixedHeader="true">
+            <HeaderContent>
+                <MudTh>Release</MudTh>
+                <MudTh>Künstler</MudTh>
+                <MudTh>Datum</MudTh>
+                <MudTh>Land</MudTh>
+                <MudTh>Typ</MudTh>
+                <MudTh>Tracks</MudTh>
+                <MudTh></MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd>
+                    <MudLink Href="@($"https://musicbrainz.org/release/{context.ReleaseId}")" Target="_blank">@context.Title</MudLink>
+                </MudTd>
+                <MudTd>@context.ArtistString</MudTd>
+                <MudTd>@context.Date</MudTd>
+                <MudTd>@context.Country</MudTd>
+                <MudTd>@string.Join(" + ", new[] { context.PrimaryType }.Concat(context.SecondaryTypes).OfType<string>())</MudTd>
+                <MudTd>@context.TrackCount</MudTd>
+                <MudTd>
+                    <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Primary" Disabled="_busy"
+                               OnClick="() => Assign(context.ReleaseId)">Zuweisen</MudButton>
+                </MudTd>
+            </RowTemplate>
+        </MudTable>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => MudDialog.Cancel()">Abbrechen</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = null!;
+    [Parameter] public List<int> FileIds { get; set; } = [];
+    [Parameter] public string? Query { get; set; }
+
+    private List<ReleaseAppearance> _results = [];
+    private bool _busy;
+
+    private static readonly System.Text.RegularExpressions.Regex GuidPattern =
+        new("[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
+    private async Task OnKey(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter") await Search();
+    }
+
+    private async Task Search()
+    {
+        if (string.IsNullOrWhiteSpace(Query)) return;
+        var guid = GuidPattern.Match(Query);
+        if (guid.Success)
+        {
+            await Assign(guid.Value);
+            return;
+        }
+
+        _busy = true;
+        try
+        {
+            _results = await Review.SearchReleasesAsync(Query);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Suche fehlgeschlagen: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task Assign(string releaseId)
+    {
+        _busy = true;
+        try
+        {
+            var problems = await Review.AssignReleaseAsync(FileIds, releaseId);
+            foreach (var p in problems) Snackbar.Add(p, Severity.Warning);
+            if (problems.Count < FileIds.Count)
+                Snackbar.Add("Release zugewiesen – Dateien werden geschrieben.", Severity.Success);
+            MudDialog.Close(DialogResult.Ok(true));
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Zuweisen fehlgeschlagen: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

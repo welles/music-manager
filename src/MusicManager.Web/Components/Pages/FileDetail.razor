@@ -1,0 +1,316 @@
+@page "/datei/{Id:int}"
+@inherits LivePage
+@inject IDbContextFactory<AppDbContext> DbFactory
+@inject ReviewService Review
+@inject IDialogService Dialogs
+@inject ISnackbar Snackbar
+@inject NavigationManager Nav
+
+<PageTitle>@(_file?.FileName ?? "Datei") – Music Manager</PageTitle>
+
+@if (_file == null)
+{
+    <MudProgressLinear Indeterminate="true" />
+    return;
+}
+
+<MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Class="mb-2">
+    <MudIconButton Icon="@Icons.Material.Filled.ArrowBack" OnClick="@(() => Nav.NavigateTo("pruefung"))" />
+    <MudText Typo="Typo.h5">@_file.FileName</MudText>
+    <StatusChip Status="_file.Status" />
+    <DecisionChip Decision="_file.Decision" />
+    @if (_file.ManuallyTagged)
+    {
+        <MudChip T="string" Size="Size.Small" Color="Color.Secondary" Variant="Variant.Outlined">manuell getaggt</MudChip>
+    }
+    <MudSpacer />
+    <MudButtonGroup Variant="Variant.Outlined" Size="Size.Small">
+        @if (_file.Status == FileStatus.NeedsReview && _file.FinalTags != null && _file.SelectedCandidateKey != null)
+        {
+            <MudButton StartIcon="@Icons.Material.Filled.Check" Color="Color.Success" OnClick="Approve">Vorschau bestätigen</MudButton>
+        }
+        <MudButton StartIcon="@Icons.Material.Filled.Search" OnClick="SearchRelease" Disabled="!IsOpen">Release suchen</MudButton>
+        <MudButton StartIcon="@Icons.Material.Filled.Edit" Href="@($"manuell?ids={_file.Id}")" Disabled="!IsOpen">Manuell taggen</MudButton>
+        <MudButton StartIcon="@Icons.Material.Filled.Replay" OnClick="Retry" Disabled="!CanRetry">Erneut verarbeiten</MudButton>
+        <MudButton StartIcon="@Icons.Material.Filled.Delete" Color="Color.Error" OnClick="Discard" Disabled="!IsOpen">Verwerfen</MudButton>
+    </MudButtonGroup>
+</MudStack>
+
+<MudText Typo="Typo.body2" Class="mb-1 mono">@_file.RelativePath</MudText>
+@if (_file.StatusReason != null)
+{
+    <MudAlert Severity="@(_file.Status == FileStatus.Error ? Severity.Error : Severity.Info)" Dense="true" Class="mb-2">@_file.StatusReason</MudAlert>
+}
+
+<MudTabs Outlined="true" Border="true" TabPanelsClass="pa-4" @bind-ActivePanelIndex="_tab">
+    <MudTabPanel Text="Kandidaten" BadgeData="@(_file.Candidates.Count > 0 ? _file.Candidates.Count : null)">
+        @if (_file.Candidates.Count == 0)
+        {
+            <MudText>Keine MusicBrainz-Kandidaten. Nutze „Release suchen“ oder „Manuell taggen“.</MudText>
+        }
+        else
+        {
+            <MudTable Items="_file.Candidates" Dense="true" Hover="true" T="ReleaseCandidate">
+                <HeaderContent>
+                    <MudTh>Punkte</MudTh>
+                    <MudTh>Release</MudTh>
+                    <MudTh>Datum / Land</MudTh>
+                    <MudTh>Typ</MudTh>
+                    <MudTh>Track</MudTh>
+                    <MudTh>Recording</MudTh>
+                    <MudTh></MudTh>
+                </HeaderContent>
+                <RowTemplate>
+                    <MudTd>
+                        <MudText Typo="Typo.body2" Color="@(context.Key == _file.SelectedCandidateKey ? Color.Primary : Color.Default)">
+                            <b>@context.Score.ToString("0.#")</b> (@context.Confidence.ToString("P0"))
+                        </MudText>
+                    </MudTd>
+                    <MudTd>
+                        <MudLink Href="@($"https://musicbrainz.org/release/{context.Release.ReleaseId}")" Target="_blank">@context.Release.Title</MudLink>
+                        <MudText Typo="Typo.caption" Class="d-block">@context.Release.ArtistString</MudText>
+                    </MudTd>
+                    <MudTd>@context.Release.Date · @context.Release.Country</MudTd>
+                    <MudTd>
+                        @string.Join(" + ", new[] { context.Release.PrimaryType }.Concat(context.Release.SecondaryTypes).OfType<string>())
+                        <MudText Typo="Typo.caption" Class="d-block">@context.Release.Status · @string.Join(", ", context.Release.Formats)</MudText>
+                    </MudTd>
+                    <MudTd>@context.Release.TrackPosition/@context.Release.TrackCount</MudTd>
+                    <MudTd>
+                        @context.RecordingArtist – @context.RecordingTitle
+                        <MudText Typo="Typo.caption" Class="d-block">
+                            @context.MatchSource @context.MatchScore.ToString("P0") · @FormatLength(context.RecordingLengthSeconds) (Datei @FormatLength(_file.DurationSeconds))
+                        </MudText>
+                    </MudTd>
+                    <MudTd Style="white-space:nowrap">
+                        <MudIconButton Icon="@Icons.Material.Filled.Visibility" Size="Size.Small" title="Tag-Vorschau" OnClick="() => Preview(context)" />
+                        <MudIconButton Icon="@Icons.Material.Filled.Info" Size="Size.Small" title="Punkte" OnClick="() => ToggleBreakdown(context.Key)" />
+                        @if (IsOpen)
+                        {
+                            <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary" OnClick="() => Choose(context)">Wählen</MudButton>
+                        }
+                    </MudTd>
+                </RowTemplate>
+                <ChildRowContent>
+                    @if (_expanded.Contains(context.Key))
+                    {
+                        <MudTr>
+                            <td colspan="7">
+                                <MudStack Row="true" Wrap="Wrap.Wrap" Spacing="1" Class="pa-2">
+                                    @foreach (var (name, value) in context.Breakdown.OrderByDescending(b => Math.Abs(b.Value)))
+                                    {
+                                        <MudChip T="string" Size="Size.Small" Color="@(value >= 0 ? Color.Success : Color.Error)" Variant="Variant.Text">
+                                            @name: @value.ToString("+0.#;-0.#;0")
+                                        </MudChip>
+                                    }
+                                </MudStack>
+                            </td>
+                        </MudTr>
+                    }
+                </ChildRowContent>
+            </MudTable>
+        }
+    </MudTabPanel>
+
+    <MudTabPanel Text="Tags">
+        @if (_preview != null)
+        {
+            <MudAlert Severity="Severity.Info" Dense="true" Class="mb-2" ShowCloseIcon="true" CloseIconClicked="() => _preview = null">
+                Vorschau für Kandidat „@_preview.SelectedCandidate?.Release.Title“ (noch nicht übernommen)
+            </MudAlert>
+        }
+        <MudSimpleTable Dense="true" Hover="true" Bordered="true">
+            <thead>
+                <tr><th>Feld</th><th>Original</th><th>Bereinigt</th><th>@(_preview != null ? "Vorschau" : "Final")</th></tr>
+            </thead>
+            <tbody>
+                @foreach (var (label, getter) in TagFields)
+                {
+                    <tr>
+                        <td>@label</td>
+                        <td>@Value(_file.OriginalTags, getter)</td>
+                        <td>@Value(_file.CleanedTags, getter)</td>
+                        <td><b>@Value(FinalTags, getter)</b></td>
+                    </tr>
+                }
+                <tr>
+                    <td>Zielpfad</td><td></td><td></td>
+                    <td class="mono">@((_preview ?? _file).TargetPath)</td>
+                </tr>
+                <tr>
+                    <td>Cover</td><td></td><td></td>
+                    <td>@(_file.CoverSource ?? "–")</td>
+                </tr>
+            </tbody>
+        </MudSimpleTable>
+    </MudTabPanel>
+
+    <MudTabPanel Text="KI" Icon="@Icons.Material.Filled.AutoAwesome" Disabled="_file.AiDecision == null && _file.AiSuggestion == null">
+        @if (_file.AiDecision is { } d)
+        {
+            <MudText Typo="Typo.h6">Release-Entscheidung</MudText>
+            <MudSimpleTable Dense="true" Class="mb-4">
+                <tbody>
+                    <tr><td>Entscheidung</td><td>@(d.Decision == "choose" ? "Release gewählt" : "Manuelle Prüfung empfohlen") @(d.Accepted ? "(übernommen)" : "(nicht übernommen)")</td></tr>
+                    <tr><td>Sicherheit</td><td>@d.Confidence.ToString("P0")</td></tr>
+                    <tr><td>Release</td><td>@(_file.Candidates.FirstOrDefault(c => c.Release.ReleaseId == d.ReleaseId)?.Release.Title ?? d.ReleaseId)</td></tr>
+                    <tr><td>Begründung</td><td>@d.Reasoning</td></tr>
+                    <tr><td>Modell</td><td>@d.Model · @d.Timestamp.ToLocalTime().ToString("g")</td></tr>
+                </tbody>
+            </MudSimpleTable>
+        }
+        @if (_file.AiSuggestion is { } s)
+        {
+            <MudText Typo="Typo.h6">Tag-Vorschlag</MudText>
+            <MudSimpleTable Dense="true">
+                <tbody>
+                    <tr><td>Künstler</td><td>@s.Artist (@string.Join(" | ", s.Artists))</td></tr>
+                    <tr><td>Titel</td><td>@s.Title</td></tr>
+                    <tr><td>Album</td><td>@s.Album</td></tr>
+                    <tr><td>Sicherheit</td><td>@s.Confidence.ToString("P0")</td></tr>
+                    <tr><td>Hinweis</td><td>@s.Notes</td></tr>
+                    <tr><td>Verwendet</td><td>@(_file.CleanupSource == "ai" ? "ja, für die Suche" : "nein")</td></tr>
+                </tbody>
+            </MudSimpleTable>
+        }
+    </MudTabPanel>
+
+    <MudTabPanel Text="Datei">
+        <MudSimpleTable Dense="true">
+            <tbody>
+                <tr><td>Codec</td><td>@_file.Codec</td></tr>
+                <tr><td>Bitrate</td><td>@_file.BitrateKbps kbps</td></tr>
+                <tr><td>Dauer</td><td>@FormatLength(_file.DurationSeconds)</td></tr>
+                <tr><td>Größe</td><td>@((_file.FileSize / 1024.0 / 1024.0).ToString("0.0")) MB</td></tr>
+                <tr><td>Eingang</td><td class="mono">@_file.RelativePath</td></tr>
+                <tr><td>Bibliothek</td><td class="mono">@_file.TargetPath</td></tr>
+                <tr><td>Papierkorb</td><td class="mono">@_file.TrashPath</td></tr>
+            </tbody>
+        </MudSimpleTable>
+        @if (_file.Error != null)
+        {
+            <MudExpansionPanels Class="mt-4">
+                <MudExpansionPanel Text="Fehlerdetails">
+                    <pre class="mono" style="white-space:pre-wrap">@_file.Error</pre>
+                </MudExpansionPanel>
+            </MudExpansionPanels>
+        }
+    </MudTabPanel>
+
+    <MudTabPanel Text="Verlauf" BadgeData="_events.Count">
+        <MudTimeline TimelinePosition="TimelinePosition.Start" TimelineAlign="TimelineAlign.Start">
+            @foreach (var e in _events)
+            {
+                <MudTimelineItem Size="Size.Small" Color="@(e.Level switch { EventLevel.Error => Color.Error, EventLevel.Warning => Color.Warning, _ => Color.Default })">
+                    <MudText Typo="Typo.caption">@e.Timestamp.ToLocalTime().ToString("g")</MudText>
+                    <MudText Typo="Typo.body2">@e.Message</MudText>
+                </MudTimelineItem>
+            }
+        </MudTimeline>
+    </MudTabPanel>
+</MudTabs>
+
+@code {
+    [Parameter] public int Id { get; set; }
+
+    private TrackFile? _file;
+    private TrackFile? _preview;
+    private List<FileEvent> _events = [];
+    private readonly HashSet<string> _expanded = [];
+    private int _tab;
+
+    private bool IsOpen => _file?.Status is FileStatus.NeedsReview or FileStatus.NotInMusicBrainz or FileStatus.Error;
+    private bool CanRetry => _file?.Status is FileStatus.NeedsReview or FileStatus.NotInMusicBrainz or FileStatus.Error;
+    private TagSet? FinalTags => (_preview ?? _file)?.FinalTags;
+
+    private static readonly (string, Func<TagSet, object?>)[] TagFields =
+    [
+        ("Titel", t => t.Title),
+        ("Künstler", t => t.Artist),
+        ("Künstler (einzeln)", t => t.Artists.Count > 0 ? string.Join(" | ", t.Artists) : null),
+        ("Album", t => t.Album),
+        ("Album-Künstler", t => t.AlbumArtist),
+        ("Album-Künstler (einzeln)", t => t.AlbumArtists.Count > 0 ? string.Join(" | ", t.AlbumArtists) : null),
+        ("Track", t => t.TrackNumber == null ? null : $"{t.TrackNumber}/{t.TrackCount}"),
+        ("Disc", t => t.DiscNumber == null ? null : $"{t.DiscNumber}/{t.DiscCount}"),
+        ("Datum", t => t.Date),
+        ("Originaldatum", t => t.OriginalDate),
+        ("Genres", t => t.Genres.Count > 0 ? string.Join(", ", t.Genres) : null),
+        ("Remixer", t => t.Remixer),
+        ("Label", t => t.Label),
+        ("Release-Typ", t => t.ReleaseType),
+        ("Weitere Tags", t => t.Extra.Count > 0 ? string.Join("; ", t.Extra.Where(e => !e.Key.StartsWith('_')).Select(e => $"{e.Key}={e.Value}")) : null),
+    ];
+
+    private static object? Value(TagSet? t, Func<TagSet, object?> getter) => t == null ? null : getter(t);
+
+    private static string FormatLength(double? seconds) =>
+        seconds is { } s ? TimeSpan.FromSeconds(s).ToString(s >= 3600 ? @"h\:mm\:ss" : @"m\:ss") : "–";
+
+    protected override async Task ReloadAsync()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        _file = await db.Files.AsNoTracking().FirstOrDefaultAsync(f => f.Id == Id);
+        _events = await db.Events.AsNoTracking().Where(e => e.TrackFileId == Id).OrderByDescending(e => e.Id).ToListAsync();
+    }
+
+    private void ToggleBreakdown(string key)
+    {
+        if (!_expanded.Remove(key)) _expanded.Add(key);
+    }
+
+    private async Task Preview(ReleaseCandidate c)
+    {
+        try
+        {
+            _preview = await Review.PreviewCandidateAsync(Id, c.Key);
+            _preview.SelectedCandidateKey = c.Key;
+            _tab = 1;
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Vorschau fehlgeschlagen: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task Choose(ReleaseCandidate c)
+    {
+        try
+        {
+            await Review.ChooseCandidateAsync(Id, c.Key);
+            Snackbar.Add("Release übernommen – Datei wird geschrieben.", Severity.Success);
+            _preview = null;
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Fehler: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task Approve()
+    {
+        await Review.ApproveAsync(Id);
+        Snackbar.Add("Bestätigt – Datei wird geschrieben.", Severity.Success);
+    }
+
+    private async Task SearchRelease()
+    {
+        var t = _file!.CleanedTags;
+        var query = string.Join(" ", new[] { t?.Album ?? t?.Title, t?.AlbumArtist ?? t?.Artist }.Where(x => !string.IsNullOrWhiteSpace(x)));
+        var parameters = new DialogParameters<ReleaseSearchDialog> { { x => x.FileIds, [Id] }, { x => x.Query, query } };
+        await Dialogs.ShowAsync<ReleaseSearchDialog>("Release suchen", parameters, new DialogOptions { MaxWidth = MaxWidth.Large, FullWidth = true });
+    }
+
+    private async Task Retry()
+    {
+        await Review.RetryAsync(Id);
+        Snackbar.Add("Wird erneut verarbeitet.", Severity.Info);
+    }
+
+    private async Task Discard()
+    {
+        var ok = await Dialogs.ShowMessageBoxAsync("Verwerfen", "Datei in den Papierkorb verschieben, ohne sie einzusortieren?",
+            yesText: "Verwerfen", cancelText: "Abbrechen");
+        if (ok == true) await Review.DiscardAsync(Id);
+    }
+}

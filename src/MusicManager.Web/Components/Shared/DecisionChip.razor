@@ -1,0 +1,24 @@
+@if (Decision != DecisionSource.None)
+{
+    <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Icon="@Icon">@Label</MudChip>
+}
+
+@code {
+    [Parameter] public DecisionSource Decision { get; set; }
+
+    private string Label => Decision switch
+    {
+        DecisionSource.Automatic => "Automatisch",
+        DecisionSource.Ai => "KI",
+        DecisionSource.Manual => "Manuell gewählt",
+        DecisionSource.ManualTags => "Manuell getaggt",
+        _ => "",
+    };
+
+    private string Icon => Decision switch
+    {
+        DecisionSource.Ai => Icons.Material.Filled.AutoAwesome,
+        DecisionSource.Automatic => Icons.Material.Filled.Bolt,
+        _ => Icons.Material.Filled.Person,
+    };
+}

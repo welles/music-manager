@@ -1,0 +1,41 @@
+<MudChip T="string" Size="Size.Small" Color="@Color" Variant="Variant.Text" Icon="@Icon">@Label</MudChip>
+
+@code {
+    [Parameter, EditorRequired] public FileStatus Status { get; set; }
+
+    public static string LabelFor(FileStatus s) => s switch
+    {
+        FileStatus.Waiting => "Wartet",
+        FileStatus.Queued => "In Warteschlange",
+        FileStatus.Processing => "In Bearbeitung",
+        FileStatus.NeedsReview => "Prüfen",
+        FileStatus.NotInMusicBrainz => "Nicht in MusicBrainz",
+        FileStatus.Approved => "Wird geschrieben",
+        FileStatus.Done => "Einsortiert",
+        FileStatus.Error => "Fehler",
+        FileStatus.Discarded => "Verworfen",
+        _ => s.ToString(),
+    };
+
+    private string Label => LabelFor(Status);
+
+    private Color Color => Status switch
+    {
+        FileStatus.Done => Color.Success,
+        FileStatus.Error => Color.Error,
+        FileStatus.NeedsReview or FileStatus.NotInMusicBrainz => Color.Warning,
+        FileStatus.Processing or FileStatus.Approved => Color.Info,
+        _ => Color.Default,
+    };
+
+    private string Icon => Status switch
+    {
+        FileStatus.Done => Icons.Material.Filled.CheckCircle,
+        FileStatus.Error => Icons.Material.Filled.Error,
+        FileStatus.NeedsReview => Icons.Material.Filled.HelpOutline,
+        FileStatus.NotInMusicBrainz => Icons.Material.Filled.SearchOff,
+        FileStatus.Processing or FileStatus.Approved => Icons.Material.Filled.Autorenew,
+        FileStatus.Discarded => Icons.Material.Filled.Delete,
+        _ => Icons.Material.Filled.Schedule,
+    };
+}

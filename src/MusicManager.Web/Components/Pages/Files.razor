@@ -1,0 +1,47 @@
+@page "/dateien"
+@inherits LivePage
+@inject IDbContextFactory<AppDbContext> DbFactory
+@inject NavigationManager Nav
+
+<PageTitle>Dateien – Music Manager</PageTitle>
+
+<MudDataGrid T="TrackFile" Items="_files" Dense="true" Hover="true" Filterable="true" FilterMode="DataGridFilterMode.ColumnFilterRow"
+             SortMode="SortMode.Multiple" RowClick="@(e => Nav.NavigateTo($"datei/{e.Item.Id}"))" RowsPerPage="50" QuickFilter="QuickFilter">
+    <ToolBarContent>
+        <MudText Typo="Typo.h5">Alle Dateien</MudText>
+        <MudSpacer />
+        <MudTextField @bind-Value="_search" Placeholder="Suchen" Adornment="Adornment.Start" Immediate="true"
+                      AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Medium" Class="mt-0" Clearable="true" />
+    </ToolBarContent>
+    <Columns>
+        <PropertyColumn Property="x => x.RelativePath" Title="Datei" />
+        <PropertyColumn Property="x => x.Status" Title="Status">
+            <CellTemplate><StatusChip Status="context.Item.Status" /></CellTemplate>
+        </PropertyColumn>
+        <PropertyColumn Property="x => x.Decision" Title="Entscheidung">
+            <CellTemplate><DecisionChip Decision="context.Item.Decision" /></CellTemplate>
+        </PropertyColumn>
+        <PropertyColumn Property="x => x.TargetPath" Title="Ziel" />
+        <PropertyColumn Property="x => x.StatusReason" Title="Hinweis" />
+        <PropertyColumn Property="x => x.UpdatedAt" Title="Geändert" Format="g" />
+    </Columns>
+    <PagerContent>
+        <MudDataGridPager T="TrackFile" />
+    </PagerContent>
+</MudDataGrid>
+
+@code {
+    private List<TrackFile> _files = [];
+    private string? _search;
+
+    private bool QuickFilter(TrackFile f) =>
+        string.IsNullOrWhiteSpace(_search)
+        || f.RelativePath.Contains(_search, StringComparison.OrdinalIgnoreCase)
+        || (f.TargetPath?.Contains(_search, StringComparison.OrdinalIgnoreCase) ?? false);
+
+    protected override async Task ReloadAsync()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        _files = await db.Files.AsNoTracking().OrderByDescending(f => f.UpdatedAt).Take(5000).ToListAsync();
+    }
+}
