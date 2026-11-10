@@ -38,6 +38,22 @@ app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages:
 app.UseAntiforgery();
 
 app.MapGet("/healthz", () => Results.Ok("ok"));
+
+// Processing state, e.g. for scripts: pending = files still waiting to be processed or written.
+app.MapGet("/api/status", async (Microsoft.EntityFrameworkCore.IDbContextFactory<MusicManager.Core.Data.AppDbContext> dbFactory, WorkQueue queue, PipelineNotifier notifier) =>
+{
+    await using var db = await dbFactory.CreateDbContextAsync();
+    var counts = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.ToDictionaryAsync(
+        db.Files.GroupBy(f => f.Status).Select(g => new { g.Key, Count = g.Count() }), x => x.Key.ToString(), x => x.Count);
+    string[] pendingStates = ["Waiting", "Queued", "Processing", "Approved"];
+    return Results.Ok(new
+    {
+        pending = pendingStates.Sum(s => counts.GetValueOrDefault(s)),
+        queue = queue.Count,
+        activity = notifier.CurrentActivity,
+        counts,
+    });
+});
 app.MapStaticAssets();
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
