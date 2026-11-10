@@ -146,6 +146,48 @@ public sealed class AudioTools(IOptions<MusicManagerOptions> options, ILogger<Au
         return copy;
     }
 
+    private static readonly HashSet<string> BrowserFormats = [".mp3", ".m4a", ".mp4", ".aac", ".flac", ".ogg", ".oga", ".opus", ".wav", ".webm"];
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, double?> _loudness = new();
+
+    /// <summary>
+    /// A file the browser can play: the file itself, or an AAC transcode cached in the work folder
+    /// (so seeking with range requests works for it as well).
+    /// </summary>
+    public async Task<string> BrowserPlayableAsync(string path, CancellationToken ct)
+    {
+        if (BrowserFormats.Contains(Path.GetExtension(path).ToLowerInvariant())) return path;
+
+        var info = new FileInfo(path);
+        var key = Convert.ToHexString(System.Security.Cryptography.SHA1.HashData(System.Text.Encoding.UTF8.GetBytes($"{path}|{info.Length}|{info.LastWriteTimeUtc.Ticks}")));
+        var dir = Path.Combine(_o.WorkPath, "preview");
+        Directory.CreateDirectory(dir);
+        var cached = Path.Combine(dir, key + ".m4a");
+        if (File.Exists(cached)) return cached;
+
+        var tmp = cached + ".tmp";
+        var r = await ProcessRunner.RunAsync(_o.FfmpegPath,
+            ["-nostdin", "-hide_banner", "-loglevel", "error", "-y", "-i", path, "-map", "0:a:0", "-vn", "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart", "-f", "ipod", tmp], ct);
+        if (r.ExitCode != 0) throw new InvalidOperationException($"ffmpeg failed: {r.StdErr.Trim()}");
+        File.Move(tmp, cached, true);
+        return cached;
+    }
+
+    /// <summary>Integrated loudness (EBU R128, LUFS) – used to play both versions equally loud.</summary>
+    public async Task<double?> LoudnessAsync(string path, CancellationToken ct)
+    {
+        var info = new FileInfo(path);
+        var key = $"{path}|{info.Length}|{info.LastWriteTimeUtc.Ticks}";
+        if (_loudness.TryGetValue(key, out var cached)) return cached;
+
+        var r = await ProcessRunner.RunAsync(_o.FfmpegPath,
+            ["-nostdin", "-hide_banner", "-nostats", "-i", path, "-map", "0:a:0", "-af", "ebur128=framelog=quiet", "-f", "null", "-"], ct);
+        double? lufs = null;
+        var m = System.Text.RegularExpressions.Regex.Match(r.StdErr, @"Integrated loudness:\s*I:\s*(-?[\d.]+) LUFS");
+        if (m.Success && double.TryParse(m.Groups[1].Value, CultureInfo.InvariantCulture, out var v)) lufs = v;
+        _loudness[key] = lufs;
+        return lufs;
+    }
+
     /// <summary>Scales an image down to the given size and re-encodes it as JPEG.</summary>
     public async Task<byte[]?> ResizeImageAsync(byte[] image, int maxSize, CancellationToken ct)
     {

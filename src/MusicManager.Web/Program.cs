@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.HttpOverrides;
 using MudBlazor.Services;
 using MusicManager.Core;
 using MusicManager.Core.Pipeline;
+using MusicManager.Web;
 using MusicManager.Web.Components;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -93,6 +94,7 @@ app.MapGet("/api/status", async (Microsoft.EntityFrameworkCore.IDbContextFactory
         counts,
     });
 });
+app.MapAudioEndpoints();
 app.MapStaticAssets();
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
