@@ -273,7 +273,10 @@ public sealed partial class MatchingPipeline(
         }
 
         var tags = file.CleanedTags!;
-        if (ids.Count == 0 && !string.IsNullOrWhiteSpace(tags.Title))
+        // Without an artist the text search only produces noise (e.g. "track03" from the file name).
+        if (ids.Count == 0 && !string.IsNullOrWhiteSpace(tags.Title) && string.IsNullOrWhiteSpace(tags.Artists.FirstOrDefault() ?? tags.Artist))
+            AddEvent(file, "Kein Künstler bekannt – MusicBrainz-Textsuche übersprungen");
+        else if (ids.Count == 0 && !string.IsNullOrWhiteSpace(tags.Title))
         {
             notifier.SetActivity($"Textsuche für {file.FileName}");
             var artist = tags.Artists.FirstOrDefault() ?? tags.Artist;
