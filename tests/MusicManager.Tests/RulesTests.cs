@@ -129,3 +129,48 @@ public class RulesTests
     public void Similarity_IsTolerant(string a, string b, double min) =>
         Assert.True(TextUtil.Similarity(a, b) >= min);
 }
+
+public class MatchingFixTests
+{
+    private static readonly ArtistRuleSet Rules = new();
+
+    [Fact]
+    public void FeaturesFromOriginalTitleAreAddedWhenMusicBrainzOmitsThem()
+    {
+        var mb = new TagSet { Title = "Shutdown", Artist = "Chase & Status", Artists = ["Chase & Status"] };
+        var t = TaggingRules.AddFeaturesFromOriginalTitle(mb, "Shutdown (feat. IRAH & Col3trane)",
+            ArtistRuleSet.FromRules([new ArtistRule { Kind = ArtistRuleKind.NoSplit, Pattern = "Chase & Status" }]));
+        Assert.Equal("Chase & Status feat. IRAH & Col3trane", t.Artist);
+        Assert.Equal(["Chase & Status", "IRAH", "Col3trane"], t.Artists);
+    }
+
+    [Fact]
+    public void FeaturesAlreadyCreditedAreNotDuplicated()
+    {
+        var mb = new TagSet { Title = "Song", Artist = "A feat. B", Artists = ["A", "B"] };
+        var t = TaggingRules.AddFeaturesFromOriginalTitle(mb, "Song (feat. B)", Rules);
+        Assert.Equal("A feat. B", t.Artist);
+    }
+
+    [Theory]
+    [InlineData(",", ", ")]
+    [InlineData("&", " & ")]
+    [InlineData(" feat. ", " feat. ")]
+    [InlineData("", "")]
+    public void JoinPhrasesAreNormalized(string input, string expected) =>
+        Assert.Equal(expected, CreditFormatter.NormalizeJoinPhrase(input));
+
+    [Fact]
+    public void SingleAlbumTagDoesNotBlockAlbumCandidate()
+    {
+        var rec = new RecordingMatch
+        {
+            RecordingId = "r", Title = "No Way!", Credits = [new CreditPart("a", "Kofi Stone", "Kofi Stone", "")], LengthSeconds = 180,
+            MatchScore = 0.95,
+            Releases = [new ReleaseAppearance { ReleaseId = "x", Title = "The Last Flower to Bloom", ReleaseGroupId = "rg", PrimaryType = "Album", Status = "Official" }],
+        };
+        var result = ReleaseScorer.Score(new TagSet { Title = "No Way!", Artist = "Kofi Stone", Album = "No Way!" }, 180, [rec],
+            GroupContext.Empty, new MusicManager.Core.Configuration.AppSettings());
+        Assert.True(result.IsCertain, result.Reason);
+    }
+}

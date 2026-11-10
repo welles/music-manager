@@ -413,6 +413,7 @@ public sealed partial class MatchingPipeline(
         }
 
         file.FinalTags = TagBuilder.Build(release, candidate.RecordingId, artists, settings, rules);
+        file.FinalTags = TaggingRules.AddFeaturesFromOriginalTitle(file.FinalTags, file.CleanedTags?.Title, rules);
         file.FinalTags.AcoustId = file.AcoustId;
         file.TargetPath = PathBuilder.Build(file.FinalTags);
         file.ManuallyTagged = false;

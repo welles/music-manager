@@ -126,9 +126,22 @@ public sealed class ArtistInfo
 
 public static class CreditFormatter
 {
+    private static readonly string[] SpacedJoinWords = ["&", "x", "×", "+", "/", "feat.", "ft.", "feat", "featuring", "with", "and", "vs.", "vs", "und"];
+
     public static string Join(IEnumerable<CreditPart> credits, Func<CreditPart, string>? name = null)
     {
         name ??= c => c.CreditedName;
-        return string.Concat(credits.Select(c => name(c) + c.JoinPhrase)).Trim();
+        return string.Concat(credits.Select(c => name(c) + NormalizeJoinPhrase(c.JoinPhrase))).Trim();
+    }
+
+    /// <summary>
+    /// Fixes sloppy join phrases from imported data: "," → ", ", "&amp;" → " &amp; ".
+    /// </summary>
+    public static string NormalizeJoinPhrase(string joinPhrase)
+    {
+        var t = joinPhrase.Trim();
+        if (t.Length == 0) return joinPhrase;
+        if (t == ",") return ", ";
+        return SpacedJoinWords.Contains(t, StringComparer.OrdinalIgnoreCase) ? $" {t} " : joinPhrase;
     }
 }

@@ -94,6 +94,29 @@ public static partial class TaggingRules
         return t;
     }
 
+    /// <summary>
+    /// Adds featured artists named in the original title ("Song (feat. B)") that the MusicBrainz
+    /// credits do not contain, so features are not lost when MusicBrainz omits them.
+    /// </summary>
+    public static TagSet AddFeaturesFromOriginalTitle(TagSet tags, string? originalTitle, ArtistRuleSet rules)
+    {
+        if (string.IsNullOrWhiteSpace(originalTitle)) return tags;
+        var (_, featured) = ExtractFeatures(originalTitle);
+        if (featured == null) return tags;
+
+        var known = tags.Artists.Select(TextUtil.Normalize).ToHashSet();
+        var missing = rules.Split(featured).Where(f => !known.Contains(TextUtil.Normalize(f))).ToList();
+        if (missing.Count == 0) return tags;
+
+        var t = tags.Clone();
+        t.Artists.AddRange(missing);
+        var joined = string.Join(" & ", missing);
+        t.Artist = string.IsNullOrWhiteSpace(t.Artist)
+            ? string.Join(" & ", t.Artists)
+            : FeatureMarker().IsMatch(t.Artist) ? $"{t.Artist} & {joined}" : $"{t.Artist} feat. {joined}";
+        return t;
+    }
+
     /// <summary>Removes "(feat. X)" / " ft. X" from a title and returns the featured artist string.</summary>
     public static (string Title, string? Featured) ExtractFeatures(string title)
     {
@@ -128,4 +151,7 @@ public static partial class TaggingRules
 
     [GeneratedRegex(@"\s{2,}")]
     private static partial Regex MultiSpace();
+
+    [GeneratedRegex(@"\s(feat\.|ft\.|featuring)\s", RegexOptions.IgnoreCase)]
+    private static partial Regex FeatureMarker();
 }
