@@ -58,6 +58,9 @@ public sealed class AppSettings
     public List<string> PreferredFormats { get; set; } = ["Digital Media"];
 
     // --- Metadata -----------------------------------------------------------------------
+    /// <summary>Separators for splitting composed artist strings (only used for data without MusicBrainz credits).</summary>
+    public List<string> ArtistSplitters { get; set; } = [.. Rules.ArtistRuleSet.DefaultSplitters];
+
     /// <summary>Artist alias locale used to translate artist names (Picard: en). Empty disables translation.</summary>
     public string ArtistLocale { get; set; } = "en";
 
