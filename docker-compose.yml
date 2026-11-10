@@ -1,0 +1,26 @@
+services:
+  music-manager:
+    image: ghcr.io/welles/music-manager:latest
+    container_name: music-manager
+    restart: unless-stopped
+    # Run as the owner of the music share so filed files get the right permissions.
+    user: "${PUID:-1000}:${PGID:-1000}"
+    ports:
+      - "8080:8080"
+    environment:
+      TZ: Europe/Berlin
+      # https://acoustid.org/new-application
+      MusicManager__AcoustIdApiKey: ${ACOUSTID_API_KEY:-}
+      # https://console.anthropic.com – optional, enables the AI features
+      MusicManager__AnthropicApiKey: ${ANTHROPIC_API_KEY:-}
+      # Contact for the MusicBrainz User-Agent (mail address or URL)
+      MusicManager__MusicBrainzContact: ${MUSICBRAINZ_CONTACT:-https://github.com/welles/music-manager}
+    volumes:
+      # Inbox for new files (subfolders = groups, e.g. musicfab/<album>)
+      - ${INBOX_DIR:-./inbox}:/inbox
+      # Navidrome library (same folder Navidrome mounts as /music)
+      - ${MUSIC_DIR:-/srv/music}:/music
+      # Replaced and discarded files, deleted after the configured retention period
+      - ${TRASH_DIR:-./trash}:/trash
+      # Database and work files
+      - ${DATA_DIR:-./data}:/data
