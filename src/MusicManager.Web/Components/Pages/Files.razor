@@ -5,11 +5,11 @@
 
 <PageTitle>Dateien – Music Manager</PageTitle>
 
+<PageHeader Title="Alle Dateien" />
+
 <MudDataGrid T="TrackFile" Items="_files" Dense="true" Hover="true" Filterable="true" FilterMode="DataGridFilterMode.ColumnFilterRow"
              SortMode="SortMode.Multiple" RowClick="@(e => Nav.NavigateTo($"datei/{e.Item.Id}"))" RowsPerPage="50" QuickFilter="QuickFilter">
     <ToolBarContent>
-        <MudText Typo="Typo.h5">Alle Dateien</MudText>
-        <MudSpacer />
         <MudTextField @bind-Value="_search" Placeholder="Suchen" Adornment="Adornment.Start" Immediate="true"
                       AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Medium" Class="mt-0" Clearable="true" />
     </ToolBarContent>

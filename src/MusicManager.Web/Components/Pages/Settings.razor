@@ -5,11 +5,11 @@
 
 <PageTitle>Einstellungen – Music Manager</PageTitle>
 
-<MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-4">
-    <MudText Typo="Typo.h5">Einstellungen</MudText>
-    <MudSpacer />
-    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Save" OnClick="Save" Disabled="_s == null">Speichern</MudButton>
-</MudStack>
+<PageHeader Title="Einstellungen">
+    <Actions>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Save" OnClick="Save" Disabled="_s == null">Speichern</MudButton>
+    </Actions>
+</PageHeader>
 
 @if (_s == null)
 {

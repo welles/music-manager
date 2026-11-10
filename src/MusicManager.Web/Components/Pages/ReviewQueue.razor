@@ -8,10 +8,11 @@
 
 <PageTitle>Prüfwarteschlange – Music Manager</PageTitle>
 
+<PageHeader Title="Prüfwarteschlange" />
+
 <MudDataGrid T="TrackFile" Items="_files" Dense="true" Hover="true" MultiSelection="true" @bind-SelectedItems="_selected"
              Groupable="true" GroupExpanded="true" RowsPerPage="100">
     <ToolBarContent>
-        <MudText Typo="Typo.h5">Prüfwarteschlange</MudText>
         <MudSpacer />
         <MudButtonGroup Variant="Variant.Outlined" Size="Size.Small">
             <MudButton StartIcon="@Icons.Material.Filled.Search" Disabled="_selected.Count == 0" OnClick="SearchRelease">Release zuweisen</MudButton>

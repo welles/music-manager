@@ -14,18 +14,18 @@
     return;
 }
 
-<MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Class="mb-2">
-    <MudIconButton Icon="@Icons.Material.Filled.ArrowBack" OnClick="@(() => Nav.NavigateTo("pruefung"))" />
-    <MudText Typo="Typo.h5">@_file.FileName</MudText>
+<PageHeader Title="@_file.FileName" UseHistory="true">
+    <Badges>
     <StatusChip Status="_file.Status" />
     <DecisionChip Decision="_file.Decision" />
     @if (_file.ManuallyTagged)
     {
         <MudChip T="string" Size="Size.Small" Color="Color.Secondary" Variant="Variant.Outlined">manuell getaggt</MudChip>
     }
-    <MudSpacer />
+    </Badges>
+    <Actions>
     <MudButtonGroup Variant="Variant.Outlined" Size="Size.Small">
-        @if (_file.Status == FileStatus.NeedsReview && _file.FinalTags != null && _file.SelectedCandidateKey != null)
+        @if (_file.Status == FileStatus.NeedsReview && _file.FinalTags != null && _file.SelectedCandidateKey != null && !IsDuplicate)
         {
             <MudButton StartIcon="@Icons.Material.Filled.Check" Color="Color.Success" OnClick="Approve">Vorschau bestätigen</MudButton>
         }
@@ -34,7 +34,8 @@
         <MudButton StartIcon="@Icons.Material.Filled.Replay" OnClick="Retry" Disabled="!CanRetry">Erneut verarbeiten</MudButton>
         <MudButton StartIcon="@Icons.Material.Filled.Delete" Color="Color.Error" OnClick="Discard" Disabled="!IsOpen">Verwerfen</MudButton>
     </MudButtonGroup>
-</MudStack>
+    </Actions>
+</PageHeader>
 
 <MudText Typo="Typo.body2" Class="mb-1 mono">@_file.RelativePath</MudText>
 @if (_file.StatusReason != null)
@@ -193,6 +194,7 @@
     private readonly HashSet<string> _expanded = [];
     private int _tab;
 
+    private bool IsDuplicate => _file?.StatusReason?.StartsWith("Zieldatei existiert") == true;
     private bool IsOpen => _file?.Status is FileStatus.NeedsReview or FileStatus.NotInMusicBrainz or FileStatus.Error;
     private bool CanRetry => _file?.Status is FileStatus.NeedsReview or FileStatus.NotInMusicBrainz or FileStatus.Error;
 

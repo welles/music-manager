@@ -1,0 +1,30 @@
+@inject NavigationManager Nav
+@inject IJSRuntime Js
+@* Page title with a back button (to the dashboard, or the previous page). *@
+
+<MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Class="mb-4">
+    <MudTooltip Text="@(UseHistory ? "Zurück" : "Zur Übersicht")">
+        <MudIconButton Icon="@Icons.Material.Filled.ArrowBack" OnClick="Back" aria-label="Zurück" />
+    </MudTooltip>
+    <MudText Typo="Typo.h5" Style="overflow-wrap:anywhere">@Title</MudText>
+    @Badges
+    <MudSpacer />
+    @Actions
+</MudStack>
+
+@code {
+    [Parameter, EditorRequired] public string Title { get; set; } = "";
+    [Parameter] public RenderFragment? Badges { get; set; }
+    [Parameter] public RenderFragment? Actions { get; set; }
+
+    /// <summary>Go back in the browser history (e.g. detail pages) instead of to the dashboard.</summary>
+    [Parameter] public bool UseHistory { get; set; }
+
+    private async Task Back()
+    {
+        if (UseHistory && await Js.InvokeAsync<int>("eval", "history.length") > 1)
+            await Js.InvokeVoidAsync("history.back");
+        else
+            Nav.NavigateTo("");
+    }
+}
