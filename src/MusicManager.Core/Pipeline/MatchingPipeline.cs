@@ -613,6 +613,7 @@ public sealed partial class MatchingPipeline(
                 if (File.Exists(replaced))
                 {
                     var trashed = storage.MoveToTrash(replaced, Path.Combine("ersetzt", file.ReplaceLibraryPath));
+                    Storage.DeleteEmptyDirectories(Path.GetDirectoryName(replaced)!, storage.LibraryRoot);
                     AddEvent(file, $"Vorhandene Datei {file.ReplaceLibraryPath} ersetzt (in den Papierkorb: {trashed})");
                 }
 

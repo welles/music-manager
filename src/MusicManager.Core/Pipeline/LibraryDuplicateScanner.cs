@@ -150,7 +150,10 @@ public sealed class LibraryDuplicateScanner(
         {
             var path = storage.LibraryPath(e.RelativePath);
             if (File.Exists(path))
+            {
                 storage.MoveToTrash(path, Path.Combine("bibliothek-duplikate", e.RelativePath));
+                Storage.DeleteEmptyDirectories(Path.GetDirectoryName(path)!, storage.LibraryRoot);
+            }
             await libraryIndexer.RemoveAsync(e.RelativePath, ct);
         }
 
