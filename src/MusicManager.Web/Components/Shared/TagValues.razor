@@ -1,0 +1,43 @@
+@using MusicManager.Core.Services
+@* Renders the values of one tag field so that multi-value fields and single strings are distinguishable. *@
+
+@if (Field == null)
+{
+    <MudText Typo="Typo.caption" Style="opacity:.6"><i>nicht vorhanden</i></MudText>
+}
+else if (Field.Values.Count == 0 || Field.Values.All(v => v.Length == 0))
+{
+    <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Style="@Strike">leer (Tag vorhanden, ohne Wert)</MudChip>
+}
+else if (Field.IsMulti)
+{
+    <MudStack Row="true" Spacing="1" Wrap="Wrap.Wrap" AlignItems="AlignItems.Center">
+        <MudTooltip Text="Mehrfachwert: jeder Eintrag ist ein eigener Wert im Tag">
+            <MudChip T="string" Size="Size.Small" Color="Color.Info" Variant="Variant.Text" Icon="@Icons.Material.Filled.ViewList">@Field.Values.Count Werte</MudChip>
+        </MudTooltip>
+        @foreach (var v in Field.Values)
+        {
+            <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Style="@Strike">@v</MudChip>
+        }
+    </MudStack>
+}
+else
+{
+    var value = Field.Values[0];
+    <span style="@Strike">@value</span>
+    @if (Separators.Any(value.Contains))
+    {
+        <MudTooltip Text="Einzelner Wert: die Trennzeichen sind Teil des Textes, kein Mehrfachwert">
+            <MudIcon Icon="@Icons.Material.Filled.ShortText" Size="Size.Small" Color="Color.Warning" Class="ml-1" Style="vertical-align:middle" />
+        </MudTooltip>
+    }
+}
+
+@code {
+    [Parameter] public TagField? Field { get; set; }
+    [Parameter] public bool Removed { get; set; }
+
+    private static readonly string[] Separators = [",", ";", " / ", " & "];
+
+    private string? Strike => Removed ? "text-decoration:line-through;opacity:.7" : null;
+}

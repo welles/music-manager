@@ -116,36 +116,7 @@
     </MudTabPanel>
 
     <MudTabPanel Text="Tags">
-        @if (_preview != null)
-        {
-            <MudAlert Severity="Severity.Info" Dense="true" Class="mb-2" ShowCloseIcon="true" CloseIconClicked="() => _preview = null">
-                Vorschau für Kandidat „@_preview.SelectedCandidate?.Release.Title“ (noch nicht übernommen)
-            </MudAlert>
-        }
-        <MudSimpleTable Dense="true" Hover="true" Bordered="true">
-            <thead>
-                <tr><th>Feld</th><th>Original</th><th>Bereinigt</th><th>@(_preview != null ? "Vorschau" : "Final")</th></tr>
-            </thead>
-            <tbody>
-                @foreach (var (label, getter) in TagFields)
-                {
-                    <tr>
-                        <td>@label</td>
-                        <td>@Value(_file.OriginalTags, getter)</td>
-                        <td>@Value(_file.CleanedTags, getter)</td>
-                        <td><b>@Value(FinalTags, getter)</b></td>
-                    </tr>
-                }
-                <tr>
-                    <td>Zielpfad</td><td></td><td></td>
-                    <td class="mono">@((_preview ?? _file).TargetPath)</td>
-                </tr>
-                <tr>
-                    <td>Cover</td><td></td><td></td>
-                    <td>@(_file.CoverSource ?? "–")</td>
-                </tr>
-            </tbody>
-        </MudSimpleTable>
+        <TagDiff File="_file" Preview="_preview" OnClearPreview="() => _preview = null" />
     </MudTabPanel>
 
     <MudTabPanel Text="KI" Icon="@Icons.Material.Filled.AutoAwesome" Disabled="_file.AiDecision == null && _file.AiSuggestion == null">
@@ -224,31 +195,6 @@
 
     private bool IsOpen => _file?.Status is FileStatus.NeedsReview or FileStatus.NotInMusicBrainz or FileStatus.Error;
     private bool CanRetry => _file?.Status is FileStatus.NeedsReview or FileStatus.NotInMusicBrainz or FileStatus.Error;
-    private TagSet? FinalTags => (_preview ?? _file)?.FinalTags;
-
-    private static readonly (string, Func<TagSet, object?>)[] TagFields =
-    [
-        ("Titel", t => t.Title),
-        ("Künstler", t => t.Artist),
-        ("Künstler (einzeln)", t => t.Artists.Count > 0 ? string.Join(" | ", t.Artists) : null),
-        ("Album", t => t.Album),
-        ("Album-Künstler", t => t.AlbumArtist),
-        ("Album-Künstler (einzeln)", t => t.AlbumArtists.Count > 0 ? string.Join(" | ", t.AlbumArtists) : null),
-        ("Track", t => t.TrackNumber == null ? null : $"{t.TrackNumber}/{t.TrackCount}"),
-        ("Disc", t => t.DiscNumber == null ? null : $"{t.DiscNumber}/{t.DiscCount}"),
-        ("Datum", t => t.Date),
-        ("Originaldatum", t => t.OriginalDate),
-        ("Genres", t => t.Genres.Count > 0 ? string.Join(", ", t.Genres) : null),
-        ("Remixer", t => t.Remixer),
-        ("Label", t => t.Label),
-        ("Release-Typ", t => t.ReleaseType),
-        ("MusicBrainz-Recording", t => t.MbRecordingId),
-        ("MusicBrainz-Release", t => t.MbReleaseId),
-        ("AcoustID", t => t.AcoustId),
-        ("Weitere Tags", t => t.Extra.Count > 0 ? string.Join("; ", t.Extra.Where(e => !e.Key.StartsWith('_')).Select(e => $"{e.Key}={e.Value}")) : null),
-    ];
-
-    private static object? Value(TagSet? t, Func<TagSet, object?> getter) => t == null ? null : getter(t);
 
     private static string FormatLength(double? seconds) =>
         seconds is { } s ? TimeSpan.FromSeconds(s).ToString(s >= 3600 ? @"h\:mm\:ss" : @"m\:ss") : "–";
