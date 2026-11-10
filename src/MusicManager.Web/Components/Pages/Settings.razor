@@ -91,7 +91,22 @@
                 </MudSelect>
             </MudItem>
             <MudItem xs="6" md="4"><MudNumericField @bind-Value="_s.AiMinConfidence" Label="Mindest-Sicherheit KI (0–1)" Variant="Variant.Outlined" Step="0.05" Min="0" Max="1" /></MudItem>
-            <MudItem xs="6" md="4"><MudTextField @bind-Value="_s.AiModel" Label="Modell" Variant="Variant.Outlined" /></MudItem>
+            <MudItem xs="12" md="4">
+                <MudSelect @bind-Value="_s.AiModel" Label="Modell für Release-Entscheidungen" Variant="Variant.Outlined" HelperText="Wenige Aufrufe, braucht Urteilsvermögen">
+                    @foreach (var (id, label) in Models)
+                    {
+                        <MudSelectItem Value="id">@label</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="12" md="4">
+                <MudSelect @bind-Value="_s.AiSimpleModel" Label="Modell für Bereinigung, Vorschläge, Übersetzung" Variant="Variant.Outlined" HelperText="Die meisten Aufrufe, einfache Aufgaben">
+                    @foreach (var (id, label) in Models)
+                    {
+                        <MudSelectItem Value="id">@label</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudItem>
             <MudItem xs="6" md="4">
                 <MudSelect @bind-Value="_s.AiEffort" Label="Denkaufwand" Variant="Variant.Outlined">
                     <MudSelectItem Value="@("low")">niedrig</MudSelectItem>
@@ -116,6 +131,13 @@
 
 @code {
     private AppSettings? _s;
+
+    private static readonly (string Id, string Label)[] Models =
+    [
+        ("claude-haiku-5-5", "Claude Haiku 5.5 – am günstigsten ($0,10 / $0,50 je 1 Mio. Token)"),
+        ("claude-sonnet-5-5", "Claude Sonnet 5.5 – Mittelklasse ($2 / $10)"),
+        ("claude-opus-5-5", "Claude Opus 5.5 – am stärksten ($4 / $20)"),
+    ];
 
     private static readonly (string, Func<ScoringWeights, double>, Action<ScoringWeights, double>)[] WeightFields =
     [

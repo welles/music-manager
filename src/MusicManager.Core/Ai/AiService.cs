@@ -78,7 +78,7 @@ public sealed class AiService(IOptions<MusicManagerOptions> options, ILogger<AiS
             pre_cleaned_tags = Describe(preCleaned),
         };
 
-        var json = await AskAsync(CleanupSystemPrompt, JsonSerializer.Serialize(input, JsonOptions), CleanupSchema, settings, ct);
+        var json = await AskAsync(settings.AiSimpleModel, CleanupSystemPrompt, JsonSerializer.Serialize(input, JsonOptions), CleanupSchema, settings, ct);
         if (json == null) return null;
 
         var result = JsonSerializer.Deserialize<CleanupResponse>(json, JsonOptions)!;
@@ -90,7 +90,7 @@ public sealed class AiService(IOptions<MusicManagerOptions> options, ILogger<AiS
             Album = result.Album.NullIfEmptyString(),
             Confidence = result.Confidence,
             Notes = result.Notes,
-            Model = settings.AiModel,
+            Model = settings.AiSimpleModel,
         };
     }
 
@@ -160,7 +160,7 @@ public sealed class AiService(IOptions<MusicManagerOptions> options, ILogger<AiS
             }),
         };
 
-        var json = await AskAsync(DecisionSystemPrompt, JsonSerializer.Serialize(input, JsonOptions), DecisionSchema, settings, ct);
+        var json = await AskAsync(settings.AiModel, DecisionSystemPrompt, JsonSerializer.Serialize(input, JsonOptions), DecisionSchema, settings, ct);
         if (json == null) return null;
 
         var r = JsonSerializer.Deserialize<DecisionResponse>(json, JsonOptions)!;
@@ -228,7 +228,7 @@ public sealed class AiService(IOptions<MusicManagerOptions> options, ILogger<AiS
 
         if (missing.Count == 0) return result;
 
-        var json = await AskAsync(TranslateSystemPrompt, JsonSerializer.Serialize(new { artist, titles = missing }, JsonOptions),
+        var json = await AskAsync(settings.AiSimpleModel, TranslateSystemPrompt, JsonSerializer.Serialize(new { artist, titles = missing }, JsonOptions),
             TranslateSchema, settings, ct);
         if (json == null) return result;
 
@@ -248,14 +248,14 @@ public sealed class AiService(IOptions<MusicManagerOptions> options, ILogger<AiS
 
     // --- Shared ----------------------------------------------------------------------------
 
-    private async Task<string?> AskAsync(string system, string userJson, Dictionary<string, JsonElement> schema, AppSettings settings,
-        CancellationToken ct)
+    private async Task<string?> AskAsync(string model, string system, string userJson, Dictionary<string, JsonElement> schema,
+        AppSettings settings, CancellationToken ct)
     {
         if (!IsConfigured) return null;
 
         var parameters = new MessageCreateParams
         {
-            Model = settings.AiModel,
+            Model = model,
             MaxTokens = 16000,
             System = system,
             OutputConfig = new OutputConfig

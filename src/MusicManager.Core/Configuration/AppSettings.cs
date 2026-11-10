@@ -97,7 +97,11 @@ public sealed class AppSettings
     /// <summary>AI decisions below this confidence go to manual review.</summary>
     public double AiMinConfidence { get; set; } = 0.8;
 
-    public string AiModel { get; set; } = "claude-opus-5-5";
+    /// <summary>Model for release decisions (the only task that needs real judgment; few calls).</summary>
+    public string AiModel { get; set; } = "claude-sonnet-5-5";
+
+    /// <summary>Model for tag cleanup, suggestions and translations (simple extraction, most calls).</summary>
+    public string AiSimpleModel { get; set; } = "claude-haiku-5-5";
 
     /// <summary>Thinking effort for AI requests: low, medium or high.</summary>
     public string AiEffort { get; set; } = "low";
