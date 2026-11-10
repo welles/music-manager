@@ -230,3 +230,25 @@ public class ForeignTitleTests
     public void FileNameKeepsUntranslatedTitleAsFallback() =>
         Assert.Equal("_______", PathBuilder.SanitizeComponent("リトルワールド"));
 }
+
+public class ExternalLinkTests
+{
+    [Fact]
+    public void FindsSpotifyAndDeezerLinksInAnyField()
+    {
+        var links = MusicManager.Core.Services.ExternalLinks.Find(
+        [
+            new("COMMENT", ["https://open.spotify.com/track/4uLU6hMCjMI75M1A2tKUQC?si=abc"]),
+            new("URL", ["spotify:track:4uLU6hMCjMI75M1A2tKUQC", "https://www.deezer.com/de/track/4265202982"]),
+        ]);
+        Assert.Equal([("spotify", "4uLU6hMCjMI75M1A2tKUQC"), ("deezer", "4265202982")], links.Select(l => (l.Source, l.Id)));
+    }
+
+    [Fact]
+    public void RatesExternalMatchesByTitleArtistAndDuration()
+    {
+        var m = new ExternalMatch { Source = "deezer", Id = "1", Title = "Shutdown (feat. IRAH & Col3trane)", Artists = ["Chase & Status"], DurationSeconds = 170 };
+        Assert.True(MusicManager.Core.Services.ExternalSourceService.Rate(m, "Shutdown", "Chase & Status", 171) > 0.95);
+        Assert.True(MusicManager.Core.Services.ExternalSourceService.Rate(m, "Other Song", "Someone", 300) < 0.4);
+    }
+}

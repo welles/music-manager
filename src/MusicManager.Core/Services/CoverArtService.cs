@@ -18,6 +18,9 @@ public sealed class CoverArtService(HttpClient http, ILogger<CoverArtService> lo
         return cover;
     }
 
+    /// <summary>Downloads a cover from any URL (e.g. Spotify/Deezer).</summary>
+    public Task<CoverImage?> DownloadAsync(string url, string source, CancellationToken ct) => TryGet(url, source, ct);
+
     private async Task<CoverImage?> TryGet(string url, string source, CancellationToken ct)
     {
         try

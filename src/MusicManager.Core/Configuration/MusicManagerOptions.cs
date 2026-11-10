@@ -26,6 +26,11 @@ public sealed class MusicManagerOptions
     /// <summary>Anthropic API key; AI features stay disabled without it.</summary>
     public string? AnthropicApiKey { get; set; }
 
+    /// <summary>Spotify app (client credentials) for the fallback search; optional.</summary>
+    public string? SpotifyClientId { get; set; }
+
+    public string? SpotifyClientSecret { get; set; }
+
     /// <summary>Contact (mail address or URL) sent in the MusicBrainz User-Agent.</summary>
     public string MusicBrainzContact { get; set; } = "https://github.com/welles/music-manager";
 

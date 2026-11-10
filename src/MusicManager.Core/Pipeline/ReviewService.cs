@@ -11,6 +11,7 @@ public sealed class ReviewService(
     IDbContextFactory<AppDbContext> dbFactory,
     MatchingPipeline pipeline,
     MusicBrainzService musicBrainz,
+    CoverArtService coverArt,
     SettingsService settingsService,
     Storage storage,
     WorkQueue queue,
@@ -127,6 +128,46 @@ public sealed class ReviewService(
         return problems;
     }
 
+    /// <summary>
+    /// Takes the tags of a Spotify/Deezer match (the given one, or the best of each file) incl. cover.
+    /// Returns files without a match.
+    /// </summary>
+    public async Task<List<string>> ApplyExternalAsync(IReadOnlyList<int> fileIds, string? matchKey = null, CancellationToken ct = default)
+    {
+        var problems = new List<string>();
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        var files = await db.Files.Where(f => fileIds.Contains(f.Id)).ToListAsync(ct);
+        foreach (var file in files)
+        {
+            var match = matchKey != null
+                ? file.ExternalMatches.FirstOrDefault(m => m.Key == matchKey)
+                : file.ExternalMatches.OrderByDescending(m => m.Score).FirstOrDefault();
+            if (match == null)
+            {
+                problems.Add($"{file.FileName}: kein Treffer aus Spotify/Deezer");
+                continue;
+            }
+
+            await pipeline.BuildManualTagsAsync(file, ExternalSourceService.ToTagSet(match), ct);
+            file.ExternalSource = match.Source;
+            file.Decision = DecisionSource.External;
+            if (match.CoverUrl != null && await coverArt.DownloadAsync(match.CoverUrl, MatchingPipeline.SourceName(match.Source), ct) is { } cover)
+            {
+                Directory.CreateDirectory(Path.Combine(storage.WorkRoot, "covers"));
+                file.ManualCoverFile = Path.Combine(storage.WorkRoot, "covers", $"{Guid.NewGuid():N}.img");
+                await File.WriteAllBytesAsync(file.ManualCoverFile, cover.Data, ct);
+            }
+
+            Approve(file, $"Tags aus {MatchingPipeline.SourceName(match.Source)} übernommen: {match.Title} ({match.Album})");
+        }
+
+        await db.SaveChangesAsync(ct);
+        foreach (var f in files.Where(f => f.Status == FileStatus.Approved))
+            queue.Enqueue(new WorkItem(WorkKind.WriteFile, f.Id));
+        notifier.Notify();
+        return problems;
+    }
+
     /// <summary>Manual tagging (fallback when the recording is not in MusicBrainz).</summary>
     public async Task ApplyManualTagsAsync(IReadOnlyList<(int FileId, TagSet Tags)> edits, byte[]? cover, CancellationToken ct = default)
     {
@@ -145,6 +186,7 @@ public sealed class ReviewService(
         {
             var file = files.First(f => f.Id == fileId);
             await pipeline.BuildManualTagsAsync(file, tags, ct);
+            file.ExternalSource = null;
             if (coverPath != null) file.ManualCoverFile = coverPath;
             Approve(file, "Manuell getaggt");
         }

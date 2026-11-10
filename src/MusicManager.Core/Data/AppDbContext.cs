@@ -43,6 +43,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
             e.Json(x => x.Candidates);
             e.Json(x => x.AiDecision);
             e.Json(x => x.AiSuggestion);
+            e.Json(x => x.ExternalMatches);
             e.HasMany(x => x.Events).WithOne().HasForeignKey(x => x.TrackFileId).OnDelete(DeleteBehavior.Cascade);
         });
 

@@ -51,6 +51,7 @@ docker compose up -d
 | `MusicManager__AcoustIdApiKey`    | AcoustID application key (https://acoustid.org/new-application) |
 | `MusicManager__AnthropicApiKey`   | Claude API key (optional, enables the AI features)        |
 | `MusicManager__MusicBrainzContact`| Contact in the MusicBrainz User-Agent                     |
+| `MusicManager__SpotifyClientId`, `MusicManager__SpotifyClientSecret` | Spotify app for the fallback search (optional; Deezer needs no key) |
 | `MusicManager__MusicBrainzServer` | Optional own MusicBrainz mirror                           |
 | `MusicManager__InboxPath` …       | Override the container paths (default `/inbox`, `/music`, `/trash`, `/data`) |
 
@@ -77,6 +78,6 @@ Database changes: `dotnet ef migrations add <Name> --project src/MusicManager.Co
 ## Not implemented yet
 
 - Duplicate view with A/B player and library index
-- Fallback sources (Spotify, Deezer, Discogs)
+- Discogs as an additional fallback source
 - Periodic re-check of manually tagged files, MusicBrainz release editor seeding
 - ReplayGain calculation

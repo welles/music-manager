@@ -27,6 +27,13 @@ public static class ServiceCollectionExtensions
             c.Timeout = TimeSpan.FromSeconds(30);
         });
 
+        services.AddHttpClient<SpotifyClient>(c => c.Timeout = TimeSpan.FromSeconds(20));
+        services.AddHttpClient<DeezerClient>(c =>
+        {
+            c.DefaultRequestHeaders.UserAgent.ParseAdd(userAgent);
+            c.Timeout = TimeSpan.FromSeconds(20);
+        });
+        services.AddSingleton<ExternalSourceService>();
         services.AddSingleton<MusicBrainzService>();
         services.AddSingleton<AudioTools>();
         services.AddSingleton<AiService>();

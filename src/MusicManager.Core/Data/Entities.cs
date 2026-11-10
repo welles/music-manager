@@ -35,6 +35,9 @@ public enum DecisionSource
     Ai,
     Manual,
     ManualTags,
+
+    /// <summary>Tags taken from Spotify or Deezer after confirmation.</summary>
+    External,
 }
 
 public sealed class InboxGroup
@@ -92,6 +95,12 @@ public sealed class TrackFile
 
     /// <summary>AI suggestion for cleaned tags / files not in MusicBrainz.</summary>
     public AiTagSuggestion? AiSuggestion { get; set; }
+
+    /// <summary>Hits from Spotify/Deezer (links in the tags or search) for files not in MusicBrainz.</summary>
+    public List<ExternalMatch> ExternalMatches { get; set; } = [];
+
+    /// <summary>Source of the applied external tags ("spotify", "deezer").</summary>
+    public string? ExternalSource { get; set; }
 
     /// <summary>Tags that will be (or were) written.</summary>
     public TagSet? FinalTags { get; set; }

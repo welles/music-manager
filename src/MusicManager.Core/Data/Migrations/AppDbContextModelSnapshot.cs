@@ -195,6 +195,13 @@ namespace MusicManager.Core.Data.Migrations
                     b.Property<string>("Error")
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("ExternalMatches")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ExternalSource")
+                        .HasColumnType("TEXT");
+
                     b.Property<DateTime>("FileModifiedUtc")
                         .HasColumnType("TEXT");
 

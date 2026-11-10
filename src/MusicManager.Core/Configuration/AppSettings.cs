@@ -83,6 +83,13 @@ public sealed class AppSettings
     // --- Conversion ---------------------------------------------------------------------
     public int AacBitrateKbps { get; set; } = 256;
 
+    // --- Fallback sources -------------------------------------------------------------
+    public bool SpotifyEnabled { get; set; } = true;
+    public bool DeezerEnabled { get; set; } = true;
+
+    /// <summary>Minimum similarity (title, artist, duration; 0..1) of an external hit.</summary>
+    public double ExternalMinScore { get; set; } = 0.75;
+
     // --- Trash --------------------------------------------------------------------------
     public int TrashRetentionDays { get; set; } = 30;
 

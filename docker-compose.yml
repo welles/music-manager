@@ -15,6 +15,9 @@ services:
       MusicManager__AnthropicApiKey: ${ANTHROPIC_API_KEY:-}
       # Contact for the MusicBrainz User-Agent (mail address or URL)
       MusicManager__MusicBrainzContact: ${MUSICBRAINZ_CONTACT:-https://github.com/welles/music-manager}
+      # Spotify app (developer.spotify.com, client credentials) – optional fallback source
+      MusicManager__SpotifyClientId: ${SPOTIFY_CLIENT_ID:-}
+      MusicManager__SpotifyClientSecret: ${SPOTIFY_CLIENT_SECRET:-}
     volumes:
       # Inbox for new files (subfolders = groups, e.g. musicfab/<album>)
       - ${INBOX_DIR:-./inbox}:/inbox

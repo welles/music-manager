@@ -23,6 +23,7 @@ public sealed partial class MatchingPipeline(
     MusicBrainzService musicBrainz,
     CoverArtService coverArt,
     AiService ai,
+    ExternalSourceService external,
     PipelineNotifier notifier,
     WorkQueue queue,
     ILogger<MatchingPipeline> logger)
@@ -259,6 +260,16 @@ public sealed partial class MatchingPipeline(
 
         file.AcoustId ??= lookup?.BestAcoustId(ids.Select(i => i.Id).FirstOrDefault(), settings.AcoustIdMinScore);
 
+        // Spotify/Deezer links in the tags: exact track, its ISRC may lead to MusicBrainz.
+        file.ExternalMatches = [];
+        if (ids.Count == 0)
+        {
+            var (linked, messages) = await external.FromLinksAsync(file.OriginalFields, ct);
+            foreach (var message in messages) AddEvent(file, message);
+            file.ExternalMatches.AddRange(linked);
+            ids.AddRange(await RecordingsByIsrcAsync(file, linked, ct));
+        }
+
         var tags = file.CleanedTags!;
         if (ids.Count == 0 && !string.IsNullOrWhiteSpace(tags.Title))
         {
@@ -302,6 +313,9 @@ public sealed partial class MatchingPipeline(
                 recordings.Add(rec);
         }
 
+        if (recordings.Count == 0 && file.ExternalMatches.Count == 0)
+            recordings = await ExternalSearchAsync(file, settings, ct);
+
         return new Identification(recordings, false);
     }
 
@@ -336,15 +350,59 @@ public sealed partial class MatchingPipeline(
         MatchScore = r.MatchScore, Source = r.Source, IsVideo = r.IsVideo, Releases = releases,
     };
 
+    /// <summary>Searches Spotify/Deezer; a confident hit with an ISRC is looked up in MusicBrainz again.</summary>
+    private async Task<List<RecordingMatch>> ExternalSearchAsync(TrackFile file, AppSettings settings, CancellationToken ct)
+    {
+        notifier.SetActivity($"Fremdquellen für {file.FileName}");
+        var (found, messages) = await external.SearchAsync(file.CleanedTags!, file.DurationSeconds, settings, ct);
+        foreach (var message in messages) AddEvent(file, message);
+        file.ExternalMatches.AddRange(found);
+
+        var recordings = new List<RecordingMatch>();
+        foreach (var (id, score, source) in await RecordingsByIsrcAsync(file, found.Where(m => m.Score >= 0.9), ct))
+        {
+            var rec = await musicBrainz.GetRecordingAsync(id, score, source, ct);
+            if (!rec.IsVideo && rec.Releases.Count > 0) recordings.Add(rec);
+        }
+
+        return recordings;
+    }
+
+    /// <summary>MusicBrainz recordings carrying the ISRC of external matches.</summary>
+    private async Task<List<(string Id, double Score, string Source)>> RecordingsByIsrcAsync(TrackFile file, IEnumerable<ExternalMatch> matches,
+        CancellationToken ct)
+    {
+        var result = new List<(string, double, string)>();
+        foreach (var m in matches.Where(m => !string.IsNullOrWhiteSpace(m.Isrc)).DistinctBy(m => m.Isrc).Take(3))
+        {
+            var ids = await musicBrainz.SearchIsrcAsync(m.Isrc!, ct);
+            if (ids.Count == 0) continue;
+            AddEvent(file, $"ISRC {m.Isrc} aus {SourceName(m.Source)} in MusicBrainz gefunden ({ids.Count} Recording(s))");
+            result.AddRange(ids.Select(id => (id, 0.95, "isrc")));
+        }
+
+        return result;
+    }
+
+    public static string SourceName(string source) => source switch
+    {
+        "spotify" => "Spotify",
+        "deezer" => "Deezer",
+        _ => source,
+    };
+
     /// <summary>Text search hits must roughly match the file duration (unknown lengths are accepted).</summary>
     private static bool LengthFits(double? file, double? recording) =>
         file == null || recording == null || Math.Abs(file.Value - recording.Value) <= 10;
 
     private async Task HandleNotInMusicBrainzAsync(TrackFile file, AppSettings settings, CancellationToken ct)
     {
-        SetStatus(file, FileStatus.NotInMusicBrainz, "Weder Fingerabdruck noch Textsuche haben einen MusicBrainz-Eintrag gefunden");
+        SetStatus(file, FileStatus.NotInMusicBrainz, file.ExternalMatches.Count > 0
+            ? $"Nicht in MusicBrainz – {file.ExternalMatches.Count} Vorschläge aus {string.Join(" und ", file.ExternalMatches.Select(m => SourceName(m.Source)).Distinct())}"
+            : "Weder Fingerabdruck noch Textsuche haben einen MusicBrainz-Eintrag gefunden");
 
-        if (settings.AiSuggestForUnknown && ai.IsConfigured && file.AiSuggestion == null)
+        // The AI suggestion is only needed when no source delivered a usable match.
+        if (settings.AiSuggestForUnknown && ai.IsConfigured && file.AiSuggestion == null && file.ExternalMatches.Count == 0)
         {
             try
             {
@@ -639,7 +697,7 @@ public sealed partial class MatchingPipeline(
 
     /// <summary>Value of the MUSICMANAGER_SOURCE tag: where the tags came from.</summary>
     public static string SourceFor(TrackFile file) =>
-        file.ManuallyTagged ? "manual" : file.Decision == DecisionSource.Ai ? "musicbrainz-ai" : "musicbrainz";
+        file.ManuallyTagged ? file.ExternalSource ?? "manual" : file.Decision == DecisionSource.Ai ? "musicbrainz-ai" : "musicbrainz";
 
     public static void SetStatus(TrackFile file, FileStatus status, string? reason)
     {

@@ -156,6 +156,14 @@ public sealed class MusicBrainzService : IDisposable
         }, ct);
     }
 
+    /// <summary>Recordings with this ISRC (via the search index).</summary>
+    public Task<List<string>> SearchIsrcAsync(string isrc, CancellationToken ct) =>
+        Run($"isrc:{isrc}", async () =>
+        {
+            var results = await _query.FindRecordingsAsync($"isrc:{isrc}", 10, cancellationToken: ct);
+            return results.Results.Where(r => r.Score >= 95).Select(r => r.Item.Id.ToString()).ToList();
+        }, ct);
+
     /// <summary>Release search for the manual search in the frontend.</summary>
     public Task<List<ReleaseAppearance>> SearchReleasesAsync(string query, int limit, CancellationToken ct) =>
         Run($"search-rel:{query}", async () =>
