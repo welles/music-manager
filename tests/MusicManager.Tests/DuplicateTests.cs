@@ -36,3 +36,22 @@ public class DuplicateTests
     public void RemasterSpellingsAreTheSameMarker() =>
         Assert.Equal(DuplicateDetector.VersionMarkers("Song (Remastered 2009)"), DuplicateDetector.VersionMarkers("Song - 2009 Remaster"));
 }
+
+public class DuplicateFingerprintTests
+{
+    [Fact]
+    public void MatchingFingerprintMakesDifferentRecordingsADuplicate()
+    {
+        var (kind, _) = DuplicateDetector.Classify(new TagSet { Title = "Shutdown", MbRecordingId = "a" },
+            new LibraryEntry { RelativePath = "x", Title = "Shutdown", MbRecordingId = "b" }, fingerprintMatches: true);
+        Assert.Equal(DuplicateKind.Duplicate, kind);
+    }
+
+    [Fact]
+    public void VersionMarkersWinOverMatchingFingerprint()
+    {
+        var (kind, _) = DuplicateDetector.Classify(new TagSet { Title = "Song (2011 Remaster)" },
+            new LibraryEntry { RelativePath = "x", Title = "Song" }, fingerprintMatches: true);
+        Assert.Equal(DuplicateKind.OtherVersion, kind);
+    }
+}

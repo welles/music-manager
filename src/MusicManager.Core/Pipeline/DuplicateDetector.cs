@@ -52,7 +52,7 @@ public sealed partial class DuplicateDetector(IDbContextFactory<AppDbContext> db
                     var similarity = FingerprintMatcher.Similarity(fingerprint, FingerprintMatcher.Decode(e.Fingerprint));
                     if (similarity >= settings.DuplicateFingerprintThreshold)
                     {
-                        var (kind, why) = Classify(tags, e);
+                        var (kind, why) = Classify(tags, e, fingerprintMatches: true);
                         Add(e, kind, $"Ähnlicher Fingerabdruck ({similarity:P0}){why}", similarity);
                         continue;
                     }
@@ -76,18 +76,25 @@ public sealed partial class DuplicateDetector(IDbContextFactory<AppDbContext> db
     }
 
     /// <summary>
-    /// Same recording or another version? Different MusicBrainz recordings or different version
-    /// markers in the titles ("Remix", "Live", "Remastered" …) mean another version.
+    /// Same recording or another version? Different version markers in the titles ("Remix", "Live",
+    /// "Remastered" …) mean another version. Different MusicBrainz recordings mean another version too –
+    /// unless the fingerprints match (MusicBrainz often has several recordings of the same audio).
     /// </summary>
-    public static (DuplicateKind Kind, string Reason) Classify(TagSet tags, LibraryEntry e)
+    public static (DuplicateKind Kind, string Reason) Classify(TagSet tags, LibraryEntry e, bool fingerprintMatches = false)
     {
-        if (!string.IsNullOrWhiteSpace(tags.MbRecordingId) && !string.IsNullOrWhiteSpace(e.MbRecordingId) && tags.MbRecordingId != e.MbRecordingId)
-            return (DuplicateKind.OtherVersion, " – aber anderes MusicBrainz-Recording");
-
         var a = VersionMarkers(tags.Title);
         var b = VersionMarkers(e.Title);
         if (!a.SetEquals(b))
             return (DuplicateKind.OtherVersion, $" – aber andere Version ({Describe(a)} / {Describe(b)})");
+
+        var differentRecordings = !string.IsNullOrWhiteSpace(tags.MbRecordingId) && !string.IsNullOrWhiteSpace(e.MbRecordingId)
+                                  && tags.MbRecordingId != e.MbRecordingId;
+        if (differentRecordings)
+        {
+            return fingerprintMatches
+                ? (DuplicateKind.Duplicate, " – anderes MusicBrainz-Recording, aber gleiche Aufnahme")
+                : (DuplicateKind.OtherVersion, " – aber anderes MusicBrainz-Recording");
+        }
 
         return (DuplicateKind.Duplicate, "");
     }
