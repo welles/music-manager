@@ -29,9 +29,9 @@
                 <MudText Typo="Typo.subtitle2">@(string.IsNullOrEmpty(context.Grouping.Key?.ToString()) ? "Eingang (lose Dateien)" : context.Grouping.Key) (@context.Grouping.Count())</MudText>
             </GroupTemplate>
         </PropertyColumn>
-        <TemplateColumn Title="Titel" SortBy="x => TrackSummary.TitleOf(x)">
+        <TemplateColumn Title="Original" SortBy="x => x.RelativePath">
             <CellTemplate>
-                <TrackSummary File="context.Item" Href="@($"datei/{context.Item.Id}")" />
+                <TrackSummary File="context.Item" Variant="TrackSummary.SummaryVariant.Original" Href="@($"datei/{context.Item.Id}")" />
             </CellTemplate>
         </TemplateColumn>
         <PropertyColumn Property="x => x.Status" Title="Status">
@@ -48,7 +48,7 @@
                 else if (context.Item.ExternalMatches.OrderByDescending(m => m.Score).FirstOrDefault() is { } ext)
                 {
                     <MudText Typo="Typo.body2">@MatchingPipeline.SourceName(ext.Source): @ext.Title (@ext.Album, @ext.ReleaseDate)</MudText>
-                    <MudText Typo="Typo.caption">@(ext.Score >= 1 ? "Link aus den Tags" : $"{ext.Score:P0} Übereinstimmung") · @context.Item.ExternalMatches.Count Treffer</MudText>
+                    <MudText Typo="Typo.caption">@(ext.FromTagLink ? "Link aus den Tags" : $"{ext.Score:P0} Übereinstimmung") · @context.Item.ExternalMatches.Count Treffer</MudText>
                 }
                 else if (context.Item.AiSuggestion is { } s)
                 {

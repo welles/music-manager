@@ -40,19 +40,25 @@ app.UseAntiforgery();
 app.MapGet("/healthz", () => Results.Ok("ok"));
 
 // Cover of a file: embedded picture of the filed file, otherwise of the original in the inbox.
-app.MapGet("/api/files/{id:int}/cover", async (int id, Microsoft.EntityFrameworkCore.IDbContextFactory<MusicManager.Core.Data.AppDbContext> dbFactory, Storage storage, HttpContext http) =>
+app.MapGet("/api/files/{id:int}/cover", async (int id, string? which, Microsoft.EntityFrameworkCore.IDbContextFactory<MusicManager.Core.Data.AppDbContext> dbFactory, Storage storage, HttpContext http) =>
 {
     await using var db = await dbFactory.CreateDbContextAsync();
     var file = await db.Files.FindAsync(id);
     byte[]? data = null;
     if (file != null)
     {
-        var paths = new[]
+        var result = new[]
         {
             file.TargetPath != null && file.Status == MusicManager.Core.Data.FileStatus.Done ? storage.LibraryPath(file.TargetPath) : null,
             file.ManualCoverFile,
-            storage.InboxPath(file.RelativePath),
-            file.TrashPath,
+        };
+        // The original is in the inbox, or in the trash once the file was filed.
+        var original = new[] { storage.InboxPath(file.RelativePath), file.TrashPath };
+        var paths = which switch
+        {
+            "original" => original,
+            "result" => result,
+            _ => result.Concat(original).ToArray(),
         };
         foreach (var p in paths.Where(p => p != null && File.Exists(p)))
         {

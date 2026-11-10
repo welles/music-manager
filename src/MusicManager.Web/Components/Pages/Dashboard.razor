@@ -43,15 +43,15 @@
         <MudText Typo="Typo.h6">Zuletzt bearbeitet</MudText>
     </ToolBarContent>
     <HeaderContent>
-        <MudTh>Titel</MudTh>
+        <MudTh>Original</MudTh>
         <MudTh>Status</MudTh>
         <MudTh>Ergebnis</MudTh>
         <MudTh>Zeit</MudTh>
     </HeaderContent>
     <RowTemplate>
-        <MudTd><TrackSummary File="context" /></MudTd>
+        <MudTd><TrackSummary File="context" Variant="TrackSummary.SummaryVariant.Original" /></MudTd>
         <MudTd><StatusChip Status="context.Status" /> <DecisionChip Decision="context.Decision" /></MudTd>
-        <MudTd>@(context.TargetPath ?? context.StatusReason)</MudTd>
+        <MudTd><TrackSummary File="context" Variant="TrackSummary.SummaryVariant.Result" /></MudTd>
         <MudTd>@context.UpdatedAt.ToLocalTime().ToString("g")</MudTd>
     </RowTemplate>
 </MudTable>

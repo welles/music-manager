@@ -1,33 +1,48 @@
-@* Metadata first: cover, title, artist, album – the file path only as a small secondary line. *@
+@* Metadata first: cover, title, artist, album – the path only as a small secondary line.
+   Variant "Original" shows the incoming file, "Result" what is (or will be) written. *@
 
-<div class="d-flex align-center" style="gap:12px;min-width:0">
-    <MudImage Src="@CoverUrl" Width="@Size" Height="@Size" ObjectFit="ObjectFit.Cover" Class="rounded flex-shrink-0" Alt="Cover" />
-    <div style="min-width:0">
-        @if (ShowTitle && Href != null)
-        {
-            <MudLink Href="@Href" Typo="@(Large ? Typo.h5 : Typo.subtitle2)" Style="overflow-wrap:anywhere">@Title</MudLink>
-        }
-        else if (ShowTitle)
-        {
-            <MudText Typo="@(Large ? Typo.h5 : Typo.subtitle2)" Style="overflow-wrap:anywhere">@Title</MudText>
-        }
-        <MudText Typo="@(Large ? Typo.subtitle1 : Typo.body2)">@Tags?.Artist</MudText>
-        @if (!string.IsNullOrWhiteSpace(AlbumLine))
-        {
-            <MudText Typo="Typo.body2" Style="opacity:.75">@AlbumLine</MudText>
-        }
-        <MudText Typo="Typo.caption" Class="mono" Style="opacity:.55;overflow-wrap:anywhere">@File.RelativePath</MudText>
+@if (Variant == SummaryVariant.Result && Tags == null)
+{
+    <MudText Typo="Typo.body2" Style="opacity:.75">@(File.StatusReason ?? "Noch kein Ergebnis")</MudText>
+}
+else
+{
+    <div class="d-flex align-center" style="gap:12px;min-width:0">
+        <MudImage Src="@CoverUrl" Width="@Size" Height="@Size" ObjectFit="ObjectFit.Cover" Class="rounded flex-shrink-0" Alt="Cover" />
+        <div style="min-width:0">
+            @if (ShowTitle && Href != null)
+            {
+                <MudLink Href="@Href" Typo="@(Large ? Typo.h5 : Typo.subtitle2)" Style="overflow-wrap:anywhere">@Title</MudLink>
+            }
+            else if (ShowTitle)
+            {
+                <MudText Typo="@(Large ? Typo.h5 : Typo.subtitle2)" Style="overflow-wrap:anywhere">@Title</MudText>
+            }
+            <MudText Typo="@(Large ? Typo.subtitle1 : Typo.body2)">@Tags?.Artist</MudText>
+            @if (!string.IsNullOrWhiteSpace(AlbumLine))
+            {
+                <MudText Typo="Typo.body2" Style="opacity:.75">@AlbumLine</MudText>
+            }
+            <MudText Typo="Typo.caption" Class="mono" Style="opacity:.55;overflow-wrap:anywhere">@PathLine</MudText>
+        </div>
     </div>
-</div>
+}
 
 @code {
+    public enum SummaryVariant { Auto, Original, Result }
+
     [Parameter, EditorRequired] public TrackFile File { get; set; } = null!;
     [Parameter] public string? Href { get; set; }
     [Parameter] public bool Large { get; set; }
     [Parameter] public bool ShowTitle { get; set; } = true;
+    [Parameter] public SummaryVariant Variant { get; set; }
 
-    /// <summary>Final tags if available, otherwise the cleaned tags of the original.</summary>
-    private TagSet? Tags => File.FinalTags ?? File.CleanedTags ?? File.OriginalTags;
+    private TagSet? Tags => Variant switch
+    {
+        SummaryVariant.Original => File.OriginalTags ?? File.CleanedTags,
+        SummaryVariant.Result => File.FinalTags,
+        _ => File.FinalTags ?? File.CleanedTags ?? File.OriginalTags,
+    };
 
     public static string TitleOf(TrackFile f) => (f.FinalTags ?? f.CleanedTags ?? f.OriginalTags)?.Title ?? f.FileName;
 
@@ -35,7 +50,14 @@
 
     private string? AlbumLine => string.Join(" · ", new[] { Tags?.Album, Tags?.Year?.ToString() }.Where(x => !string.IsNullOrWhiteSpace(x)));
 
+    private string? PathLine => Variant == SummaryVariant.Result ? File.TargetPath : File.RelativePath;
+
     private int Size => Large ? 140 : 48;
 
-    private string CoverUrl => $"api/files/{File.Id}/cover?v={File.UpdatedAt.UtcTicks}";
+    private string CoverUrl => $"api/files/{File.Id}/cover?v={File.UpdatedAt.UtcTicks}" + Variant switch
+    {
+        SummaryVariant.Original => "&which=original",
+        SummaryVariant.Result => "&which=result",
+        _ => "",
+    };
 }

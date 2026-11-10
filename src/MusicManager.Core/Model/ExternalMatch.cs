@@ -33,6 +33,9 @@ public sealed class ExternalMatch
     public List<string> Genres { get; init; } = [];
     public string? CoverUrl { get; init; }
 
+    /// <summary>True if the track came from a Spotify/Deezer link in the file's tags (exact match).</summary>
+    public bool FromTagLink { get; set; }
+
     /// <summary>Similarity to the file (title, artist, duration), 0..1.</summary>
     public double Score { get; set; }
 

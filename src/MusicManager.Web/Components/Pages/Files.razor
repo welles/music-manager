@@ -14,8 +14,8 @@
                       AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Medium" Class="mt-0" Clearable="true" />
     </ToolBarContent>
     <Columns>
-        <TemplateColumn Title="Titel" SortBy="x => TrackSummary.TitleOf(x)">
-            <CellTemplate><TrackSummary File="context.Item" /></CellTemplate>
+        <TemplateColumn Title="Original" SortBy="x => x.RelativePath">
+            <CellTemplate><TrackSummary File="context.Item" Variant="TrackSummary.SummaryVariant.Original" Href="@($"datei/{context.Item.Id}")" /></CellTemplate>
         </TemplateColumn>
         <PropertyColumn Property="x => x.Status" Title="Status">
             <CellTemplate><StatusChip Status="context.Item.Status" /></CellTemplate>
@@ -23,8 +23,9 @@
         <PropertyColumn Property="x => x.Decision" Title="Entscheidung">
             <CellTemplate><DecisionChip Decision="context.Item.Decision" /></CellTemplate>
         </PropertyColumn>
-        <PropertyColumn Property="x => x.TargetPath" Title="Ziel" />
-        <PropertyColumn Property="x => x.StatusReason" Title="Hinweis" />
+        <TemplateColumn Title="Ergebnis" SortBy="x => x.TargetPath ?? x.StatusReason">
+            <CellTemplate><TrackSummary File="context.Item" Variant="TrackSummary.SummaryVariant.Result" /></CellTemplate>
+        </TemplateColumn>
         <PropertyColumn Property="x => x.UpdatedAt" Title="Geändert" Format="g" />
     </Columns>
     <PagerContent>

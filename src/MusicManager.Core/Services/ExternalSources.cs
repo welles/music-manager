@@ -209,6 +209,7 @@ public sealed class ExternalSourceService(SpotifyClient spotify, DeezerClient de
                 }
 
                 match.Score = 1;
+                match.FromTagLink = true;
                 matches.Add(match);
                 messages.Add($"{link.Source}-Link in {link.Field}: \"{match.Title}\" (\"{match.Album}\")");
             }

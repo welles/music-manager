@@ -140,8 +140,8 @@
                                 <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="@(m.Source == "spotify" ? Color.Success : Color.Info)">
                                     @MatchingPipeline.SourceName(m.Source)
                                 </MudChip>
-                                <MudChip T="string" Size="Size.Small" Variant="Variant.Text" Color="@(m.Score >= 0.95 ? Color.Success : Color.Warning)">
-                                    @(m.Score >= 1 ? "Link aus den Tags" : $"{m.Score:P0} Übereinstimmung")
+                                <MudChip T="string" Size="Size.Small" Variant="Variant.Text" Color="@(m.FromTagLink || m.Score >= 0.95 ? Color.Success : Color.Warning)">
+                                    @(m.FromTagLink ? "Link aus den Tags" : $"{m.Score:P0} Übereinstimmung")
                                 </MudChip>
                             </MudStack>
                             <MudText Typo="Typo.body2">
