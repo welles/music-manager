@@ -62,9 +62,11 @@
                 </HeaderContent>
                 <RowTemplate>
                     <MudTd>
-                        <MudText Typo="Typo.body2" Color="@(context.Key == _file.SelectedCandidateKey ? Color.Primary : Color.Default)">
-                            <b>@context.Score.ToString("0.#")</b> (@context.Confidence.ToString("P0"))
-                        </MudText>
+                        <MudTooltip Text="Erreichte Punkte von den für diese Datei maximal möglichen. Das ist keine Erkennungssicherheit – die steht beim Recording.">
+                            <MudText Typo="Typo.body2" Color="@(context.Key == _file.SelectedCandidateKey ? Color.Primary : Color.Default)" Style="white-space:nowrap">
+                                <b>@context.Score.ToString("0.#")</b>@(context.MaxScore > 0 ? $" / {context.MaxScore:0.#}" : "")
+                            </MudText>
+                        </MudTooltip>
                     </MudTd>
                     <MudTd>
                         <MudLink Href="@($"https://musicbrainz.org/release/{context.Release.ReleaseId}")" Target="_blank">@context.Release.Title</MudLink>
@@ -97,10 +99,11 @@
                         <MudTr>
                             <td colspan="7">
                                 <MudStack Row="true" Wrap="Wrap.Wrap" Spacing="1" Class="pa-2">
-                                    @foreach (var (name, value) in context.Breakdown.OrderByDescending(b => Math.Abs(b.Value)))
+                                    @foreach (var (name, value, max) in BreakdownRows(context))
                                     {
-                                        <MudChip T="string" Size="Size.Small" Color="@(value >= 0 ? Color.Success : Color.Error)" Variant="Variant.Text">
-                                            @name: @value.ToString("+0.#;-0.#;0")
+                                        <MudChip T="string" Size="Size.Small" Variant="Variant.Text"
+                                                 Color="@(value < 0 ? Color.Error : max != null && value >= max - 0.05 ? Color.Success : Color.Warning)">
+                                            @name: @value.ToString("0.#")@(max != null ? $" / {max:0.#}" : "")
                                         </MudChip>
                                     }
                                 </MudStack>
@@ -256,6 +259,13 @@
         _file = await db.Files.AsNoTracking().FirstOrDefaultAsync(f => f.Id == Id);
         _events = await db.Events.AsNoTracking().Where(e => e.TrackFileId == Id).OrderByDescending(e => e.Id).ToListAsync();
     }
+
+    /// <summary>All categories with achieved and maximum points, including categories with 0 points.</summary>
+    private static IEnumerable<(string Name, double Value, double? Max)> BreakdownRows(ReleaseCandidate c) =>
+        c.BreakdownMax.Keys.Union(c.Breakdown.Keys)
+            .Select(k => (k, c.Breakdown.GetValueOrDefault(k), c.BreakdownMax.TryGetValue(k, out var m) ? m : (double?)null))
+            .Where(r => r.Item2 != 0 || r.Item3 is > 0)
+            .OrderByDescending(r => (r.Item3 ?? 0) - r.Item2);
 
     private void ToggleBreakdown(string key)
     {

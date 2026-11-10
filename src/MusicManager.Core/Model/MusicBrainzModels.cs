@@ -61,11 +61,17 @@ public sealed class ReleaseCandidate
 
     public double Score { get; set; }
 
-    /// <summary>Normalized score 0..1 (Score / maximum achievable positive score).</summary>
+    /// <summary>Share of the maximum achievable score (0..1). Not a match probability.</summary>
     public double Confidence { get; set; }
+
+    /// <summary>Maximum achievable score for this file (sum of <see cref="BreakdownMax"/>).</summary>
+    public double MaxScore { get; set; }
 
     /// <summary>Score parts for display ("Album-Ähnlichkeit" -> 22.5).</summary>
     public Dictionary<string, double> Breakdown { get; set; } = [];
+
+    /// <summary>Maximum per category ("Land" -> 6); categories without data are missing.</summary>
+    public Dictionary<string, double> BreakdownMax { get; set; } = [];
 
     public string Key => $"{RecordingId}/{Release.ReleaseId}";
 }

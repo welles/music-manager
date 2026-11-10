@@ -51,7 +51,8 @@ public static class ReleaseScorer
         var w = settings.Weights;
         var candidates = new List<ReleaseCandidate>();
         var earliestYear = recordings.SelectMany(r => r.Releases).Select(r => r.Year).Where(y => y != null).Min();
-        var maxScore = MaxScore(oldTags, fileDurationSeconds, group, settings);
+        var maxParts = MaxParts(oldTags, fileDurationSeconds, group, settings);
+        var maxScore = maxParts.Values.Sum();
 
         foreach (var rec in recordings)
         {
@@ -132,7 +133,9 @@ public static class ReleaseScorer
                     Release = rel,
                     Score = Math.Round(score, 2),
                     Confidence = maxScore > 0 ? Math.Clamp(score / maxScore, 0, 1) : 0,
+                    MaxScore = Math.Round(maxScore, 2),
                     Breakdown = parts.ToDictionary(p => p.Key, p => Math.Round(p.Value, 2)),
+                    BreakdownMax = maxParts,
                 });
             }
         }
@@ -186,19 +189,24 @@ public static class ReleaseScorer
             ? a.Release.ReleaseGroupId == b.Release.ReleaseGroupId
             : a.Release.ReleaseId == b.Release.ReleaseId;
 
-    /// <summary>Maximum achievable score with the information available for this file.</summary>
-    private static double MaxScore(TagSet old, double? duration, GroupContext group, AppSettings s)
+    /// <summary>Maximum achievable points per category with the information available for this file.</summary>
+    private static Dictionary<string, double> MaxParts(TagSet old, double? duration, GroupContext group, AppSettings s)
     {
         var w = s.Weights;
-        var max = w.Match + w.EarliestRelease + w.Country + w.Format
-                  + w.Status.Values.DefaultIfEmpty(0).Max() + w.PrimaryType.Values.DefaultIfEmpty(0).Max();
-        if (!string.IsNullOrWhiteSpace(old.Title)) max += w.TitleSimilarity;
-        if (!string.IsNullOrWhiteSpace(old.Artist) || old.Artists.Count > 0) max += w.ArtistSimilarity;
-        if (!string.IsNullOrWhiteSpace(old.Album)) max += w.AlbumSimilarity;
-        if (!string.IsNullOrWhiteSpace(old.AlbumArtist)) max += w.AlbumArtistSimilarity;
-        if (old.TrackNumber != null) max += w.TrackNumber;
-        if (duration != null) max += w.LengthMatch;
-        if (group.OtherFiles.Count > 0) max += w.GroupSameRelease + w.GroupSameReleaseGroup;
+        var max = new Dictionary<string, double> { ["Erkennung"] = w.Match };
+        if (!string.IsNullOrWhiteSpace(old.Title)) max["Titel-Ähnlichkeit"] = w.TitleSimilarity;
+        if (!string.IsNullOrWhiteSpace(old.Artist) || old.Artists.Count > 0) max["Künstler-Ähnlichkeit"] = w.ArtistSimilarity;
+        if (duration != null) max["Länge"] = w.LengthMatch;
+        if (!string.IsNullOrWhiteSpace(old.Album)) max["Album-Ähnlichkeit"] = w.AlbumSimilarity;
+        if (!string.IsNullOrWhiteSpace(old.AlbumArtist)) max["Album-Künstler"] = w.AlbumArtistSimilarity;
+        if (old.TrackNumber != null) max["Tracknummer"] = w.TrackNumber;
+        max["Status"] = w.Status.Values.DefaultIfEmpty(0).Max();
+        max["Typ"] = w.PrimaryType.Values.DefaultIfEmpty(0).Max();
+        max["Sekundärtyp"] = 0;
+        if (group.OtherFiles.Count > 0) max["Ordnerkontext"] = w.GroupSameRelease + w.GroupSameReleaseGroup;
+        max["Datum"] = w.EarliestRelease;
+        max["Land"] = w.Country;
+        max["Format"] = w.Format;
         return max;
     }
 }
