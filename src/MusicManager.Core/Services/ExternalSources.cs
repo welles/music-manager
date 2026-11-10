@@ -254,7 +254,8 @@ public sealed class ExternalSourceService(SpotifyClient spotify, DeezerClient de
 
         await Run("Spotify", settings.SpotifyEnabled && spotify.IsConfigured, () => spotify.SearchAsync(artist, plainTitle, ct));
         await Run("Deezer", settings.DeezerEnabled, () => deezer.SearchAsync(artist, plainTitle, ct), m => deezer.DetailsAsync(m, ct));
-        return (matches.OrderByDescending(m => m.Score).ToList(), messages);
+        // On equal scores Deezer comes first: it distinguishes featured artists and adds label and genres.
+        return (matches.OrderByDescending(m => m.Score).ThenBy(m => m.Source == "deezer" ? 0 : 1).ToList(), messages);
     }
 
     /// <summary>Similarity of a hit to the file: title 50 %, artist 30 %, duration 20 %.</summary>
