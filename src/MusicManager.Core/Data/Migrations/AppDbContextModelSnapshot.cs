@@ -213,6 +213,10 @@ namespace MusicManager.Core.Data.Migrations
                     b.Property<bool>("ManuallyTagged")
                         .HasColumnType("INTEGER");
 
+                    b.Property<string>("OriginalFields")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("OriginalTags")
                         .HasColumnType("TEXT");
 

@@ -76,6 +76,9 @@ public sealed class TrackFile
     public DateTime FileModifiedUtc { get; set; }
 
     public TagSet? OriginalTags { get; set; }
+
+    /// <summary>Tag fields exactly as found in the original file (all values of multi-value fields).</summary>
+    public List<MusicManager.Core.Services.TagField> OriginalFields { get; set; } = [];
     public TagSet? CleanedTags { get; set; }
 
     /// <summary>"rules" or "ai".</summary>

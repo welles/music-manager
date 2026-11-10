@@ -10,7 +10,7 @@ namespace MusicManager.Core.Services;
 /// <summary>Reading tags from any input format and writing the final tags into M4A files (TagLib#).</summary>
 public static class TagIo
 {
-    private const string ITunesMean = "com.apple.iTunes";
+    private const string ITunesMean = TagFields.ITunesMean;
     private static readonly ByteVector DayBox = new([0xA9, (byte)'d', (byte)'a', (byte)'y']);
     private static readonly ByteVector TvShowBox = ByteVector.FromString("tvsh", StringType.Latin1);
 
@@ -103,68 +103,67 @@ public static class TagIo
         }
     }
 
+    private static readonly Dictionary<string, ByteVector> TextAtoms = new()
+    {
+        ["TITLE"] = Atom("©nam"), ["ARTIST"] = Atom("©ART"), ["ALBUM"] = Atom("©alb"), ["ALBUMARTIST"] = Atom("aART"),
+        ["DATE"] = Atom("©day"), ["GENRE"] = Atom("©gen"),
+    };
+
+    private static ByteVector Atom(string name) =>
+        name[0] == '©' ? new ByteVector([0xA9, .. System.Text.Encoding.ASCII.GetBytes(name[1..])]) : ByteVector.FromString(name, StringType.Latin1);
+
     /// <summary>
-    /// Writes the final tags into an M4A file. ARTIST/ALBUMARTIST get the display strings,
-    /// ARTISTS/ALBUMARTISTS the individual artists (read by Navidrome as multi-artist tags).
+    /// Writes the final tags into an M4A file. The field list comes from
+    /// <see cref="TagFields.ForFinalTags"/>, so the before/after view shows exactly what is written.
+    /// Multi-value fields (ARTISTS, GENRE, artist IDs …) are written as one atom with several values.
     /// </summary>
     public static void WriteM4a(string path, TagSet t, byte[]? cover, string source)
     {
         using var file = File.Create(path, "audio/mp4", ReadStyle.Average);
         var apple = (AppleTag)file.GetTag(TagTypes.Apple, true);
         apple.Clear();
-
         Tag tag = apple;
-        tag.Title = t.Title;
-        tag.Performers = t.Artist == null ? [] : [t.Artist];
-        tag.AlbumArtists = t.AlbumArtist == null ? [] : [t.AlbumArtist];
-        tag.Album = t.Album;
-        tag.Track = (uint)(t.TrackNumber ?? 0);
-        tag.TrackCount = (uint)(t.TrackCount ?? 0);
-        tag.Disc = (uint)(t.DiscNumber ?? 0);
-        tag.DiscCount = (uint)(t.DiscCount ?? 0);
-        tag.Genres = [.. t.Genres];
-        if (t.Date != null)
-            apple.SetText(DayBox, t.Date);
 
-        tag.MusicBrainzTrackId = t.MbRecordingId;
-        tag.MusicBrainzReleaseId = t.MbReleaseId;
-        tag.MusicBrainzReleaseGroupId = t.MbReleaseGroupId;
-        tag.MusicBrainzArtistId = t.MbArtistIds.Count > 0 ? string.Join("/", t.MbArtistIds) : null;
-        tag.MusicBrainzReleaseArtistId = t.MbAlbumArtistIds.Count > 0 ? string.Join("/", t.MbAlbumArtistIds) : null;
-        tag.MusicBrainzReleaseStatus = t.ReleaseStatus;
-        tag.MusicBrainzReleaseType = t.ReleaseType;
-        tag.MusicBrainzReleaseCountry = t.ReleaseCountry;
-
-        SetDash(apple, "ARTISTS", t.Artists);
-        SetDash(apple, "ALBUMARTISTS", t.AlbumArtists);
-        SetDash(apple, "REMIXER", t.Remixer);
-        SetDash(apple, "ISRC", t.Isrc);
-        SetDash(apple, "LABEL", t.Label);
-        SetDash(apple, "ORIGINALDATE", t.OriginalDate);
-        SetDash(apple, "MusicBrainz Release Track Id", t.MbTrackId);
-        SetDash(apple, "Acoustid Id", t.AcoustId);
-        SetDash(apple, SourceMarker, source);
-
-        if (cover != null)
+        foreach (var field in TagFields.ForFinalTags(t, cover != null ? "Front-Cover" : null, source))
         {
-            tag.Pictures =
-            [
-                new Picture(new ByteVector(cover)) { Type = PictureType.FrontCover, MimeType = "image/jpeg" },
-            ];
+            switch (field.Name)
+            {
+                case "TRACKNUMBER":
+                    tag.Track = (uint)(t.TrackNumber ?? 0);
+                    tag.TrackCount = (uint)(t.TrackCount ?? 0);
+                    break;
+                case "DISCNUMBER":
+                    tag.Disc = (uint)(t.DiscNumber ?? 0);
+                    tag.DiscCount = (uint)(t.DiscCount ?? 0);
+                    break;
+                case "COVER":
+                    tag.Pictures = [new Picture(new ByteVector(cover!)) { Type = PictureType.FrontCover, MimeType = "image/jpeg" }];
+                    break;
+                default:
+                    if (TextAtoms.TryGetValue(field.Name, out var atom))
+                        apple.SetData(atom, field.Values.Select(TextBox).ToArray());
+                    else
+                        SetDashValues(apple, field.Name, field.Values);
+                    break;
+            }
         }
 
         file.Save();
     }
 
-    private static void SetDash(AppleTag apple, string name, string? value)
-    {
-        if (!string.IsNullOrWhiteSpace(value))
-            apple.SetDashBox(ITunesMean, name, value);
-    }
+    private static AppleDataBox TextBox(string value) =>
+        new(ByteVector.FromString("data", StringType.Latin1), (uint)AppleDataBox.FlagType.ContainsText) { Text = value };
 
-    private static void SetDash(AppleTag apple, string name, List<string> values)
+    /// <summary>Freeform atom (----:com.apple.iTunes:NAME) with one data child per value.</summary>
+    private static void SetDashValues(AppleTag apple, string name, List<string> values)
     {
-        if (values.Count > 0)
-            apple.SetDashBoxes(ITunesMean, name, [.. values]);
+        apple.SetDashBox(ITunesMean, name, values[0]);
+        if (values.Count == 1) return;
+
+        var box = apple.OfType<AppleAnnotationBox>().First(b =>
+            b.BoxType.ToString(StringType.Latin1) == "----"
+            && b.Children.OfType<AppleAdditionalInfoBox>().Any(c => c.BoxType.ToString(StringType.Latin1) == "name" && c.Text == name));
+        foreach (var value in values.Skip(1))
+            box.AddChild(TextBox(value));
     }
 }

@@ -157,6 +157,7 @@ public sealed partial class MatchingPipeline(
 
         // Tags and pre-cleaning.
         file.OriginalTags = TagIo.Read(path);
+        file.OriginalFields = TagFields.Read(path);
         var cleaned = PreCleaner.Clean(file.OriginalTags, file.FileName, profile);
         file.CleanedTags = cleaned.Tags;
         file.CleanupSource = "rules";
@@ -485,7 +486,7 @@ public sealed partial class MatchingPipeline(
 
             var cover = await GetCoverAsync(file, source, settings, ct);
             TagIo.WriteM4a(tmp, file.FinalTags, cover,
-                file.ManuallyTagged ? "manual" : file.Decision == DecisionSource.Ai ? "musicbrainz-ai" : "musicbrainz");
+                SourceFor(file));
 
             // Keep the timestamp of the original file.
             File.SetLastWriteTimeUtc(tmp, File.GetLastWriteTimeUtc(source));
@@ -601,6 +602,10 @@ public sealed partial class MatchingPipeline(
     // =====================================================================================
     // Helpers
     // =====================================================================================
+
+    /// <summary>Value of the MUSICMANAGER_SOURCE tag: where the tags came from.</summary>
+    public static string SourceFor(TrackFile file) =>
+        file.ManuallyTagged ? "manual" : file.Decision == DecisionSource.Ai ? "musicbrainz-ai" : "musicbrainz";
 
     public static void SetStatus(TrackFile file, FileStatus status, string? reason)
     {

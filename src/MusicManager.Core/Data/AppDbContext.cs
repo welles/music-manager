@@ -37,6 +37,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
             e.Property(x => x.Status).HasConversion<string>();
             e.Property(x => x.Decision).HasConversion<string>();
             e.Json(x => x.OriginalTags);
+            e.Json(x => x.OriginalFields);
             e.Json(x => x.CleanedTags);
             e.Json(x => x.FinalTags);
             e.Json(x => x.Candidates);
