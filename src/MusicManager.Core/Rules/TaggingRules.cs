@@ -116,12 +116,21 @@ public static partial class TaggingRules
         var (_, featuredText) = ExtractFeatures(source.Title ?? "");
         var featured = featuredText == null ? [] : rules.Split(featuredText).Select(rules.ReplaceName).ToList();
 
-        var first = sourceArtists.FirstOrDefault();
-        if (first == null || TextUtil.Similarity(first, main) < 0.8) return mb;
-
         var known = new HashSet<string> { TextUtil.Normalize(main) };
+
+        // The main artist may itself be a name with a separator ("JJ Grey & Mofro"), which the
+        // source split into parts – those parts are the main artist, not collaborators.
+        var consumed = MainArtistParts(sourceArtists, main);
+        if (consumed == 0)
+        {
+            var first = sourceArtists.FirstOrDefault();
+            if (first == null || TextUtil.Similarity(first, main) < 0.8) return mb;
+            consumed = 1;
+        }
+
+        foreach (var part in sourceArtists.Take(consumed)) known.Add(TextUtil.Normalize(part));
         var feats = featured.Where(f => known.Add(TextUtil.Normalize(f))).ToList();
-        var others = sourceArtists.Skip(1).Where(a => known.Add(TextUtil.Normalize(a))).ToList();
+        var others = sourceArtists.Skip(consumed).Where(a => known.Add(TextUtil.Normalize(a))).ToList();
         if (feats.Count == 0 && others.Count == 0) return mb;
 
         var t = mb.Clone();
@@ -129,6 +138,29 @@ public static partial class TaggingRules
         var display = others.Count > 0 ? JoinList([mb.Artist ?? main, .. others]) : mb.Artist ?? main;
         t.Artist = feats.Count > 0 ? $"{display} feat. {JoinList(feats)}" : display;
         return t;
+    }
+
+    private static readonly HashSet<string> Connectors = ["and", "x", "with", "feat", "ft", "vs"];
+
+    private static List<string> NameTokens(string name) =>
+        TextUtil.Normalize(name).Split(' ', StringSplitOptions.RemoveEmptyEntries).Where(t => !Connectors.Contains(t)).ToList();
+
+    /// <summary>
+    /// Number of leading source artists that together spell the main artist (e.g. "JJ Grey" +
+    /// "Mofro" = "JJ Grey &amp; Mofro"), or 0 if they do not.
+    /// </summary>
+    private static int MainArtistParts(IReadOnlyList<string> sourceArtists, string main)
+    {
+        var target = NameTokens(main);
+        var acc = new List<string>();
+        for (var i = 0; i < sourceArtists.Count; i++)
+        {
+            acc.AddRange(NameTokens(sourceArtists[i]));
+            if (acc.Count > target.Count || !acc.SequenceEqual(target.Take(acc.Count))) return 0;
+            if (acc.Count == target.Count) return i + 1;
+        }
+
+        return 0;
     }
 
     /// <summary>"A", "A & B", "A, B & C".</summary>

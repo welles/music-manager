@@ -163,6 +163,17 @@ public class MatchingFixTests
     }
 
     [Fact]
+    public void MainArtistWithSeparatorIsNotSplitIntoCollaborators()
+    {
+        var mb = Mb("JJ Grey & Mofro");
+        Assert.Same(mb, TaggingRules.AddSourceArtists(mb, new TagSet { Title = "Dirtfloorcraker", Artist = "JJ Grey & Mofro" }, Rules));
+
+        var t = TaggingRules.AddSourceArtists(Mb("JJ Grey & Mofro"),
+            new TagSet { Title = "Song (feat. Someone)", Artist = "JJ Grey & Mofro, Guest" }, Rules);
+        Assert.Equal(["JJ Grey & Mofro", "Guest", "Someone"], t.Artists);
+    }
+
+    [Fact]
     public void SourceArtistsAreIgnoredWhenTheMainArtistDiffers()
     {
         var mb = Mb("Musica Nuda");
