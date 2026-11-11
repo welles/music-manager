@@ -172,15 +172,25 @@ public static class ReleaseScorer
             reason = $"Album-Tag \"{oldTags.Album}\" passt nicht zum besten Kandidaten \"{best.Release.Title}\"";
         }
         else if (best.MatchSource != "tag" && OldArtist(oldTags) is { } oldArtist
-                 && TextUtil.Similarity(oldArtist, best.RecordingArtist) < 0.4
-                 && !IsStrongFingerprintMatch(best, fileDurationSeconds, settings))
+                 && TextUtil.Similarity(oldArtist, best.RecordingArtist) < 0.4)
         {
-            // Same title, but a completely different artist (e.g. a fingerprint hit on another song
-            // of the same name) – do not file the song under someone else automatically. A very
-            // close fingerprint with the same length is trusted: the source may credit the members
-            // of a band ("Petra Magoni, Ferruccio Spinetti" for "Musica Nuda").
+            // Same title, but a completely different artist – do not file the song under someone
+            // else automatically. Even an exact fingerprint is not enough: AcoustID IDs are sometimes
+            // linked to the wrong recording ("Vinyl Theatre – Me, Myself, and I" → Big Sean, 97 %,
+            // same length). Bands credited by their members ("Petra Magoni, Ferruccio Spinetti" for
+            // "Musica Nuda") therefore go to Claude / the review queue as well.
             certain = false;
             reason = $"Künstler-Tag \"{oldArtist}\" passt nicht zum besten Kandidaten \"{best.RecordingArtist}\"";
+        }
+        else if (fileDurationSeconds is { } fileLength && LengthOff(best, fileLength, settings.LengthToleranceSeconds * 2)
+                 && candidates.FirstOrDefault(c => c.RecordingId != best.RecordingId && !LengthOff(c, fileLength, settings.LengthToleranceSeconds)) is { } fitting)
+        {
+            // The best candidate won through other points (e.g. an album name copied by a cover
+            // band: "The Pokémon Beatles – Beatles for Sale"), but its length does not fit while
+            // another recording fits exactly.
+            certain = false;
+            reason = $"Länge des besten Kandidaten passt nicht ({best.RecordingLengthSeconds:0} s statt {fileLength:0} s), " +
+                     $"die von \"{fitting.RecordingArtist} – {fitting.RecordingTitle}\" schon";
         }
         else if (margin < settings.ScoreMarginThreshold)
         {
@@ -198,10 +208,9 @@ public static class ReleaseScorer
         return new ScoreResult { Candidates = candidates, RunnerUp = runnerUp, IsCertain = certain, Reason = reason };
     }
 
-    private static bool IsStrongFingerprintMatch(ReleaseCandidate c, double? fileDurationSeconds, AppSettings settings) =>
-        c.MatchSource == "acoustid" && c.MatchScore >= 0.95
-        && fileDurationSeconds is { } fileLen && c.RecordingLengthSeconds is { } recLen
-        && Math.Abs(fileLen - recLen) <= settings.LengthToleranceSeconds;
+    /// <summary>True if the recording length is known and differs by more than <paramref name="tolerance"/> seconds.</summary>
+    private static bool LengthOff(ReleaseCandidate c, double fileLength, double tolerance) =>
+        c.RecordingLengthSeconds is { } recLen && Math.Abs(fileLength - recLen) > tolerance;
 
     private static string? OldArtist(TagSet t)
     {

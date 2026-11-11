@@ -79,13 +79,31 @@ public class ReleaseScorerTests
     }
 
     [Fact]
-    public void DifferentArtistIsAcceptedWithAnExactFingerprintMatch()
+    public void DifferentArtistGoesToReviewEvenWithAnExactFingerprintMatch()
     {
-        // Spotify credits the members "Petra Magoni, Ferruccio Spinetti", MusicBrainz the duo "Musica Nuda".
+        // Spotify credits the members "Petra Magoni, Ferruccio Spinetti", MusicBrainz the duo "Musica Nuda" – but an
+        // exact fingerprint can also be linked to the wrong recording, so this is not filed automatically.
         var recs = new[] { Rec(Rel("album", "Song", "rg", type: "Single", date: "2022-02-04")) };
         var result = ReleaseScorer.Score(new TagSet { Title = "Song", Artist = "Petra Magoni, Ferruccio Spinetti", Album = "Song" }, 201, recs,
             GroupContext.Empty, new AppSettings());
-        Assert.True(result.IsCertain, result.Reason);
+        Assert.False(result.IsCertain);
+    }
+
+    [Fact]
+    public void BestCandidateWithWrongLengthIsNotFiledWhenAnotherRecordingFits()
+    {
+        // "The Pokémon Beatles – Beatles for Sale" won by the album name, but only the Beatles recording has the right length.
+        var cover = new RecordingMatch
+        {
+            RecordingId = "cover", Title = "Song", Credits = [new CreditPart("c", "The Cover Artist", "The Cover Artist", "")],
+            LengthSeconds = 208, MatchScore = 0.99, Releases = [Rel("cover-album", "The Album", "rg-cover", date: "2025-02-26")],
+        };
+        var recs = new[] { cover, Rec(Rel("comp", "Greatest Hits", "rg-comp", secondary: "Compilation", date: "1993")) };
+        var result = ReleaseScorer.Score(new TagSet { Title = "Song", Artist = "The Artist", Album = "The Album" }, 200.5, recs,
+            GroupContext.Empty, new AppSettings());
+        Assert.Equal("cover-album", result.Best!.Release.ReleaseId);
+        Assert.False(result.IsCertain);
+        Assert.Contains("Länge", result.Reason);
     }
 
     [Theory]
