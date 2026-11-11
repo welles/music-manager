@@ -72,10 +72,20 @@ public class ReleaseScorerTests
     {
         // Nobodys Face – Chemicals: the fingerprint hit Ollie Crowe – Chemicals.
         var recs = new[] { Rec(Rel("album", "Song", "rg", type: "Single", date: "2022-02-04")) };
-        var result = ReleaseScorer.Score(new TagSet { Title = "Song", Artist = "Nobodys Face", Album = "Song" }, 200, recs,
+        var result = ReleaseScorer.Score(new TagSet { Title = "Song", Artist = "Nobodys Face", Album = "Song" }, 205, recs,
             GroupContext.Empty, new AppSettings());
         Assert.False(result.IsCertain);
         Assert.Contains("Künstler-Tag", result.Reason);
+    }
+
+    [Fact]
+    public void DifferentArtistIsAcceptedWithAnExactFingerprintMatch()
+    {
+        // Spotify credits the members "Petra Magoni, Ferruccio Spinetti", MusicBrainz the duo "Musica Nuda".
+        var recs = new[] { Rec(Rel("album", "Song", "rg", type: "Single", date: "2022-02-04")) };
+        var result = ReleaseScorer.Score(new TagSet { Title = "Song", Artist = "Petra Magoni, Ferruccio Spinetti", Album = "Song" }, 201, recs,
+            GroupContext.Empty, new AppSettings());
+        Assert.True(result.IsCertain, result.Reason);
     }
 
     [Theory]

@@ -172,10 +172,13 @@ public static class ReleaseScorer
             reason = $"Album-Tag \"{oldTags.Album}\" passt nicht zum besten Kandidaten \"{best.Release.Title}\"";
         }
         else if (best.MatchSource != "tag" && OldArtist(oldTags) is { } oldArtist
-                 && TextUtil.Similarity(oldArtist, best.RecordingArtist) < 0.4)
+                 && TextUtil.Similarity(oldArtist, best.RecordingArtist) < 0.4
+                 && !IsStrongFingerprintMatch(best, fileDurationSeconds, settings))
         {
             // Same title, but a completely different artist (e.g. a fingerprint hit on another song
-            // of the same name) – do not file the song under someone else automatically.
+            // of the same name) – do not file the song under someone else automatically. A very
+            // close fingerprint with the same length is trusted: the source may credit the members
+            // of a band ("Petra Magoni, Ferruccio Spinetti" for "Musica Nuda").
             certain = false;
             reason = $"Künstler-Tag \"{oldArtist}\" passt nicht zum besten Kandidaten \"{best.RecordingArtist}\"";
         }
@@ -194,6 +197,11 @@ public static class ReleaseScorer
 
         return new ScoreResult { Candidates = candidates, RunnerUp = runnerUp, IsCertain = certain, Reason = reason };
     }
+
+    private static bool IsStrongFingerprintMatch(ReleaseCandidate c, double? fileDurationSeconds, AppSettings settings) =>
+        c.MatchSource == "acoustid" && c.MatchScore >= 0.95
+        && fileDurationSeconds is { } fileLen && c.RecordingLengthSeconds is { } recLen
+        && Math.Abs(fileLen - recLen) <= settings.LengthToleranceSeconds;
 
     private static string? OldArtist(TagSet t)
     {
