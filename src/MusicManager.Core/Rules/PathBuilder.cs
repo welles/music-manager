@@ -4,8 +4,8 @@ using MusicManager.Core.Model;
 namespace MusicManager.Core.Rules;
 
 /// <summary>
-/// File naming, port of the Picard "File Renaming Script":
-/// <c>$if2(%albumartist%,$getmulti(%artist%,0),%artist%)/%album%/$if2(...) - %title%</c>
+/// File naming after the (lost) final version of the Picard "File Renaming Script":
+/// <c>{main album artist}/{album}/{main track artist} - {title}</c>
 /// with ASCII-only and Windows-compatible file names.
 /// </summary>
 public static class PathBuilder
@@ -25,12 +25,14 @@ public static class PathBuilder
         var album = tags.Album.NullIfEmpty() ?? NonAlbumFolder;
         var title = tags.Title.NullIfEmpty() ?? "Unknown Title";
 
-        // Folder and file name use the main (first) album artist only, as in the existing library:
-        // "Ceschi/…/Ceschi - Say No More" although ALBUMARTIST is "Ceschi | Commoners Choir".
+        // The folder uses the main (first) album artist only, the file name the main (first) artist of
+        // the track – as in the existing library: "Ceschi/…/Ceschi - Say No More" although ALBUMARTIST is
+        // "Ceschi | Commoners Choir", and "Various Artists/Shell Shock/Fox Stevenson - Sandblast".
         var mainArtist = tags.FolderArtist.NullIfEmpty() ?? albumArtist;
+        var trackArtist = tags.Artists.FirstOrDefault().NullIfEmpty() ?? tags.Artist.NullIfEmpty() ?? mainArtist;
         var dir1 = SanitizeComponent(mainArtist);
         var dir2 = SanitizeComponent(album);
-        var file = SanitizeComponent($"{mainArtist} - {title}");
+        var file = SanitizeComponent($"{trackArtist} - {title}");
 
         return Path.Combine(dir1, dir2, file + extension);
     }

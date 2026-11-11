@@ -84,8 +84,18 @@ public class RulesTests
     [Fact]
     public void PathBuilder_FollowsRenamingScript()
     {
-        var path = PathBuilder.Build(new TagSet { AlbumArtist = "Sigur Rós", Album = "Ágætis byrjun", Title = "Svefn-g-englar: AC/DC?", Artists = ["x"] });
+        var path = PathBuilder.Build(new TagSet { AlbumArtist = "Sigur Rós", Album = "Ágætis byrjun", Title = "Svefn-g-englar: AC/DC?", Artists = ["Sigur Rós"] });
         Assert.Equal(Path.Combine("Sigur Ros", "Agaetis byrjun", "Sigur Ros - Svefn-g-englar_ AC_DC_.m4a"), path);
+    }
+
+    [Fact]
+    public void FileNameUsesTheMainTrackArtist()
+    {
+        var path = PathBuilder.Build(new TagSet
+        {
+            AlbumArtist = "Various Artists", Album = "Shell Shock", Title = "Sandblast", Artist = "Fox Stevenson feat. X", Artists = ["Fox Stevenson", "X"],
+        });
+        Assert.Equal(Path.Combine("Various Artists", "Shell Shock", "Fox Stevenson - Sandblast.m4a"), path);
     }
 
     [Fact]
