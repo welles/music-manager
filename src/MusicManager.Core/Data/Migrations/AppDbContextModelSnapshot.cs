@@ -188,6 +188,9 @@ namespace MusicManager.Core.Data.Migrations
                     b.Property<string>("Codec")
                         .HasColumnType("TEXT");
 
+                    b.Property<bool>("CoverEditedOutside")
+                        .HasColumnType("INTEGER");
+
                     b.Property<string>("Date")
                         .HasColumnType("TEXT");
 
@@ -272,6 +275,12 @@ namespace MusicManager.Core.Data.Migrations
                         .HasColumnType("TEXT");
 
                     b.Property<string>("TagSource")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("TagsEditedOutside")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("TagsHash")
                         .HasColumnType("TEXT");
 
                     b.Property<string>("Title")

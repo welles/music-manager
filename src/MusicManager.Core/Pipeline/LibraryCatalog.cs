@@ -28,6 +28,8 @@ public sealed class LibraryTrack
     public string? TagSource { get; init; }
     public string? GenreOrigin { get; init; }
     public string? RulesVersion { get; init; }
+    public bool TagsEditedOutside { get; init; }
+    public bool CoverEditedOutside { get; init; }
     public List<string> MbArtistIds { get; init; } = [];
     public List<string> MbAlbumArtistIds { get; init; } = [];
 
@@ -40,6 +42,7 @@ public sealed class LibraryTrack
         var p = new List<LibraryProblem>();
         if (TagSource == null) p.Add(LibraryProblem.NotFromThisTool);
         else if (RulesVersion != rulesVersion) p.Add(LibraryProblem.OldRules);
+        if (TagsEditedOutside || CoverEditedOutside) p.Add(LibraryProblem.EditedOutside);
         if (MbRecordingId == null) p.Add(LibraryProblem.NoMusicBrainz);
         if (!HasCover) p.Add(LibraryProblem.NoCover);
         if (Genres.Count == 0) p.Add(LibraryProblem.NoGenre);
@@ -54,6 +57,9 @@ public enum LibraryProblem
 {
     NotFromThisTool,
     OldRules,
+
+    /// <summary>Tags or cover changed outside Music Manager since it wrote them (see <see cref="Services.TagHashes"/>).</summary>
+    EditedOutside,
     NoMusicBrainz,
     NoCover,
     NoGenre,
@@ -81,7 +87,8 @@ public sealed class LibraryCatalog(IDbContextFactory<AppDbContext> dbFactory)
             AlbumArtist = e.AlbumArtist, AlbumArtists = e.AlbumArtists, Genres = e.Genres, Year = e.Year, TrackNumber = e.TrackNumber,
             DiscNumber = e.DiscNumber, DurationSeconds = e.DurationSeconds, Codec = e.Codec, BitrateKbps = e.BitrateKbps,
             FileSize = e.FileSize, HasCover = e.HasCover, MbRecordingId = e.MbRecordingId, MbReleaseId = e.MbReleaseId,
-            TagSource = e.TagSource, GenreOrigin = e.GenreOrigin, RulesVersion = e.RulesVersion, MbArtistIds = e.MbArtistIds, MbAlbumArtistIds = e.MbAlbumArtistIds,
+            TagSource = e.TagSource, GenreOrigin = e.GenreOrigin, RulesVersion = e.RulesVersion, TagsEditedOutside = e.TagsEditedOutside, CoverEditedOutside = e.CoverEditedOutside,
+            MbArtistIds = e.MbArtistIds, MbAlbumArtistIds = e.MbAlbumArtistIds,
         }).ToListAsync(ct);
     }
 

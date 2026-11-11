@@ -12,6 +12,8 @@
 <MudText Typo="Typo.body2" Class="mb-3">
     Dateien aus MusicBrainz bekommen frische Tags von ihrem Release, manuell oder über Spotify/Deezer getaggte Dateien nur die
     aktuellen Regeln. Es werden nur Tags geschrieben, das Audio bleibt unverändert. Erst nach „Übernehmen“ wird etwas geändert.
+    Wurden Tags außerhalb von Music Manager geändert („extern geändert“), bleiben diese Änderungen erhalten und die Regeln werden
+    auf die aktuellen Tags angewendet; das Cover bleibt immer, wie es in der Datei ist.
 </MudText>
 
 @if (State.Running)
@@ -38,6 +40,11 @@
         @if (errors.Count > 0)
         {
             <MudChip T="string" Color="Color.Error" Variant="Variant.Text">@errors.Count Fehler</MudChip>
+        }
+        @if (!Show && Retag.Previews.Any(p => p.EditedOutside))
+        {
+            <MudSwitch T="bool" Value="_discardOutsideEdits" ValueChanged="DiscardOutsideEditsChanged" Color="Color.Warning"
+                       Label="Externe Änderungen verwerfen (neu aus MusicBrainz)" />
         }
         <MudSpacer />
         <MudSwitch @bind-Value="_movePaths" Color="Color.Primary" Label="Dateien bei geändertem Pfad verschieben" />
@@ -69,6 +76,10 @@
                             <MudText Typo="Typo.caption" Class="mono" Style="opacity:.6">@p.RelativePath@(p.PathChanged ? $"  →  {p.NewRelativePath}" : "")</MudText>
                         </div>
                         <MudSpacer />
+                        @if (p.EditedOutside)
+                        {
+                            <MudChip T="string" Size="Size.Small" Variant="Variant.Text" Color="@(p.DiscardsOutsideEdits ? Color.Error : Color.Warning)">extern geändert</MudChip>
+                        }
                         <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">@p.Method</MudChip>
                     </div>
                 </TitleContent>
@@ -98,7 +109,8 @@
     [SupplyParameterFromQuery] public bool Show { get; set; }
 
     private readonly HashSet<int> _deselected = [];
-    private bool _movePaths, _started;
+    private bool _movePaths, _started, _discardOutsideEdits;
+    private List<int> _ids = [];
 
     private RetagState State => Retag.State;
 
@@ -130,8 +142,23 @@
             return;
         }
 
+        _ids = ids;
         if (!await Retag.StartPreviewAsync(ids))
             Snackbar.Add("Es läuft bereits ein Vorgang – bitte warten.", Severity.Warning);
+    }
+
+    /// <summary>Builds the preview again, with or without the edits made outside the tool.</summary>
+    private async Task DiscardOutsideEditsChanged(bool discard)
+    {
+        var ids = _ids.Count > 0 ? _ids : Retag.Previews.Select(p => p.EntryId).ToList();
+        if (!await Retag.StartPreviewAsync(ids, null, discard))
+        {
+            Snackbar.Add("Es läuft bereits ein Vorgang – bitte warten.", Severity.Warning);
+            return;
+        }
+
+        _discardOutsideEdits = discard;
+        _deselected.Clear();
     }
 
     private void Toggle(RetagPreview p, bool selected)
