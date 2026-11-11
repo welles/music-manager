@@ -94,6 +94,9 @@
     [SupplyParameterFromQuery] public string? Problem { get; set; }
     [SupplyParameterFromQuery] public bool All { get; set; }
 
+    /// <summary>Only show the preview that was started elsewhere (e.g. by the edit page).</summary>
+    [SupplyParameterFromQuery] public bool Show { get; set; }
+
     private readonly HashSet<int> _deselected = [];
     private bool _movePaths, _started;
 
@@ -104,7 +107,7 @@
 
     protected override async Task ReloadAsync()
     {
-        if (_started) return;
+        if (_started || Show) return;
         _started = true;
 
         List<int> ids;

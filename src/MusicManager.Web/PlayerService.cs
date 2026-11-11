@@ -21,3 +21,8 @@ public sealed class PlayerService
         Changed?.Invoke();
     }
 }
+
+internal static class TextExtensions
+{
+    public static string? NullIfEmptyText(this string? s) => string.IsNullOrWhiteSpace(s) ? null : s.Trim();
+}

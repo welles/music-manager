@@ -1,0 +1,140 @@
+@page "/bibliothek/bearbeiten"
+@using MusicManager.Core.Services
+@inject IDbContextFactory<AppDbContext> DbFactory
+@inject Storage Storage
+@inject RetagService Retag
+@inject ISnackbar Snackbar
+@inject NavigationManager Nav
+
+<PageTitle>Tags bearbeiten – Music Manager</PageTitle>
+
+<PageHeader Title="Tags bearbeiten" UseHistory="true" />
+
+<MudText Typo="Typo.body2" Class="mb-3">
+    Änderungen gehen erst in eine Vorschau (mit den eigenen Regeln), geschrieben wird nach Bestätigung. Mehrere Werte mit „;“ trennen.
+    Bearbeitete Dateien gelten danach als manuell getaggt und werden beim Neu-Taggen nicht mehr aus MusicBrainz überschrieben.
+</MudText>
+
+@if (_rows.Count == 0)
+{
+    <MudProgressLinear Indeterminate="true" />
+    return;
+}
+
+<MudPaper Outlined="true" Class="pa-4 mb-4">
+    <MudText Typo="Typo.h6" Class="mb-2">Gemeinsam für alle @_rows.Count Datei(en)</MudText>
+    <MudGrid>
+        <MudItem xs="12" md="4"><MudTextField @bind-Value="_album" Label="Album" Variant="Variant.Outlined" Placeholder="@Mixed(_initialAlbum)" /></MudItem>
+        <MudItem xs="12" md="4"><MudTextField @bind-Value="_albumArtists" Label="Album-Künstler" Variant="Variant.Outlined" Placeholder="@Mixed(_initialAlbumArtists)" /></MudItem>
+        <MudItem xs="6" md="2"><MudTextField @bind-Value="_date" Label="Datum" Variant="Variant.Outlined" Placeholder="@Mixed(_initialDate)" /></MudItem>
+        <MudItem xs="6" md="2"><MudTextField @bind-Value="_genres" Label="Genres" Variant="Variant.Outlined" Placeholder="@Mixed(_initialGenres)" /></MudItem>
+    </MudGrid>
+    <MudText Typo="Typo.caption" Style="opacity:.7">Leere Felder mit „verschiedene“ bleiben je Datei unverändert.</MudText>
+</MudPaper>
+
+<MudTable Items="_rows" Dense="true" Outlined="true" T="Row">
+    <HeaderContent>
+        <MudTh Style="width:80px">Nr.</MudTh>
+        <MudTh>Titel</MudTh>
+        <MudTh>Künstler</MudTh>
+        <MudTh>Datei</MudTh>
+    </HeaderContent>
+    <RowTemplate>
+        <MudTd><MudNumericField @bind-Value="context.Track" HideSpinButtons="true" Variant="Variant.Text" /></MudTd>
+        <MudTd><MudTextField @bind-Value="context.Title" Variant="Variant.Text" /></MudTd>
+        <MudTd><MudTextField @bind-Value="context.Artists" Variant="Variant.Text" /></MudTd>
+        <MudTd><MudText Typo="Typo.caption" Class="mono">@context.RelativePath</MudText></MudTd>
+    </RowTemplate>
+</MudTable>
+
+<MudStack Row="true" Class="mt-4">
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Preview" OnClick="Preview">Vorschau</MudButton>
+</MudStack>
+
+@code {
+    [SupplyParameterFromQuery] public string? Ids { get; set; }
+
+    private sealed class Row
+    {
+        public int EntryId { get; init; }
+        public required string RelativePath { get; init; }
+        public required TagSet Original { get; init; }
+        public int? Track { get; set; }
+        public string? Title { get; set; }
+        public string? Artists { get; set; }
+    }
+
+    private List<Row> _rows = [];
+    private string? _album, _albumArtists, _date, _genres;
+    private string? _initialAlbum, _initialAlbumArtists, _initialDate, _initialGenres;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var ids = (Ids ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries).Select(int.Parse).ToList();
+        await using var db = await DbFactory.CreateDbContextAsync();
+        var entries = await db.Library.AsNoTracking().Where(e => ids.Contains(e.Id)).OrderBy(e => e.RelativePath).ToListAsync();
+        _rows = entries.Select(e =>
+        {
+            var tags = TagIo.Read(Storage.LibraryPath(e.RelativePath));
+            return new Row
+            {
+                EntryId = e.Id, RelativePath = e.RelativePath, Original = tags, Track = tags.TrackNumber, Title = tags.Title,
+                Artists = Join(tags.Artists.Count > 0 ? tags.Artists : tags.Artist == null ? [] : [tags.Artist]),
+            };
+        }).ToList();
+
+        _album = _initialAlbum = Common(r => r.Original.Album);
+        _albumArtists = _initialAlbumArtists = Common(r => Join(r.Original.AlbumArtists.Count > 0 ? r.Original.AlbumArtists : r.Original.AlbumArtist == null ? [] : [r.Original.AlbumArtist]));
+        _date = _initialDate = Common(r => r.Original.Date);
+        _genres = _initialGenres = Common(r => Join(r.Original.Genres));
+    }
+
+    /// <summary>The value if all files share it, otherwise null (shown as "verschiedene").</summary>
+    private string? Common(Func<Row, string?> get)
+    {
+        var values = _rows.Select(get).Distinct().ToList();
+        return values.Count == 1 ? values[0] : null;
+    }
+
+    private string? Mixed(string? initial) => initial == null && _rows.Count > 1 ? "verschiedene" : null;
+
+    private static string Join(IEnumerable<string> values) => string.Join("; ", values);
+
+    private static List<string> Split(string? value) =>
+        (value ?? "").Split(';', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries).ToList();
+
+    private async Task Preview()
+    {
+        var edits = new Dictionary<int, Func<TagSet, TagSet>>();
+        foreach (var row in _rows)
+        {
+            var r = row;
+            edits[r.EntryId] = t =>
+            {
+                t.Title = r.Title.NullIfEmptyText();
+                t.TrackNumber = r.Track;
+                var artists = Split(r.Artists);
+                t.Artists = artists;
+                t.Artist = artists.Count > 0 ? string.Join(" & ", artists) : null;
+                if (_album != _initialAlbum || _initialAlbum != null) t.Album = _album.NullIfEmptyText();
+                if (_albumArtists != _initialAlbumArtists || _initialAlbumArtists != null)
+                {
+                    t.AlbumArtists = Split(_albumArtists);
+                    t.AlbumArtist = t.AlbumArtists.Count > 0 ? string.Join(" & ", t.AlbumArtists) : null;
+                }
+
+                if (_date != _initialDate || _initialDate != null) t.Date = _date.NullIfEmptyText();
+                if (_genres != _initialGenres || _initialGenres != null) t.Genres = Split(_genres);
+                return t;
+            };
+        }
+
+        if (!await Retag.StartPreviewAsync(_rows.Select(r => r.EntryId).ToList(), edits))
+        {
+            Snackbar.Add("Es läuft bereits ein Vorgang – bitte warten.", Severity.Warning);
+            return;
+        }
+
+        Nav.NavigateTo("bibliothek/neu-taggen?show=true");
+    }
+}
