@@ -16,6 +16,11 @@
             <img src="@(_dark ? "icons/icon.svg" : "icons/icon-foreground.svg")" alt="" width="28" height="28" class="mr-2" />
             <MudText Typo="Typo.h6" Style="white-space:nowrap">Music Manager</MudText>
         </MudLink>
+        @* Which build is running; links to its commit when known. *@
+        <MudLink Href="@(AppVersion.Commit is { } sha ? $"https://github.com/welles/music-manager/commit/{sha}" : null)" Target="_blank"
+                 Color="Color.Inherit" Underline="Underline.None" Class="ml-3 d-none d-sm-flex flex-shrink-0">
+            <MudText Typo="Typo.caption" Class="mono" Style="opacity:.75;white-space:nowrap" title="Laufende Version">@AppVersion.Display</MudText>
+        </MudLink>
         <MudSpacer />
         @if (Notifier.CurrentActivity is { } activity)
         {
