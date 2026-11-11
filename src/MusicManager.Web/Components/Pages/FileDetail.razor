@@ -46,64 +46,120 @@
 }
 
 <MudTabs Outlined="true" Border="true" TabPanelsClass="pa-4" @bind-ActivePanelIndex="_tab">
-    <MudTabPanel Text="Kandidaten" BadgeData="@(_file.Candidates.Count > 0 ? _file.Candidates.Count : null)">
-        @if (_file.Candidates.Count == 0)
+    <MudTabPanel Text="Kandidaten" BadgeData="@(CandidateRows.Count > 0 ? CandidateRows.Count : null)">
+        @if (CandidateRows.Count == 0)
         {
-            <MudText>Keine MusicBrainz-Kandidaten. Nutze „Release suchen“ oder „Manuell taggen“.</MudText>
+            <MudText>Keine Kandidaten von MusicBrainz, Spotify oder Deezer. Nutze „Release suchen“ oder „Manuell taggen“.</MudText>
         }
         else
         {
-            <MudTable Items="_file.Candidates" Dense="true" Hover="true" T="ReleaseCandidate">
+            <MudText Typo="Typo.body2" Class="mb-2">
+                „Vorschau“ zeigt die Tags eines Kandidaten im Tab „Tags“, ohne etwas zu ändern; „Wählen“ übernimmt ihn.
+                Bei Spotify/Deezer werden Tags und Cover der Quelle mit den eigenen Regeln verwendet, die Datei gilt danach als manuell getaggt.
+            </MudText>
+            <MudTable Items="CandidateRows" Dense="true" Hover="true" T="CandidateRow">
                 <HeaderContent>
+                    <MudTh>Quelle</MudTh>
                     <MudTh>Punkte</MudTh>
                     <MudTh>Release</MudTh>
                     <MudTh>Datum / Land</MudTh>
                     <MudTh>Typ</MudTh>
                     <MudTh>Track</MudTh>
-                    <MudTh>Recording</MudTh>
+                    <MudTh>Aufnahme</MudTh>
                     <MudTh></MudTh>
                 </HeaderContent>
                 <RowTemplate>
-                    <MudTd>
-                        <MudTooltip Text="Erreichte Punkte von den für diese Datei maximal möglichen. Das ist keine Erkennungssicherheit – die steht beim Recording.">
-                            <MudText Typo="Typo.body2" Color="@(context.Key == _file.SelectedCandidateKey ? Color.Primary : Color.Default)" Style="white-space:nowrap">
-                                <b>@context.Score.ToString("0.#")</b>@(context.MaxScore > 0 ? $" / {context.MaxScore:0.#}" : "")
+                    @if (context.MusicBrainz is { } c)
+                    {
+                        <MudTd><MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="Color.Primary">MusicBrainz</MudChip></MudTd>
+                        <MudTd>
+                            <MudTooltip Text="Erreichte Punkte von den für diese Datei maximal möglichen. Das ist keine Erkennungssicherheit – die steht bei der Aufnahme.">
+                                <MudText Typo="Typo.body2" Color="@(c.Key == _file.SelectedCandidateKey ? Color.Primary : Color.Default)" Style="white-space:nowrap">
+                                    <b>@c.Score.ToString("0.#")</b>@(c.MaxScore > 0 ? $" / {c.MaxScore:0.#}" : "")
+                                </MudText>
+                            </MudTooltip>
+                        </MudTd>
+                        <MudTd>
+                            <MudLink Href="@($"https://musicbrainz.org/release/{c.Release.ReleaseId}")" Target="_blank">@c.Release.Title</MudLink>
+                            <MudText Typo="Typo.caption" Class="d-block">@c.Release.ArtistString</MudText>
+                        </MudTd>
+                        <MudTd>@c.Release.Date · @c.Release.Country</MudTd>
+                        <MudTd>
+                            @string.Join(" + ", new[] { c.Release.PrimaryType }.Concat(c.Release.SecondaryTypes).OfType<string>())
+                            <MudText Typo="Typo.caption" Class="d-block">@c.Release.Status · @string.Join(", ", c.Release.Formats)</MudText>
+                        </MudTd>
+                        <MudTd>@c.Release.TrackPosition/@c.Release.TrackCount</MudTd>
+                        <MudTd>
+                            @c.RecordingArtist – @c.RecordingTitle
+                            <MudText Typo="Typo.caption" Class="d-block">
+                                @c.MatchSource @c.MatchScore.ToString("P0") · @FormatLength(c.RecordingLengthSeconds) (Datei @FormatLength(_file.DurationSeconds))
                             </MudText>
-                        </MudTooltip>
-                    </MudTd>
-                    <MudTd>
-                        <MudLink Href="@($"https://musicbrainz.org/release/{context.Release.ReleaseId}")" Target="_blank">@context.Release.Title</MudLink>
-                        <MudText Typo="Typo.caption" Class="d-block">@context.Release.ArtistString</MudText>
-                    </MudTd>
-                    <MudTd>@context.Release.Date · @context.Release.Country</MudTd>
-                    <MudTd>
-                        @string.Join(" + ", new[] { context.Release.PrimaryType }.Concat(context.Release.SecondaryTypes).OfType<string>())
-                        <MudText Typo="Typo.caption" Class="d-block">@context.Release.Status · @string.Join(", ", context.Release.Formats)</MudText>
-                    </MudTd>
-                    <MudTd>@context.Release.TrackPosition/@context.Release.TrackCount</MudTd>
-                    <MudTd>
-                        @context.RecordingArtist – @context.RecordingTitle
-                        <MudText Typo="Typo.caption" Class="d-block">
-                            @context.MatchSource @context.MatchScore.ToString("P0") · @FormatLength(context.RecordingLengthSeconds) (Datei @FormatLength(_file.DurationSeconds))
-                        </MudText>
-                    </MudTd>
-                    <MudTd Style="white-space:nowrap">
-                        <MudButton Size="Size.Small" Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Visibility" title="Tags dieses Kandidaten anzeigen, ohne etwas zu ändern"
-                                   OnClick="() => Preview(context)">Vorschau</MudButton>
-                        <MudIconButton Icon="@Icons.Material.Filled.Info" Size="Size.Small" title="Punkte" OnClick="() => ToggleBreakdown(context.Key)" />
-                        @if (IsOpen)
-                        {
-                            <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary" OnClick="() => Choose(context)">Wählen</MudButton>
-                        }
-                    </MudTd>
+                        </MudTd>
+                        <MudTd Style="white-space:nowrap">
+                            <MudButton Size="Size.Small" Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Visibility" OnClick="() => Preview(c)">Vorschau</MudButton>
+                            <MudIconButton Icon="@Icons.Material.Filled.Info" Size="Size.Small" title="Punkte" OnClick="() => ToggleBreakdown(c.Key)" />
+                            @if (IsOpen)
+                            {
+                                <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary" OnClick="() => Choose(c)">Wählen</MudButton>
+                            }
+                        </MudTd>
+                    }
+                    else if (context.External is { } m)
+                    {
+                        <MudTd>
+                            <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="@(m.Source == "spotify" ? Color.Success : Color.Info)">
+                                @MatchingPipeline.SourceName(m.Source)
+                            </MudChip>
+                        </MudTd>
+                        <MudTd>
+                            <MudText Typo="Typo.body2" Style="white-space:nowrap" Color="@(m.FromTagLink || m.Score >= 0.95 ? Color.Success : Color.Default)">
+                                @(m.FromTagLink ? "Link aus den Tags" : $"{m.Score:P0} Übereinstimmung")
+                            </MudText>
+                        </MudTd>
+                        <MudTd>
+                            <div class="d-flex align-center" style="gap:8px">
+                                @if (m.CoverUrl != null)
+                                {
+                                    <MudImage Src="@m.CoverUrl" Width="40" Height="40" ObjectFit="ObjectFit.Cover" Class="rounded flex-shrink-0" Alt="Cover" />
+                                }
+                                <div>
+                                    @if (m.Url != null)
+                                    {
+                                        <MudLink Href="@m.Url" Target="_blank">@m.Album</MudLink>
+                                    }
+                                    else
+                                    {
+                                        @m.Album
+                                    }
+                                    <MudText Typo="Typo.caption" Class="d-block">@(m.Label ?? "")</MudText>
+                                </div>
+                            </div>
+                        </MudTd>
+                        <MudTd>@m.ReleaseDate</MudTd>
+                        <MudTd>@m.AlbumType</MudTd>
+                        <MudTd>@(m.TrackNumber != null ? $"{m.TrackNumber}/{m.TrackCount}" : "")</MudTd>
+                        <MudTd>
+                            @string.Join(", ", m.Artists)@(m.FeaturedArtists.Count > 0 ? $" feat. {string.Join(", ", m.FeaturedArtists)}" : "") – @m.Title
+                            <MudText Typo="Typo.caption" Class="d-block">
+                                @FormatLength(m.DurationSeconds) (Datei @FormatLength(_file.DurationSeconds))@(m.Isrc != null ? $" · ISRC {m.Isrc}" : "")@(m.Genres.Count > 0 ? $" · {string.Join(", ", m.Genres)}" : "")
+                            </MudText>
+                        </MudTd>
+                        <MudTd Style="white-space:nowrap">
+                            <MudButton Size="Size.Small" Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Visibility" OnClick="() => PreviewExternal(m)">Vorschau</MudButton>
+                            @if (IsOpen)
+                            {
+                                <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary" OnClick="() => ApplyExternal(m)">Wählen</MudButton>
+                            }
+                        </MudTd>
+                    }
                 </RowTemplate>
                 <ChildRowContent>
-                    @if (_expanded.Contains(context.Key))
+                    @if (context.MusicBrainz is { } c && _expanded.Contains(c.Key))
                     {
                         <MudTr>
-                            <td colspan="7">
+                            <td colspan="8">
                                 <MudStack Row="true" Wrap="Wrap.Wrap" Spacing="1" Class="pa-2">
-                                    @foreach (var (name, value, max) in BreakdownRows(context))
+                                    @foreach (var (name, value, max) in BreakdownRows(c))
                                     {
                                         <MudChip T="string" Size="Size.Small" Variant="Variant.Text"
                                                  Color="@(value < 0 ? Color.Error : max != null && value >= max - 0.05 ? Color.Success : Color.Warning)">
@@ -120,56 +176,7 @@
     </MudTabPanel>
 
     <MudTabPanel Text="Tags">
-        <TagDiff File="_file" Preview="_preview" OnClearPreview="() => _preview = null" />
-    </MudTabPanel>
-
-    <MudTabPanel Text="Spotify/Deezer" Icon="@Icons.Material.Filled.TravelExplore" BadgeData="@(_file.ExternalMatches.Count > 0 ? _file.ExternalMatches.Count : null)"
-                 Disabled="_file.ExternalMatches.Count == 0">
-        <MudText Typo="Typo.body2" Class="mb-3">
-            Treffer außerhalb von MusicBrainz. Beim Übernehmen werden Tags und Cover der Quelle verwendet und die eigenen Regeln angewendet;
-            die Datei gilt danach als manuell getaggt.
-        </MudText>
-        <MudStack Spacing="2">
-            @foreach (var m in _file.ExternalMatches.OrderByDescending(m => m.Score))
-            {
-                <MudPaper Outlined="true" Class="pa-3">
-                    <div class="d-flex" style="gap:16px">
-                        <MudImage Src="@m.CoverUrl" Width="96" Height="96" ObjectFit="ObjectFit.Cover" Class="rounded flex-shrink-0" Alt="Cover" />
-                        <div style="min-width:0;flex:1">
-                            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1" Wrap="Wrap.Wrap">
-                                <MudText Typo="Typo.subtitle1"><b>@m.Title</b></MudText>
-                                <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="@(m.Source == "spotify" ? Color.Success : Color.Info)">
-                                    @MatchingPipeline.SourceName(m.Source)
-                                </MudChip>
-                                <MudChip T="string" Size="Size.Small" Variant="Variant.Text" Color="@(m.FromTagLink || m.Score >= 0.95 ? Color.Success : Color.Warning)">
-                                    @(m.FromTagLink ? "Link aus den Tags" : $"{m.Score:P0} Übereinstimmung")
-                                </MudChip>
-                            </MudStack>
-                            <MudText Typo="Typo.body2">
-                                @string.Join(", ", m.Artists)@(m.FeaturedArtists.Count > 0 ? $" feat. {string.Join(", ", m.FeaturedArtists)}" : "")
-                            </MudText>
-                            <MudText Typo="Typo.body2" Style="opacity:.8">
-                                @m.Album · @m.AlbumType · @m.ReleaseDate@(m.TrackNumber != null ? $" · Track {m.TrackNumber}/{m.TrackCount}" : "")
-                            </MudText>
-                            <MudText Typo="Typo.caption" Style="opacity:.7">
-                                Länge @FormatLength(m.DurationSeconds) (Datei @FormatLength(_file.DurationSeconds))
-                                @(m.Isrc != null ? $" · ISRC {m.Isrc}" : "")@(m.Label != null ? $" · {m.Label}" : "")@(m.Genres.Count > 0 ? $" · {string.Join(", ", m.Genres)}" : "")
-                            </MudText>
-                        </div>
-                        <MudStack Spacing="1" AlignItems="AlignItems.End" Class="flex-shrink-0">
-                            @if (IsOpen)
-                            {
-                                <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary" OnClick="() => ApplyExternal(m)">Übernehmen</MudButton>
-                            }
-                            @if (m.Url != null)
-                            {
-                                <MudLink Href="@m.Url" Target="_blank" Typo="Typo.caption">Bei @MatchingPipeline.SourceName(m.Source) öffnen</MudLink>
-                            }
-                        </MudStack>
-                    </div>
-                </MudPaper>
-            }
-        </MudStack>
+        <TagDiff File="_file" Preview="_preview" PreviewLabel="@_previewLabel" OnClearPreview="() => _preview = null" />
     </MudTabPanel>
 
     <MudTabPanel Text="KI" Icon="@Icons.Material.Filled.AutoAwesome" Disabled="_file.AiDecision == null && _file.AiSuggestion == null">
@@ -242,6 +249,15 @@
 
     private TrackFile? _file;
     private TrackFile? _preview;
+    private string? _previewLabel;
+
+    private sealed record CandidateRow(ReleaseCandidate? MusicBrainz, ExternalMatch? External);
+
+    /// <summary>MusicBrainz candidates first (by points), then Spotify/Deezer matches (by agreement).</summary>
+    private List<CandidateRow> CandidateRows => _file == null ? [] :
+        _file.Candidates.Select(c => new CandidateRow(c, null))
+            .Concat(_file.ExternalMatches.OrderByDescending(m => m.FromTagLink).ThenByDescending(m => m.Score).Select(m => new CandidateRow(null, m)))
+            .ToList();
     private List<FileEvent> _events = [];
     private readonly HashSet<string> _expanded = [];
     private int _tab;
@@ -258,12 +274,6 @@
         await using var db = await DbFactory.CreateDbContextAsync();
         _file = await db.Files.AsNoTracking().FirstOrDefaultAsync(f => f.Id == Id);
         _events = await db.Events.AsNoTracking().Where(e => e.TrackFileId == Id).OrderByDescending(e => e.Id).ToListAsync();
-        if (!_tabChosen && _file != null)
-        {
-            // Files without MusicBrainz candidates open on the Spotify/Deezer tab.
-            _tab = _file.Candidates.Count == 0 && _file.ExternalMatches.Count > 0 ? 2 : 0;
-            _tabChosen = true;
-        }
     }
 
     /// <summary>All categories with achieved and maximum points, including categories with 0 points.</summary>
@@ -284,6 +294,7 @@
         {
             _preview = await Review.PreviewCandidateAsync(Id, c.Key);
             _preview.SelectedCandidateKey = c.Key;
+            _previewLabel = $"MusicBrainz: {c.Release.Title} ({c.Release.Date} · {c.Release.Country})";
             _tab = 1;
         }
         catch (Exception ex)
@@ -292,7 +303,19 @@
         }
     }
 
-    private bool _tabChosen;
+    private async Task PreviewExternal(ExternalMatch m)
+    {
+        try
+        {
+            _preview = await Review.PreviewExternalAsync(Id, m.Key);
+            _previewLabel = $"{MatchingPipeline.SourceName(m.Source)}: {m.Album} ({m.ReleaseDate})";
+            _tab = 1;
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Vorschau fehlgeschlagen: {ex.Message}", Severity.Error);
+        }
+    }
 
     private async Task ApplyExternal(ExternalMatch m)
     {

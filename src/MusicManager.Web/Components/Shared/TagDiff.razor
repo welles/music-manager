@@ -4,7 +4,7 @@
 @if (Preview != null)
 {
     <MudAlert Severity="Severity.Info" Dense="true" Class="mb-2" ShowCloseIcon="true" CloseIconClicked="OnClearPreview">
-        Vorschau für Kandidat „@Preview.SelectedCandidate?.Release.Title“ (noch nicht übernommen)
+        Vorschau für „@(PreviewLabel ?? Preview.SelectedCandidate?.Release.Title)“ – noch nicht übernommen
     </MudAlert>
 }
 
@@ -51,11 +51,16 @@
     [Parameter] public TrackFile? Preview { get; set; }
     [Parameter] public EventCallback OnClearPreview { get; set; }
 
+    /// <summary>What the preview shows, e.g. "Deezer: Album (2024)".</summary>
+    [Parameter] public string? PreviewLabel { get; set; }
+
     private TagSet? FinalTags => (Preview ?? File).FinalTags;
 
     private List<TagField>? AfterFields => FinalTags == null
         ? null
         : TagFields.ForFinalTags(FinalTags, CoverDescription, MatchingPipeline.SourceFor(Preview ?? File));
 
-    private string CoverDescription => File.CoverSource != null ? $"Front-Cover ({File.CoverSource})" : "Front-Cover (Quelle wird beim Schreiben ermittelt)";
+    private string CoverDescription => Preview?.ExternalSource is { } source
+        ? $"Front-Cover ({MatchingPipeline.SourceName(source)})"
+        : File.CoverSource != null ? $"Front-Cover ({File.CoverSource})" : "Front-Cover (Quelle wird beim Schreiben ermittelt)";
 }

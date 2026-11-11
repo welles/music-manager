@@ -30,6 +30,19 @@ public sealed class ReviewService(
         return file;
     }
 
+    /// <summary>Tags a Spotify/Deezer match would produce – nothing is saved.</summary>
+    public async Task<TrackFile> PreviewExternalAsync(int fileId, string matchKey, CancellationToken ct = default)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        var file = await db.Files.AsNoTracking().FirstAsync(f => f.Id == fileId, ct);
+        var match = file.ExternalMatches.First(m => m.Key == matchKey);
+        await pipeline.BuildManualTagsAsync(file, ExternalSourceService.ToTagSet(match), ct);
+        file.ExternalSource = match.Source;
+        file.Decision = DecisionSource.External;
+        file.SelectedCandidateKey = null;
+        return file;
+    }
+
     /// <summary>Chooses a candidate from the list and files it.</summary>
     public async Task ChooseCandidateAsync(int fileId, string candidateKey, CancellationToken ct = default)
     {
