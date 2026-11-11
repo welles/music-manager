@@ -21,8 +21,8 @@ a review queue in the web frontend, optionally after Claude had a look first.
    tags, release type, group context, date, country, format, length). Close calls
    go to Claude, then to the review queue.
 5. **Tagging**: tags are built from the MusicBrainz data with the own rules (see
-   [docs/tagging-rules.md](docs/tagging-rules.md)). `ARTISTS`/`ALBUMARTISTS` are
-   written as multi-value tags for Navidrome.
+   [docs/tagging-rules.md](docs/tagging-rules.md)). `ARTIST` and `ALBUMARTIST` hold the
+   individual artists as multi-value tags (no joined "A feat. B" string).
 6. **Conversion**: AAC streams are only remuxed. Everything else is encoded to AAC
    (256 kbps). `+faststart` is set, and a 500 px cover is embedded.
 7. **Filing**: `{album artist}/{album}/{album artist} - {title}.m4a`. Images move

@@ -18,7 +18,7 @@ else
             {
                 <MudText Typo="@(Large ? Typo.h5 : Typo.subtitle2)" Style="overflow-wrap:anywhere">@Title</MudText>
             }
-            <MudText Typo="@(Large ? Typo.subtitle1 : Typo.body2)">@Tags?.Artist</MudText>
+            <MudText Typo="@(Large ? Typo.subtitle1 : Typo.body2)">@(Tags is { Artists.Count: > 0 } ? string.Join(", ", Tags.Artists) : Tags?.Artist)</MudText>
             @if (!string.IsNullOrWhiteSpace(AlbumLine))
             {
                 <MudText Typo="Typo.body2" Style="opacity:.75">@AlbumLine</MudText>

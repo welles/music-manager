@@ -55,3 +55,20 @@ public class DuplicateFingerprintTests
         Assert.Equal(DuplicateKind.OtherVersion, kind);
     }
 }
+
+public class TagFieldTests
+{
+    [Fact]
+    public void ArtistIsWrittenAsMultiValueWithoutArtistsTag()
+    {
+        var fields = MusicManager.Core.Services.TagFields.ForFinalTags(new TagSet
+        {
+            Title = "Baddadan", Artist = "Chase & Status and Bou feat. IRAH", Artists = ["Chase & Status", "Bou", "IRAH"],
+            AlbumArtist = "Chase & Status and Bou", AlbumArtists = ["Chase & Status", "Bou"],
+        }, null, "musicbrainz");
+
+        Assert.Equal(["Chase & Status", "Bou", "IRAH"], fields.Single(f => f.Name == "ARTIST").Values);
+        Assert.Equal(["Chase & Status", "Bou"], fields.Single(f => f.Name == "ALBUMARTIST").Values);
+        Assert.DoesNotContain(fields, f => f.Name is "ARTISTS" or "ALBUMARTISTS");
+    }
+}

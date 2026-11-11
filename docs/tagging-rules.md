@@ -9,10 +9,10 @@ longer needed here.
 | Picard script | Purpose | Implementation |
 |---|---|---|
 | `$delete(artistsort/albumartistsort/composersort)` | No sort tags in the files | Files are written from scratch (`ffmpeg -map_metadata -1`), sort tags are never written. |
-| `$setmulti(artist,%artists%)` | Every artist as its own value, so Navidrome links the song to every artist | `ARTISTS` comes directly from the structured MusicBrainz artist credits (`TagBuilder`). The display string (`ARTIST`, e.g. "A feat. B") is built from the credits plus join phrases. |
+| `$setmulti(artist,%artists%)` + `$delete(artists)` | Every artist as its own value in `ARTIST`, so Navidrome links the song to every artist | `ARTIST` is written as a multi-value field with the individual artists from the structured MusicBrainz credits (`TagBuilder`); no joined "A feat. B" string and no separate `ARTISTS` tag. |
 | `_artist_splitter_strings` + `$rreplace` | Split composed artist strings | Only needed for data **without** credits (manual input, fallback sources): `ArtistRuleSet.Split`. |
-| Comparing `artist` / `albumartist` | Album artist as a multi-value list as well | `ALBUMARTISTS` comes directly from the release's artist credits. Without credits, the album artist string is split, and if it names the same people as the artist, the artist list is reused. |
-| `$rsearch(%title%, (… Remix))` | Remixer is credited as an artist | First choice is the recording's MusicBrainz **remixer relationship**; the title pattern `(Name Remix)` is only a fallback. The remixer is added to `ARTISTS`. |
+| Comparing `artist` / `albumartist` | Album artist as a multi-value list as well | `ALBUMARTIST` is a multi-value field from the release's artist credits. Without credits, the album artist string is split, and if it names the same people as the artist, the artist list is reused. |
+| `$rsearch(%title%, (… Remix))` | Remixer is credited as an artist | First choice is the recording's MusicBrainz **remixer relationship**; the title pattern `(Name Remix)` is only a fallback. The remixer is added to `ARTIST`. |
 | Remove ` (explicit)` / ` (album version)` | Variant markers do not belong in the title | Case-insensitive, round and square brackets, also "Explicit Version". |
 | `_force_split_artists` | MusicBrainz artists like "Audio88 & Yassin" should show up under their individual members | List editable in the frontend; applies to individual artists in the artist lists. |
 | `_force_replace_artists` | Unify artist names ("Bob Seger & the Silver Bullet Band" → "Bob Seger") | Applied **per credit** (exact name), before the display string is assembled. No substring replacement in composed strings. |

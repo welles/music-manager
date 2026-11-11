@@ -191,11 +191,11 @@ public static class TagFields
         }
 
         One("TITLE", t.Title);
-        One("ARTIST", t.Artist);
-        Many("ARTISTS", t.Artists);
+        // ARTIST and ALBUMARTIST hold the individual artists as multi-value fields (Picard script:
+        // $setmulti(artist,%artists%) + $delete(artists)) – no joined "A feat. B" string, no ARTISTS tag.
+        Many("ARTIST", t.Artists.Count > 0 ? t.Artists : [t.Artist ?? ""]);
         One("ALBUM", t.Album);
-        One("ALBUMARTIST", t.AlbumArtist);
-        Many("ALBUMARTISTS", t.AlbumArtists);
+        Many("ALBUMARTIST", t.AlbumArtists.Count > 0 ? t.AlbumArtists : [t.AlbumArtist ?? ""]);
         if (t.TrackNumber != null) One("TRACKNUMBER", t.TrackCount != null ? $"{t.TrackNumber}/{t.TrackCount}" : $"{t.TrackNumber}");
         if (t.DiscNumber != null) One("DISCNUMBER", t.DiscCount != null ? $"{t.DiscNumber}/{t.DiscCount}" : $"{t.DiscNumber}");
         One("DATE", t.Date);
