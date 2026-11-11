@@ -134,7 +134,15 @@ namespace MusicManager.Core.Data.Migrations
                     b.Property<string>("AlbumArtist")
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("AlbumArtists")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("Artist")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Artists")
+                        .IsRequired()
                         .HasColumnType("TEXT");
 
                     b.Property<int?>("BitrateKbps")
@@ -145,6 +153,9 @@ namespace MusicManager.Core.Data.Migrations
 
                     b.Property<string>("Date")
                         .HasColumnType("TEXT");
+
+                    b.Property<int?>("DiscNumber")
+                        .HasColumnType("INTEGER");
 
                     b.Property<double?>("DurationSeconds")
                         .HasColumnType("REAL");
@@ -161,13 +172,31 @@ namespace MusicManager.Core.Data.Migrations
                     b.Property<bool>("FingerprintFailed")
                         .HasColumnType("INTEGER");
 
+                    b.Property<string>("Genres")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("HasCover")
+                        .HasColumnType("INTEGER");
+
                     b.Property<int>("IndexVersion")
                         .HasColumnType("INTEGER");
 
                     b.Property<long>("IndexedAt")
                         .HasColumnType("INTEGER");
 
+                    b.Property<string>("MbAlbumArtistIds")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("MbArtistIds")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("MbRecordingId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("MbReleaseGroupId")
                         .HasColumnType("TEXT");
 
                     b.Property<string>("MbReleaseId")
@@ -177,11 +206,20 @@ namespace MusicManager.Core.Data.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("RulesVersion")
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("TagSource")
                         .HasColumnType("TEXT");
 
                     b.Property<string>("Title")
                         .HasColumnType("TEXT");
+
+                    b.Property<int?>("TrackNumber")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int?>("Year")
+                        .HasColumnType("INTEGER");
 
                     b.HasKey("Id");
 

@@ -23,5 +23,10 @@ longer needed here.
 
 Additionally (new):
 
+- No relationship tags (COMPOSER, LYRICIST, WRITER, PRODUCER, MIXER, ENGINEER, ARRANGER, WORK)
+  and in particular no PERFORMER/instrument credits: the writer clears all tags first and only
+  writes its own field list, so such tags from Picard-tagged files disappear on import or re-tag.
+- Every written file carries `MUSICMANAGER_RULES` (rules version) to find files tagged by older rules.
+
 - Features in the title (`Song (feat. B)`) are moved into the artist field.
 - Typographic punctuation is converted to plain ASCII punctuation (Picard `convert_punctuation`).

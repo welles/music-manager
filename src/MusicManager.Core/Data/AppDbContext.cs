@@ -55,6 +55,11 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
 
         b.Entity<LibraryEntry>(e =>
         {
+            e.Json(x => x.Artists);
+            e.Json(x => x.AlbumArtists);
+            e.Json(x => x.Genres);
+            e.Json(x => x.MbArtistIds);
+            e.Json(x => x.MbAlbumArtistIds);
             e.HasIndex(x => x.RelativePath).IsUnique();
             e.HasIndex(x => x.MbRecordingId);
             e.HasIndex(x => x.DurationSeconds);

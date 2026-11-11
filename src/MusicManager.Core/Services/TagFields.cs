@@ -175,7 +175,7 @@ public static class TagFields
 
     // --- Fields of the final tags (exactly what WriteM4a writes) --------------------------
 
-    public static List<TagField> ForFinalTags(TagSet t, string? coverDescription, string? source)
+    public static List<TagField> ForFinalTags(TagSet t, string? coverDescription, string? source, string? rulesVersion = null)
     {
         var fields = new List<TagField>();
 
@@ -216,7 +216,20 @@ public static class TagFields
         One("MusicBrainz Album Status", t.ReleaseStatus);
         One("MusicBrainz Album Release Country", t.ReleaseCountry);
         One(TagIo.SourceMarker, source);
+        One(TagIo.RulesMarker, rulesVersion);
         return fields;
+    }
+
+    /// <summary>All values of the first field with one of the names (case-insensitive; names differ per format).</summary>
+    public static List<string> Get(IReadOnlyList<TagField> fields, params string[] names)
+    {
+        foreach (var name in names)
+        {
+            var f = fields.FirstOrDefault(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase));
+            if (f != null) return f.Values.Where(v => !string.IsNullOrWhiteSpace(v)).ToList();
+        }
+
+        return [];
     }
 
     public static int SortKey(string name)

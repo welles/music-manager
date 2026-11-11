@@ -72,3 +72,19 @@ public class TagFieldTests
         Assert.DoesNotContain(fields, f => f.Name is "ARTISTS" or "ALBUMARTISTS");
     }
 }
+
+public class NoRelationshipTagsTests
+{
+    /// <summary>No relationship or instrument credits are ever written (explicit user wish).</summary>
+    [Fact]
+    public void FinalTagsNeverContainRelationshipOrPerformerFields()
+    {
+        var t = new TagSet { Title = "x", Artist = "A", Artists = ["A"], Album = "B", Date = "2020", Genres = ["Rock"], Label = "L" };
+        t.Extra["PERFORMER"] = "Someone (guitar)";
+        t.Extra["COMPOSER"] = "Someone";
+        var names = MusicManager.Core.Services.TagFields.ForFinalTags(t, "Front-Cover", "musicbrainz", "1-abc").Select(f => f.Name).ToList();
+        foreach (var forbidden in new[] { "PERFORMER", "COMPOSER", "LYRICIST", "WRITER", "PRODUCER", "MIXER", "ENGINEER", "ARRANGER", "WORK" })
+            Assert.DoesNotContain(forbidden, names);
+        Assert.Contains("MUSICMANAGER_RULES", names);
+    }
+}

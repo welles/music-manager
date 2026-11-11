@@ -268,6 +268,22 @@ public sealed class LibraryEntry
     /// <summary>Fingerprinting failed (e.g. unreadable file); not retried until the file changes.</summary>
     public bool FingerprintFailed { get; set; }
 
+    public List<string> Artists { get; set; } = [];
+    public List<string> AlbumArtists { get; set; } = [];
+    public List<string> Genres { get; set; } = [];
+    public int? TrackNumber { get; set; }
+    public int? DiscNumber { get; set; }
+    public int? Year { get; set; }
+    public string? MbReleaseGroupId { get; set; }
+    public List<string> MbArtistIds { get; set; } = [];
+    public List<string> MbAlbumArtistIds { get; set; } = [];
+
+    /// <summary>File has an embedded cover.</summary>
+    public bool HasCover { get; set; }
+
+    /// <summary>Value of the MUSICMANAGER_RULES tag: rules version the file was tagged with.</summary>
+    public string? RulesVersion { get; set; }
+
     /// <summary>Version of the index logic that read this entry (older entries are re-read).</summary>
     public int IndexVersion { get; set; }
 

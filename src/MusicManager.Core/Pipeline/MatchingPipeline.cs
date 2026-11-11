@@ -620,8 +620,7 @@ public sealed partial class MatchingPipeline(
             });
 
             var cover = await GetCoverAsync(file, source, settings, ct);
-            TagIo.WriteM4a(tmp, file.FinalTags, cover,
-                SourceFor(file));
+            TagIo.WriteM4a(tmp, file.FinalTags, cover, SourceFor(file), await settingsService.GetRulesVersionAsync(ct));
 
             // Replaced library file goes to the trash (decision can be undone from there).
             if (file.DuplicateDecision == DuplicateDecision.KeepNew && file.ReplaceLibraryPath != null)

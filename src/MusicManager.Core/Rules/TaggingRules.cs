@@ -14,6 +14,9 @@ namespace MusicManager.Core.Rules;
 /// </summary>
 public static partial class TaggingRules
 {
+    /// <summary>Version of the rule code. Raise it when the rules change in a way that should re-tag files.</summary>
+    public const int Version = 1;
+
     public static TagSet Apply(TagSet input, ArtistRuleSet rules, bool convertPunctuation = true)
     {
         var t = input.Clone();

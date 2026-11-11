@@ -49,6 +49,25 @@ public sealed class SettingsService(IDbContextFactory<AppDbContext> dbFactory)
         return ArtistRuleSet.FromRules(rules, settings.ArtistSplitters);
     }
 
+    /// <summary>
+    /// Version of the tagging rules a file is written with: code version plus a hash of the editable
+    /// rules and the settings that influence tags. Files with another value are "tagged by old rules".
+    /// </summary>
+    public async Task<string> GetRulesVersionAsync(CancellationToken ct = default)
+    {
+        var s = await GetAsync(ct);
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        var rules = await db.ArtistRules.AsNoTracking().OrderBy(r => r.Kind).ThenBy(r => r.Pattern)
+            .Select(r => new { r.Kind, r.Pattern, r.Replacement }).ToListAsync(ct);
+        var relevant = JsonSerializer.Serialize(new
+        {
+            rules, s.ArtistSplitters, s.StandardizeArtists, s.ArtistLocale, s.ConvertPunctuation, s.UseGenres, s.UseArtistGenres,
+            s.MaxGenres, s.MinGenreUsagePercent, s.GenreFilter, s.TranslateForeignTitles,
+        });
+        var hash = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(relevant)))[..8].ToLowerInvariant();
+        return $"{Rules.TaggingRules.Version}-{hash}";
+    }
+
     public async Task<List<SourceProfile>> GetSourceProfilesAsync(CancellationToken ct = default)
     {
         await using var db = await dbFactory.CreateDbContextAsync(ct);

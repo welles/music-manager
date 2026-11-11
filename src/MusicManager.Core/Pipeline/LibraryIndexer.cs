@@ -23,7 +23,7 @@ public sealed class LibraryIndexer(
     ILogger<LibraryIndexer> logger) : BackgroundService
 {
     /// <summary>Raise when <see cref="Fill"/> reads more or different data, so existing entries are re-read.</summary>
-    public const int CurrentIndexVersion = 2;
+    public const int CurrentIndexVersion = 3;
 
     private readonly SemaphoreSlim _trigger = new(0, 1);
     private readonly SemaphoreSlim _lock = new(1, 1);
@@ -163,6 +163,21 @@ public sealed class LibraryIndexer(
         entry.MbReleaseId = tags.MbReleaseId;
         entry.AcoustId = tags.AcoustId;
         entry.TagSource = tags.Extra.GetValueOrDefault(TagIo.SourceMarker);
+
+        // Multi-value fields from the raw tags (names differ between M4A, Vorbis and ID3).
+        var fields = TagFields.Read(path);
+        entry.Artists = TagFields.Get(fields, "ARTIST");
+        entry.AlbumArtists = TagFields.Get(fields, "ALBUMARTIST", "ALBUM ARTIST");
+        entry.Genres = TagFields.Get(fields, "GENRE");
+        entry.MbArtistIds = TagFields.Get(fields, "MusicBrainz Artist Id", "MUSICBRAINZ_ARTISTID");
+        entry.MbAlbumArtistIds = TagFields.Get(fields, "MusicBrainz Album Artist Id", "MUSICBRAINZ_ALBUMARTISTID");
+        entry.MbReleaseGroupId = TagFields.Get(fields, "MusicBrainz Release Group Id", "MUSICBRAINZ_RELEASEGROUPID").FirstOrDefault();
+        entry.RulesVersion = TagFields.Get(fields, TagIo.RulesMarker).FirstOrDefault();
+        entry.TagSource ??= TagFields.Get(fields, TagIo.SourceMarker).FirstOrDefault();
+        entry.HasCover = fields.Any(x => x.Name == "COVER") || TagFields.Get(fields, "METADATA_BLOCK_PICTURE").Count > 0;
+        entry.TrackNumber = tags.TrackNumber;
+        entry.DiscNumber = tags.DiscNumber;
+        entry.Year = tags.Year;
         if (resetFingerprint)
         {
             entry.Fingerprint = null;

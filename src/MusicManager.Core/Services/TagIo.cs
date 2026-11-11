@@ -17,6 +17,9 @@ public static class TagIo
     /// <summary>Marker that identifies files written by this tool and the source of their tags.</summary>
     public const string SourceMarker = "MUSICMANAGER_SOURCE";
 
+    /// <summary>Rules version the file was tagged with, see <see cref="Pipeline.SettingsService.GetRulesVersionAsync"/>.</summary>
+    public const string RulesMarker = "MUSICMANAGER_RULES";
+
     public static TagSet Read(string path)
     {
         var t = new TagSet();
@@ -25,11 +28,12 @@ public static class TagIo
             using var file = File.Create(path);
             var tag = file.Tag;
             t.Title = tag.Title.NullIfEmpty();
-            t.Artist = tag.JoinedPerformers.NullIfEmpty();
+            // Several values (multi-value ARTIST): display as "A & B", the list goes to Artists.
+            t.Artist = string.Join(" & ", tag.Performers.Where(p => !string.IsNullOrWhiteSpace(p))).NullIfEmpty();
             if (tag.Performers.Length > 1)
                 t.Artists = tag.Performers.Where(p => !string.IsNullOrWhiteSpace(p)).ToList();
             t.Album = tag.Album.NullIfEmpty();
-            t.AlbumArtist = tag.JoinedAlbumArtists.NullIfEmpty();
+            t.AlbumArtist = string.Join(" & ", tag.AlbumArtists.Where(p => !string.IsNullOrWhiteSpace(p))).NullIfEmpty();
             if (tag.AlbumArtists.Length > 1)
                 t.AlbumArtists = tag.AlbumArtists.Where(p => !string.IsNullOrWhiteSpace(p)).ToList();
             t.TrackNumber = tag.Track > 0 ? (int)tag.Track : null;
@@ -167,14 +171,14 @@ public static class TagIo
     /// <see cref="TagFields.ForFinalTags"/>, so the before/after view shows exactly what is written.
     /// Multi-value fields (ARTISTS, GENRE, artist IDs …) are written as one atom with several values.
     /// </summary>
-    public static void WriteM4a(string path, TagSet t, byte[]? cover, string source)
+    public static void WriteM4a(string path, TagSet t, byte[]? cover, string source, string? rulesVersion = null)
     {
         using var file = File.Create(path, "audio/mp4", ReadStyle.Average);
         var apple = (AppleTag)file.GetTag(TagTypes.Apple, true);
         apple.Clear();
         Tag tag = apple;
 
-        foreach (var field in TagFields.ForFinalTags(t, cover != null ? "Front-Cover" : null, source))
+        foreach (var field in TagFields.ForFinalTags(t, cover != null ? "Front-Cover" : null, source, rulesVersion))
         {
             switch (field.Name)
             {
