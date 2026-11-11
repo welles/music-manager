@@ -5,6 +5,7 @@ using MusicManager.Core;
 using MusicManager.Core.Pipeline;
 using MusicManager.Web;
 using MusicManager.Web.Components;
+using MusicManager.Web.Subsonic;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -97,6 +98,7 @@ app.MapGet("/api/status", async (Microsoft.EntityFrameworkCore.IDbContextFactory
     });
 });
 app.MapAudioEndpoints();
+app.MapSubsonicEndpoints();
 app.MapStaticAssets();
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();

@@ -2,8 +2,10 @@
 
 Self-hosted replacement for MusicBrainz Picard. New audio files dropped into an inbox
 are identified (Chromaprint/AcoustID, MusicBrainz), tagged with your own rules,
-converted to M4A/AAC and filed into the Navidrome library. Uncertain cases go to
-a review queue in the web frontend, optionally after Claude had a look first.
+converted to M4A/AAC and filed into the music library. Uncertain cases go to
+a review queue in the web frontend, optionally after Claude had a look first. The
+library is also served through a minimal OpenSubsonic API, so a player such as
+Symfonium can use it instead of Navidrome.
 
 ## Pipeline
 
@@ -45,9 +47,9 @@ docker compose up -d
 | Volume   | Purpose                                                    |
 |----------|------------------------------------------------------------|
 | `/inbox` | New files                                                  |
-| `/music` | Navidrome library (the same folder Navidrome reads)        |
+| `/music` | Music library (the same folder Navidrome reads, if used)   |
 | `/trash` | Replaced/discarded files, deleted after the retention time |
-| `/data`  | SQLite database, work files, Data Protection keys          |
+| `/data`  | SQLite database, work files, Data Protection keys, cover cache |
 
 | Environment variable              | Purpose                                                   |
 |-----------------------------------|-----------------------------------------------------------|
@@ -56,6 +58,7 @@ docker compose up -d
 | `MusicManager__MusicBrainzContact`| Contact in the MusicBrainz User-Agent                     |
 | `MusicManager__SpotifyClientId`, `MusicManager__SpotifyClientSecret` | Spotify app for the fallback search (optional; Deezer needs no key) |
 | `MusicManager__MusicBrainzServer` | Optional own MusicBrainz mirror                           |
+| `MusicManager__SubsonicApiKey`    | API key for the Subsonic API (optional; without it the API is off) |
 | `MusicManager__InboxPath` …       | Override the container paths (default `/inbox`, `/music`, `/trash`, `/data`) |
 
 The container runs as `PUID:PGID` (see `docker-compose.yml`), so filed files belong
@@ -71,6 +74,40 @@ Settings → Notifications each device can subscribe to Web Push: after a batch,
 summary when new files wait for review, have no MusicBrainz match, look like duplicates or
 failed. The VAPID key pair is created on first start as `vapid.pem` in the data folder; keep it,
 otherwise all devices have to subscribe again.
+
+### Subsonic API (Symfonium)
+
+Under `/rest` the library is served as a minimal [OpenSubsonic](https://opensubsonic.netlify.app)
+API, enough for [Symfonium](https://symfonium.app/) to use Music Manager as its media source
+instead of Navidrome: browsing by tags, search (Symfonium's full sync), streaming with seeking,
+covers, favourites, ratings, play counts and playlists. Songs keep their ID when a file is
+retagged, moved or replaced (duplicate "keep new"), so favourites, play counts and playlist
+entries stay with the song. Album and artist IDs come from the MusicBrainz IDs (otherwise from
+the names), so stars and ratings of albums and artists are lost when those tags change. User data
+of a song that is missing from the library is kept and comes back with the file.
+
+Set `MusicManager__SubsonicApiKey` to a long random value (e.g. `openssl rand -hex 32`). Without
+it every call fails. The API stays behind Cloudflare Access; Symfonium gets through with a
+service token:
+
+1. Zero Trust → Access → Service Auth: create a service token.
+2. Add a policy with the action *Service Auth* for that token to the Music Manager Access
+   application (the browser login stays as it is).
+3. In Symfonium add an OpenSubsonic media provider: server URL `https://<your host>` (without
+   `/rest`), enable "API-Schlüssel benutzen" and enter the key.
+4. Under "Custom-Header schicken" add `CF-Access-Client-Id: <client id>` and
+   `CF-Access-Client-Secret: <client secret>` of the service token.
+
+Limits:
+
+- JSON only (no XML), API key authentication only (no username/password or token auth).
+- No transcoding: `stream` always serves the original file (`maxBitRate` and `format` are ignored).
+- No folder browsing (`getIndexes`, `getMusicDirectory`); browsing by tags only.
+- One user (the owner); there is no user management.
+- Casting (Chromecast/UPnP) does not work through Cloudflare Access: the cast device fetches the
+  stream URL itself and does not send the custom headers.
+
+Resized covers are cached under `<data>/cache/covers`; the folder can be deleted at any time.
 
 ## Development
 

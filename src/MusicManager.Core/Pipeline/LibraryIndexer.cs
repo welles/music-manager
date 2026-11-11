@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using MusicManager.Core.Catalog;
 using MusicManager.Core.Data;
 using MusicManager.Core.Rules;
 using MusicManager.Core.Services;
@@ -23,13 +24,24 @@ public sealed class LibraryIndexer(
     ILogger<LibraryIndexer> logger) : BackgroundService
 {
     /// <summary>Raise when <see cref="Fill"/> reads more or different data, so existing entries are re-read.</summary>
-    public const int CurrentIndexVersion = 3;
+    public const int CurrentIndexVersion = 4;
 
     private readonly SemaphoreSlim _trigger = new(0, 1);
+    private long _version;
     private readonly SemaphoreSlim _lock = new(1, 1);
     private volatile bool _scanning;
     private string? _activity;
     private DateTimeOffset? _lastScan;
+
+    /// <summary>
+    /// Increases with every change of the index (scan, upsert, remove); lets caches such as
+    /// <see cref="Catalog.MediaCatalog"/> detect that they are stale.
+    /// </summary>
+    public long Version => Interlocked.Read(ref _version);
+
+    public bool Scanning => _scanning;
+
+    internal void OnChanged() => Interlocked.Increment(ref _version);
 
     public async Task<LibraryIndexStatus> GetStatusAsync(CancellationToken ct = default)
     {
@@ -75,7 +87,7 @@ public sealed class LibraryIndexer(
         }
     }
 
-    private async Task ScanAsync(CancellationToken ct)
+    internal async Task ScanAsync(CancellationToken ct)
     {
         if (!Directory.Exists(storage.LibraryRoot))
         {
@@ -92,6 +104,9 @@ public sealed class LibraryIndexer(
             await using var db = await dbFactory.CreateDbContextAsync(ct);
             var existing = await db.Library.ToDictionaryAsync(e => e.RelativePath, StringComparer.Ordinal, ct);
             var seen = new HashSet<string>(StringComparer.Ordinal);
+            var newEntries = new List<LibraryEntry>();
+            // First build of the index: the files were there before, so their mtime is the best "added" date.
+            var initialBuild = existing.Count == 0;
             int added = 0, updated = 0, count = 0;
 
             foreach (var path in Directory.EnumerateFiles(storage.LibraryRoot, "*", new EnumerationOptions
@@ -111,9 +126,10 @@ public sealed class LibraryIndexer(
 
                 if (entry == null)
                 {
-                    entry = new LibraryEntry { RelativePath = relative };
+                    entry = new LibraryEntry { RelativePath = relative, AddedAt = initialBuild ? null : DateTimeOffset.UtcNow };
                     db.Library.Add(entry);
                     existing[relative] = entry;
+                    newEntries.Add(entry);
                     added++;
                 }
                 else
@@ -131,11 +147,23 @@ public sealed class LibraryIndexer(
             }
 
             var removed = existing.Values.Where(e => !seen.Contains(e.RelativePath)).ToList();
-            db.Library.RemoveRange(removed);
-            await db.SaveChangesAsync(ct);
+            var moved = CarryOverMoved(removed, newEntries);
+
+            // Removed rows go first, so carried-over song IDs do not collide with the unique index.
+            await using (var tx = await db.Database.BeginTransactionAsync(ct))
+            {
+                db.Library.RemoveRange(removed);
+                await db.SaveChangesAsync(ct);
+                var assigned = AssignSongIds(existing.Values.Where(e => seen.Contains(e.RelativePath)), []);
+                await db.SaveChangesAsync(ct);
+                await tx.CommitAsync(ct);
+                if (added + updated + removed.Count + assigned > 0) OnChanged();
+            }
+
             _lastScan = DateTimeOffset.UtcNow;
             if (added + updated + removed.Count > 0)
-                logger.LogInformation("Library index: {Added} added, {Updated} updated, {Removed} removed", added, updated, removed.Count);
+                logger.LogInformation("Library index: {Added} added, {Updated} updated, {Removed} removed ({Moved} moved)", added, updated,
+                    removed.Count, moved);
         }
         finally
         {
@@ -146,9 +174,66 @@ public sealed class LibraryIndexer(
         }
     }
 
+    /// <summary>
+    /// Files that vanished and appeared in the same scan (moved or renamed outside the tool) keep their
+    /// song ID and added date. Only unambiguous pairs count: same release track ID, or else same
+    /// recording and release ID, with exactly one candidate on each side.
+    /// </summary>
+    internal static int CarryOverMoved(IReadOnlyList<LibraryEntry> removed, IReadOnlyList<LibraryEntry> added)
+    {
+        var moved = 0;
+        var gone = removed.Where(e => e.SongId != null).ToList();
+        if (gone.Count == 0 || added.Count == 0) return 0;
+
+        Func<LibraryEntry, string?>[] keys =
+        [
+            e => e.MbTrackId,
+            e => e.MbRecordingId != null && e.MbReleaseId != null ? $"{e.MbRecordingId}|{e.MbReleaseId}" : null,
+        ];
+        foreach (var key in keys)
+        {
+            var oldByKey = gone.Where(e => key(e) != null).GroupBy(e => key(e)!).Where(g => g.Count() == 1).ToDictionary(g => g.Key, g => g.Single());
+            var newByKey = added.Where(e => e.SongId == null && key(e) != null).GroupBy(e => key(e)!).Where(g => g.Count() == 1);
+            foreach (var g in newByKey)
+            {
+                if (!oldByKey.TryGetValue(g.Key, out var old)) continue;
+                var entry = g.Single();
+                entry.SongId = old.SongId;
+                entry.AddedAt = old.AddedAt ?? entry.AddedAt;
+                gone.Remove(old);
+                moved++;
+            }
+        }
+
+        return moved;
+    }
+
+    /// <summary>
+    /// Gives every entry without one a song ID: "tr-" + the release track ID if no other entry uses it,
+    /// otherwise a random one. Entries without an added date get their file's mtime (existing rows).
+    /// </summary>
+    internal static int AssignSongIds(IEnumerable<LibraryEntry> entries, IEnumerable<string> usedElsewhere)
+    {
+        var list = entries.ToList();
+        var used = new HashSet<string>(list.Select(e => e.SongId).OfType<string>().Concat(usedElsewhere), StringComparer.OrdinalIgnoreCase);
+        var assigned = 0;
+        // Stable order, so the same entry wins a contested release track ID on every installation.
+        foreach (var entry in list.Where(e => e.SongId == null).OrderBy(e => e.RelativePath, StringComparer.Ordinal))
+        {
+            var id = entry.MbTrackId is { Length: > 0 } t ? $"{CatalogIds.SongPrefix}{t.ToLowerInvariant()}" : null;
+            if (id == null || used.Contains(id)) id = CatalogIds.NewSongId();
+            used.Add(id);
+            entry.SongId = id;
+            entry.AddedAt ??= new DateTimeOffset(DateTime.SpecifyKind(entry.FileModifiedUtc, DateTimeKind.Utc));
+            assigned++;
+        }
+
+        return assigned;
+    }
+
     private static void Fill(LibraryEntry entry, string path, FileInfo info, bool resetFingerprint = true)
     {
-        var (tags, duration, bitrate, codec) = TagIo.ReadForIndex(path);
+        var (tags, duration, bitrate, codec, compilation) = TagIo.ReadForIndex(path);
         entry.FileSize = info.Length;
         entry.FileModifiedUtc = info.LastWriteTimeUtc;
         entry.DurationSeconds = duration;
@@ -162,6 +247,11 @@ public sealed class LibraryIndexer(
         entry.MbRecordingId = tags.MbRecordingId;
         entry.MbReleaseId = tags.MbReleaseId;
         entry.AcoustId = tags.AcoustId;
+        entry.MbTrackId = tags.MbTrackId.NullIfEmpty();
+        entry.OriginalDate = tags.OriginalDate.NullIfEmpty();
+        entry.Isrc = tags.Isrc.NullIfEmpty();
+        entry.ReleaseTypes = (tags.ReleaseType ?? "").Split(';', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries).ToList();
+        entry.IsCompilation = compilation;
         entry.TagSource = tags.Extra.GetValueOrDefault(TagIo.SourceMarker);
 
         // Multi-value fields from the raw tags (names differ between M4A, Vorbis and ID3).
@@ -216,30 +306,63 @@ public sealed class LibraryIndexer(
         notifier.Notify();
     }
 
-    /// <summary>Adds or updates one file right after the pipeline filed it.</summary>
-    public async Task UpsertAsync(string relativePath, uint[]? fingerprint, CancellationToken ct)
+    /// <summary>
+    /// Adds or updates one file right after the pipeline filed it. <paramref name="replaces"/> is the
+    /// library path of a file this one replaces or was moved from: its entry is removed, and its song
+    /// ID and added date pass to this file.
+    /// </summary>
+    public async Task UpsertAsync(string relativePath, uint[]? fingerprint, CancellationToken ct, string? replaces = null)
     {
         var path = storage.LibraryPath(relativePath);
         if (!File.Exists(path)) return;
         await using var db = await dbFactory.CreateDbContextAsync(ct);
+        await using var tx = await db.Database.BeginTransactionAsync(ct);
         var entry = await db.Library.FirstOrDefaultAsync(e => e.RelativePath == relativePath, ct);
+
+        LibraryEntry? old = null;
+        if (replaces != null && replaces != relativePath)
+        {
+            old = await db.Library.FirstOrDefaultAsync(e => e.RelativePath == replaces, ct);
+            if (old != null)
+            {
+                db.Library.Remove(old);
+                await db.SaveChangesAsync(ct);
+            }
+        }
+
         if (entry == null)
         {
-            entry = new LibraryEntry { RelativePath = relativePath };
+            entry = new LibraryEntry { RelativePath = relativePath, SongId = old?.SongId, AddedAt = old?.AddedAt ?? DateTimeOffset.UtcNow };
             db.Library.Add(entry);
+        }
+        else if (old?.SongId != null)
+        {
+            // The file at the target path is replaced as well; the moved/replacing identity wins.
+            entry.SongId = old.SongId;
+            entry.AddedAt = old.AddedAt ?? entry.AddedAt;
         }
 
         Fill(entry, path, new FileInfo(path));
         if (fingerprint is { Length: > 0 })
             entry.Fingerprint = FingerprintMatcher.Encode(fingerprint);
+        if (entry.SongId == null)
+        {
+            var mbId = entry.MbTrackId == null ? null : $"{CatalogIds.SongPrefix}{entry.MbTrackId.ToLowerInvariant()}";
+            var taken = mbId != null && await db.Library.AnyAsync(e => e.SongId == mbId && e.Id != entry.Id, ct);
+            AssignSongIds([entry], taken ? [mbId!] : []);
+        }
+
         await db.SaveChangesAsync(ct);
+        await tx.CommitAsync(ct);
+        OnChanged();
     }
 
     /// <summary>Removes an entry (file moved to the trash).</summary>
     public async Task RemoveAsync(string relativePath, CancellationToken ct)
     {
         await using var db = await dbFactory.CreateDbContextAsync(ct);
-        await db.Library.Where(e => e.RelativePath == relativePath).ExecuteDeleteAsync(ct);
+        if (await db.Library.Where(e => e.RelativePath == relativePath).ExecuteDeleteAsync(ct) > 0)
+            OnChanged();
     }
 
     public override void Dispose()

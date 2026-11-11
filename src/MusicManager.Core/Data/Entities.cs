@@ -262,6 +262,29 @@ public sealed class LibraryEntry
     public string? MbReleaseId { get; set; }
     public string? AcoustId { get; set; }
 
+    /// <summary>MusicBrainz release track ID (tag MUSICBRAINZ_RELEASETRACKID).</summary>
+    public string? MbTrackId { get; set; }
+
+    /// <summary>Original release date (YYYY, YYYY-MM or YYYY-MM-DD).</summary>
+    public string? OriginalDate { get; set; }
+
+    /// <summary>MusicBrainz release types ("album", "compilation" …).</summary>
+    public List<string> ReleaseTypes { get; set; } = [];
+
+    /// <summary>Compilation flag of the file (cpil / TCMP / COMPILATION).</summary>
+    public bool IsCompilation { get; set; }
+
+    public string? Isrc { get; set; }
+
+    /// <summary>
+    /// Stable public song ID for the Subsonic API ("tr-…"). Assigned once and carried over when the
+    /// file is replaced or moved; never derived again from the tags.
+    /// </summary>
+    public string? SongId { get; set; }
+
+    /// <summary>When the file entered the library (carried over together with <see cref="SongId"/>).</summary>
+    public DateTimeOffset? AddedAt { get; set; }
+
     /// <summary>Value of the MUSICMANAGER_SOURCE tag (null = not written by this tool).</summary>
     public string? TagSource { get; set; }
 
@@ -381,4 +404,51 @@ public sealed class PushSubscription
 
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset? LastSentAt { get; set; }
+}
+
+/// <summary>A starred song, album or artist (Subsonic API), keyed by its public catalog ID.</summary>
+public sealed class Star
+{
+    /// <summary>Public ID ("tr-…", "al-…", "ar-…"). Kept when the item is not in the library.</summary>
+    public required string ItemId { get; set; }
+
+    public DateTimeOffset StarredAt { get; set; } = DateTimeOffset.UtcNow;
+}
+
+/// <summary>User rating (1..5) of a song, album or artist, keyed by its public catalog ID.</summary>
+public sealed class Rating
+{
+    public required string ItemId { get; set; }
+    public int Value { get; set; }
+}
+
+/// <summary>Play count and last play of a song, keyed by its public song ID.</summary>
+public sealed class PlayStat
+{
+    public required string SongId { get; set; }
+    public int PlayCount { get; set; }
+    public DateTimeOffset? LastPlayed { get; set; }
+}
+
+/// <summary>Playlist of the Subsonic API (public ID "pl-{Id}").</summary>
+public sealed class Playlist
+{
+    public int Id { get; set; }
+    public required string Name { get; set; }
+    public string? Comment { get; set; }
+    public bool Public { get; set; }
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+    public DateTimeOffset ChangedAt { get; set; } = DateTimeOffset.UtcNow;
+
+    /// <summary>Entries; order by <see cref="PlaylistEntry.Position"/>.</summary>
+    public List<PlaylistEntry> Entries { get; set; } = [];
+}
+
+/// <summary>One song of a playlist. Entries whose song is not in the library are kept (and hidden).</summary>
+public sealed class PlaylistEntry
+{
+    public int Id { get; set; }
+    public int PlaylistId { get; set; }
+    public int Position { get; set; }
+    public required string SongId { get; set; }
 }

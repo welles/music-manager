@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using MusicManager.Core.Ai;
+using MusicManager.Core.Catalog;
 using MusicManager.Core.Configuration;
 using MusicManager.Core.Data;
 using MusicManager.Core.Pipeline;
@@ -45,6 +46,9 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<DuplicateDetector>();
         services.AddSingleton<LibraryDuplicateScanner>();
         services.AddSingleton<LibraryCatalog>();
+        services.AddSingleton<MediaCatalog>();
+        services.AddSingleton<UserDataStore>();
+        services.AddSingleton<PlaylistStore>();
         services.AddSingleton<RetagService>();
         services.AddHttpClient("wikimedia", c =>
         {

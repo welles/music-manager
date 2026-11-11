@@ -18,6 +18,11 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
     public DbSet<ArtistImage> ArtistImages => Set<ArtistImage>();
     public DbSet<DismissedDuplicateGroup> DismissedDuplicates => Set<DismissedDuplicateGroup>();
     public DbSet<PushSubscription> PushSubscriptions => Set<PushSubscription>();
+    public DbSet<Star> Stars => Set<Star>();
+    public DbSet<Rating> Ratings => Set<Rating>();
+    public DbSet<PlayStat> PlayStats => Set<PlayStat>();
+    public DbSet<Playlist> Playlists => Set<Playlist>();
+    public DbSet<PlaylistEntry> PlaylistEntries => Set<PlaylistEntry>();
 
     protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
     {
@@ -64,10 +69,20 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
             e.Json(x => x.Genres);
             e.Json(x => x.MbArtistIds);
             e.Json(x => x.MbAlbumArtistIds);
+            e.Json(x => x.ReleaseTypes);
             e.HasIndex(x => x.RelativePath).IsUnique();
+            e.HasIndex(x => x.SongId).IsUnique();
             e.HasIndex(x => x.MbRecordingId);
             e.HasIndex(x => x.DurationSeconds);
         });
+
+        // User data of the Subsonic API, keyed by public catalog IDs (no foreign keys to the library:
+        // it outlives files that are missing for a while).
+        b.Entity<Star>(e => e.HasKey(x => x.ItemId));
+        b.Entity<Rating>(e => e.HasKey(x => x.ItemId));
+        b.Entity<PlayStat>(e => e.HasKey(x => x.SongId));
+        b.Entity<Playlist>(e => e.HasMany(x => x.Entries).WithOne().HasForeignKey(x => x.PlaylistId).OnDelete(DeleteBehavior.Cascade));
+        b.Entity<PlaylistEntry>(e => e.HasIndex(x => new { x.PlaylistId, x.Position }));
 
         b.Entity<FileEvent>(e => e.Property(x => x.Level).HasConversion<string>());
         b.Entity<ArtistRule>(e => e.Property(x => x.Kind).HasConversion<string>());

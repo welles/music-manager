@@ -135,8 +135,8 @@ public static class TagIo
         }
     }
 
-    /// <summary>Tags plus audio properties for the library index (one file open).</summary>
-    public static (TagSet Tags, double? Duration, int? BitrateKbps, string? Codec) ReadForIndex(string path)
+    /// <summary>Tags plus audio properties and the compilation flag for the library index.</summary>
+    public static (TagSet Tags, double? Duration, int? BitrateKbps, string? Codec, bool Compilation) ReadForIndex(string path)
     {
         var tags = Read(path);
         try
@@ -144,13 +144,19 @@ public static class TagIo
             using var file = File.Create(path, ReadStyle.Average);
             var p = file.Properties;
             return (tags, p?.Duration.TotalSeconds > 0 ? p.Duration.TotalSeconds : null, p?.AudioBitrate > 0 ? p.AudioBitrate : null,
-                ShortCodec(p?.Codecs.OfType<ICodec>().FirstOrDefault()?.Description));
+                ShortCodec(p?.Codecs.OfType<ICodec>().FirstOrDefault()?.Description), IsCompilation(file));
         }
         catch (Exception ex) when (ex is CorruptFileException or UnsupportedFormatException)
         {
-            return (tags, null, null, null);
+            return (tags, null, null, null, false);
         }
     }
+
+    /// <summary>Compilation flag: cpil (M4A), TCMP (ID3) or COMPILATION (Vorbis).</summary>
+    private static bool IsCompilation(File file) =>
+        (file.GetTag(TagTypes.Apple) as AppleTag)?.IsCompilation == true
+        || (file.GetTag(TagTypes.Id3v2) as TagLib.Id3v2.Tag)?.IsCompilation == true
+        || (file.GetTag(TagTypes.Xiph) as TagLib.Ogg.XiphComment)?.IsCompilation == true;
 
     /// <summary>Same short names as ffprobe ("aac", "mp3", "flac" …) so both sides of a comparison match.</summary>
     public static string? ShortCodec(string? description)
