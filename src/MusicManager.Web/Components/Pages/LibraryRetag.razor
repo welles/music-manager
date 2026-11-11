@@ -41,10 +41,10 @@
         {
             <MudChip T="string" Color="Color.Error" Variant="Variant.Text">@errors.Count Fehler</MudChip>
         }
-        @if (!Show && Retag.Previews.Any(p => p.EditedOutside))
+        @if (!Show && Retag.Previews.Any(p => p.CanDiscardOutsideEdits))
         {
             <MudSwitch T="bool" Value="_discardOutsideEdits" ValueChanged="DiscardOutsideEditsChanged" Color="Color.Warning"
-                       Label="Externe Änderungen verwerfen (neu aus MusicBrainz)" />
+                       Label="@($"Externe Änderungen verwerfen (neu aus MusicBrainz, {Retag.Previews.Count(p => p.CanDiscardOutsideEdits)} Datei(en))")" />
         }
         <MudSpacer />
         <MudSwitch @bind-Value="_movePaths" Color="Color.Primary" Label="Dateien bei geändertem Pfad verschieben" />

@@ -35,6 +35,9 @@ public sealed class RetagPreview
     /// <summary>The outside edits are thrown away: the tags are rebuilt from MusicBrainz.</summary>
     public bool DiscardsOutsideEdits { get; set; }
 
+    /// <summary>The tags were edited outside and can be rebuilt from MusicBrainz (source musicbrainz with IDs).</summary>
+    public bool CanDiscardOutsideEdits { get; set; }
+
     public bool PathChanged => NewRelativePath != null && NewRelativePath != RelativePath;
 
     public bool TagsChanged =>
@@ -132,9 +135,12 @@ public sealed class RetagService(
             // Checked on the file itself, the index may be older.
             var outside = TagIo.CheckHashes(path);
             preview.EditedOutside = outside?.Edited == true;
-            var keepOutsideEdits = outside?.TagsEdited == true && !discardOutsideEdits;
+            var fromMusicBrainz = source?.StartsWith("musicbrainz") == true && current is { MbReleaseId: not null, MbRecordingId: not null };
+            // Only tags from MusicBrainz can be rebuilt; for all other files the current tags are the only basis.
+            preview.CanDiscardOutsideEdits = outside?.TagsEdited == true && fromMusicBrainz && edit == null;
+            var keepOutsideEdits = outside?.TagsEdited == true && !(discardOutsideEdits && preview.CanDiscardOutsideEdits);
             TagSet tags;
-            if (edit == null && !keepOutsideEdits && source?.StartsWith("musicbrainz") == true && current is { MbReleaseId: not null, MbRecordingId: not null })
+            if (edit == null && !keepOutsideEdits && fromMusicBrainz)
             {
                 tags = await pipeline.BuildReleaseTagsAsync(current.MbReleaseId, current.MbRecordingId, current, settings, CancellationToken.None);
                 preview.DiscardsOutsideEdits = outside?.TagsEdited == true;
@@ -154,7 +160,9 @@ public sealed class RetagService(
                 {
                     // The edited tags are no longer pure MusicBrainz tags: as "manual" a later retag keeps them too.
                     if (source?.StartsWith("musicbrainz") == true) source = "manual";
-                    preview.Method = "Externe Änderungen behalten, Regeln angewendet";
+                    preview.Method = discardOutsideEdits
+                        ? "Externe Änderungen behalten (nicht aus MusicBrainz, nicht verwerfbar), Regeln angewendet"
+                        : "Externe Änderungen behalten, Regeln angewendet";
                 }
                 else
                 {
