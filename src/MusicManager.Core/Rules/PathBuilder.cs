@@ -32,13 +32,17 @@ public static class PathBuilder
         var trackArtist = tags.Artists.FirstOrDefault().NullIfEmpty() ?? tags.Artist.NullIfEmpty() ?? mainArtist;
         var dir1 = SanitizeComponent(mainArtist);
         var dir2 = SanitizeComponent(album);
-        var file = SanitizeComponent($"{trackArtist} - {title}");
+        var file = SanitizeComponent($"{trackArtist} - {title}", directory: false);
 
         return Path.Combine(dir1, dir2, file + extension);
     }
 
-    /// <summary>ASCII only, Windows compatible, slashes in values replaced by "_".</summary>
-    public static string SanitizeComponent(string value)
+    /// <summary>
+    /// ASCII only, Windows compatible, slashes in values replaced by "_". Like Picard, a trailing dot
+    /// of a folder name becomes "_" ("Fred again.." → "Fred again._", "J.B.O." → "J.B.O_"); file
+    /// names keep it because the extension follows ("Born in the U.S.A..m4a").
+    /// </summary>
+    public static string SanitizeComponent(string value, bool directory = true)
     {
         // "Little World (リトルワールド)" → "Little World": bracket parts without any Latin letters
         // would only become underscores in an ASCII file name.
@@ -57,11 +61,12 @@ public static class PathBuilder
         }
 
         var result = sb.ToString().Trim();
-
-        // Windows does not allow trailing dots or spaces.
-        result = result.TrimEnd('.', ' ');
         if (result.Length > MaxComponentLength)
-            result = result[..MaxComponentLength].TrimEnd('.', ' ');
+            result = result[..MaxComponentLength].TrimEnd();
+
+        // Windows does not allow folder names ending in a dot.
+        if (directory && result.EndsWith('.'))
+            result = result[..^1] + "_";
 
         return result.Length == 0 ? "_" : result;
     }

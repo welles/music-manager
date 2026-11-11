@@ -88,6 +88,13 @@ public class RulesTests
         Assert.Equal(Path.Combine("Sigur Ros", "Agaetis byrjun", "Sigur Ros - Svefn-g-englar_ AC_DC_.m4a"), path);
     }
 
+    [Theory]
+    [InlineData("Fred again..", "leavemealone", "Fred again._", "Fred again.. - leavemealone.m4a")]
+    [InlineData("Bruce Springsteen", "Born in the U.S.A.", "Bruce Springsteen", "Bruce Springsteen - Born in the U.S.A..m4a")]
+    [InlineData("J.B.O.", "Song", "J.B.O_", "J.B.O. - Song.m4a")]
+    public void TrailingDotsFollowPicard(string artist, string title, string folder, string file) =>
+        Assert.Equal(Path.Combine(folder, "Album", file), PathBuilder.Build(new TagSet { AlbumArtist = artist, Artists = [artist], Album = "Album", Title = title }));
+
     [Fact]
     public void FileNameUsesTheMainTrackArtist()
     {
