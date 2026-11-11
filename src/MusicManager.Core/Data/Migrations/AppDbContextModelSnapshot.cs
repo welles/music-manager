@@ -292,6 +292,72 @@ namespace MusicManager.Core.Data.Migrations
                     b.ToTable("Library");
                 });
 
+            modelBuilder.Entity("MusicManager.Core.Data.PlayStat", b =>
+                {
+                    b.Property<string>("SongId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long?>("LastPlayed")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("PlayCount")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("SongId");
+
+                    b.ToTable("PlayStats");
+                });
+
+            modelBuilder.Entity("MusicManager.Core.Data.Playlist", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("ChangedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Comment")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("CreatedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("Public")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("Playlists");
+                });
+
+            modelBuilder.Entity("MusicManager.Core.Data.PlaylistEntry", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("PlaylistId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("Position")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("SongId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PlaylistId", "Position");
+
+                    b.ToTable("PlaylistEntries");
+                });
+
             modelBuilder.Entity("MusicManager.Core.Data.PushSubscription", b =>
                 {
                     b.Property<int>("Id")
@@ -325,6 +391,19 @@ namespace MusicManager.Core.Data.Migrations
                         .IsUnique();
 
                     b.ToTable("PushSubscriptions");
+                });
+
+            modelBuilder.Entity("MusicManager.Core.Data.Rating", b =>
+                {
+                    b.Property<string>("ItemId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Value")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("ItemId");
+
+                    b.ToTable("Ratings");
                 });
 
             modelBuilder.Entity("MusicManager.Core.Data.SettingsEntry", b =>
@@ -375,6 +454,19 @@ namespace MusicManager.Core.Data.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("SourceProfiles");
+                });
+
+            modelBuilder.Entity("MusicManager.Core.Data.Star", b =>
+                {
+                    b.Property<string>("ItemId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("StarredAt")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("ItemId");
+
+                    b.ToTable("Stars");
                 });
 
             modelBuilder.Entity("MusicManager.Core.Data.TrackFile", b =>
@@ -512,6 +604,15 @@ namespace MusicManager.Core.Data.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("MusicManager.Core.Data.PlaylistEntry", b =>
+                {
+                    b.HasOne("MusicManager.Core.Data.Playlist", null)
+                        .WithMany("Entries")
+                        .HasForeignKey("PlaylistId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("MusicManager.Core.Data.TrackFile", b =>
                 {
                     b.HasOne("MusicManager.Core.Data.InboxGroup", "Group")
@@ -526,6 +627,11 @@ namespace MusicManager.Core.Data.Migrations
             modelBuilder.Entity("MusicManager.Core.Data.InboxGroup", b =>
                 {
                     b.Navigation("Files");
+                });
+
+            modelBuilder.Entity("MusicManager.Core.Data.Playlist", b =>
+                {
+                    b.Navigation("Entries");
                 });
 
             modelBuilder.Entity("MusicManager.Core.Data.TrackFile", b =>

@@ -405,3 +405,50 @@ public sealed class PushSubscription
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset? LastSentAt { get; set; }
 }
+
+/// <summary>A starred song, album or artist (Subsonic API), keyed by its public catalog ID.</summary>
+public sealed class Star
+{
+    /// <summary>Public ID ("tr-…", "al-…", "ar-…"). Kept when the item is not in the library.</summary>
+    public required string ItemId { get; set; }
+
+    public DateTimeOffset StarredAt { get; set; } = DateTimeOffset.UtcNow;
+}
+
+/// <summary>User rating (1..5) of a song, album or artist, keyed by its public catalog ID.</summary>
+public sealed class Rating
+{
+    public required string ItemId { get; set; }
+    public int Value { get; set; }
+}
+
+/// <summary>Play count and last play of a song, keyed by its public song ID.</summary>
+public sealed class PlayStat
+{
+    public required string SongId { get; set; }
+    public int PlayCount { get; set; }
+    public DateTimeOffset? LastPlayed { get; set; }
+}
+
+/// <summary>Playlist of the Subsonic API (public ID "pl-{Id}").</summary>
+public sealed class Playlist
+{
+    public int Id { get; set; }
+    public required string Name { get; set; }
+    public string? Comment { get; set; }
+    public bool Public { get; set; }
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+    public DateTimeOffset ChangedAt { get; set; } = DateTimeOffset.UtcNow;
+
+    /// <summary>Entries; order by <see cref="PlaylistEntry.Position"/>.</summary>
+    public List<PlaylistEntry> Entries { get; set; } = [];
+}
+
+/// <summary>One song of a playlist. Entries whose song is not in the library are kept (and hidden).</summary>
+public sealed class PlaylistEntry
+{
+    public int Id { get; set; }
+    public int PlaylistId { get; set; }
+    public int Position { get; set; }
+    public required string SongId { get; set; }
+}

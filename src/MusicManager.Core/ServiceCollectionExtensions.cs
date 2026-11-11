@@ -47,6 +47,8 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<LibraryDuplicateScanner>();
         services.AddSingleton<LibraryCatalog>();
         services.AddSingleton<MediaCatalog>();
+        services.AddSingleton<UserDataStore>();
+        services.AddSingleton<PlaylistStore>();
         services.AddSingleton<RetagService>();
         services.AddHttpClient("wikimedia", c =>
         {
