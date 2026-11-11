@@ -88,7 +88,8 @@
                         </MudText>
                     </MudTd>
                     <MudTd Style="white-space:nowrap">
-                        <MudIconButton Icon="@Icons.Material.Filled.Visibility" Size="Size.Small" title="Tag-Vorschau" OnClick="() => Preview(context)" />
+                        <MudButton Size="Size.Small" Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Visibility" title="Tags dieses Kandidaten anzeigen, ohne etwas zu ändern"
+                                   OnClick="() => Preview(context)">Vorschau</MudButton>
                         <MudIconButton Icon="@Icons.Material.Filled.Info" Size="Size.Small" title="Punkte" OnClick="() => ToggleBreakdown(context.Key)" />
                         @if (IsOpen)
                         {
