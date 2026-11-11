@@ -162,6 +162,9 @@ namespace MusicManager.Core.Data.Migrations
                     b.Property<string>("AcoustId")
                         .HasColumnType("TEXT");
 
+                    b.Property<long?>("AddedAt")
+                        .HasColumnType("INTEGER");
+
                     b.Property<string>("Album")
                         .HasColumnType("TEXT");
 
@@ -219,6 +222,12 @@ namespace MusicManager.Core.Data.Migrations
                     b.Property<long>("IndexedAt")
                         .HasColumnType("INTEGER");
 
+                    b.Property<bool>("IsCompilation")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Isrc")
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("MbAlbumArtistIds")
                         .IsRequired()
                         .HasColumnType("TEXT");
@@ -236,11 +245,24 @@ namespace MusicManager.Core.Data.Migrations
                     b.Property<string>("MbReleaseId")
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("MbTrackId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("OriginalDate")
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("RelativePath")
                         .IsRequired()
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("ReleaseTypes")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("RulesVersion")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SongId")
                         .HasColumnType("TEXT");
 
                     b.Property<string>("TagSource")
@@ -262,6 +284,9 @@ namespace MusicManager.Core.Data.Migrations
                     b.HasIndex("MbRecordingId");
 
                     b.HasIndex("RelativePath")
+                        .IsUnique();
+
+                    b.HasIndex("SongId")
                         .IsUnique();
 
                     b.ToTable("Library");

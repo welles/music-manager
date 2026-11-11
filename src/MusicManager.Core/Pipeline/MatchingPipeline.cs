@@ -644,15 +644,15 @@ public sealed partial class MatchingPipeline(
                     Storage.DeleteEmptyDirectories(Path.GetDirectoryName(replaced)!, storage.LibraryRoot);
                     AddEvent(file, $"Vorhandene Datei {file.ReplaceLibraryPath} ersetzt (in den Papierkorb: {trashed})");
                 }
-
-                await libraryIndexer.RemoveAsync(file.ReplaceLibraryPath, ct);
             }
 
             // Keep the timestamp of the original file.
             File.SetLastWriteTimeUtc(tmp, File.GetLastWriteTimeUtc(source));
             Storage.MovePreservingTime(tmp, target);
             tmp = null;
-            await libraryIndexer.UpsertAsync(file.TargetPath, fingerprint, ct);
+            // A replaced file hands its index entry (song ID, added date) over to the new one.
+            await libraryIndexer.UpsertAsync(file.TargetPath, fingerprint, ct,
+                replaces: file.DuplicateDecision == DuplicateDecision.KeepNew ? file.ReplaceLibraryPath : null);
 
             file.TrashPath = storage.MoveToTrash(source, file.RelativePath);
             SetStatus(file, FileStatus.Done, null);

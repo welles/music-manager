@@ -262,6 +262,29 @@ public sealed class LibraryEntry
     public string? MbReleaseId { get; set; }
     public string? AcoustId { get; set; }
 
+    /// <summary>MusicBrainz release track ID (tag MUSICBRAINZ_RELEASETRACKID).</summary>
+    public string? MbTrackId { get; set; }
+
+    /// <summary>Original release date (YYYY, YYYY-MM or YYYY-MM-DD).</summary>
+    public string? OriginalDate { get; set; }
+
+    /// <summary>MusicBrainz release types ("album", "compilation" …).</summary>
+    public List<string> ReleaseTypes { get; set; } = [];
+
+    /// <summary>Compilation flag of the file (cpil / TCMP / COMPILATION).</summary>
+    public bool IsCompilation { get; set; }
+
+    public string? Isrc { get; set; }
+
+    /// <summary>
+    /// Stable public song ID for the Subsonic API ("tr-…"). Assigned once and carried over when the
+    /// file is replaced or moved; never derived again from the tags.
+    /// </summary>
+    public string? SongId { get; set; }
+
+    /// <summary>When the file entered the library (carried over together with <see cref="SongId"/>).</summary>
+    public DateTimeOffset? AddedAt { get; set; }
+
     /// <summary>Value of the MUSICMANAGER_SOURCE tag (null = not written by this tool).</summary>
     public string? TagSource { get; set; }
 

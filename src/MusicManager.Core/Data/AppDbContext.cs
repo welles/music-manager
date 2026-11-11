@@ -64,7 +64,9 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
             e.Json(x => x.Genres);
             e.Json(x => x.MbArtistIds);
             e.Json(x => x.MbAlbumArtistIds);
+            e.Json(x => x.ReleaseTypes);
             e.HasIndex(x => x.RelativePath).IsUnique();
+            e.HasIndex(x => x.SongId).IsUnique();
             e.HasIndex(x => x.MbRecordingId);
             e.HasIndex(x => x.DurationSeconds);
         });

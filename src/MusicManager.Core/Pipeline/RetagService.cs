@@ -211,10 +211,10 @@ public sealed class RetagService(
                 throw new InvalidOperationException($"Tags geschrieben, aber nicht verschoben: {p.NewRelativePath} existiert bereits");
             Storage.MovePreservingTime(path, target);
             Storage.DeleteEmptyDirectories(Path.GetDirectoryName(path)!, storage.LibraryRoot);
-            await libraryIndexer.RemoveAsync(p.RelativePath, CancellationToken.None);
             finalPath = p.NewRelativePath!;
         }
 
-        await libraryIndexer.UpsertAsync(finalPath, null, CancellationToken.None);
+        // A moved file keeps its index entry identity (song ID, added date).
+        await libraryIndexer.UpsertAsync(finalPath, null, CancellationToken.None, replaces: finalPath != p.RelativePath ? p.RelativePath : null);
     }
 }
