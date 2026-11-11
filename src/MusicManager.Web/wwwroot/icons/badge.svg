@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Monochrome status bar icon for notifications (Android uses only the alpha channel). -->
+  <g fill="#fff" transform="translate(40 60)">
+    <path d="M168 120 L344 88 L344 136 L168 168 Z"/>
+    <rect x="168" y="140" width="30" height="176"/>
+    <rect x="314" y="108" width="30" height="176"/>
+    <ellipse cx="146" cy="318" rx="50" ry="38" transform="rotate(-22 146 318)"/>
+    <ellipse cx="292" cy="286" rx="50" ry="38" transform="rotate(-22 292 286)"/>
+  </g>
+</svg>
