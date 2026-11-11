@@ -67,6 +67,17 @@ public class ReleaseScorerTests
         Assert.Equal("original", result.Best!.Release.ReleaseId);
     }
 
+    [Fact]
+    public void CompletelyDifferentArtistIsNotFiledAutomatically()
+    {
+        // Nobodys Face – Chemicals: the fingerprint hit Ollie Crowe – Chemicals.
+        var recs = new[] { Rec(Rel("album", "Song", "rg", type: "Single", date: "2022-02-04")) };
+        var result = ReleaseScorer.Score(new TagSet { Title = "Song", Artist = "Nobodys Face", Album = "Song" }, 200, recs,
+            GroupContext.Empty, new AppSettings());
+        Assert.False(result.IsCertain);
+        Assert.Contains("Künstler-Tag", result.Reason);
+    }
+
     [Theory]
     [InlineData("2020-02-07", "2020-02-07", 1.0)]
     [InlineData("2020", "2020-02-07", 1.0)]

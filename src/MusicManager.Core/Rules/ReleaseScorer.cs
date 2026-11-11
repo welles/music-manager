@@ -171,6 +171,14 @@ public static class ReleaseScorer
             certain = false;
             reason = $"Album-Tag \"{oldTags.Album}\" passt nicht zum besten Kandidaten \"{best.Release.Title}\"";
         }
+        else if (best.MatchSource != "tag" && OldArtist(oldTags) is { } oldArtist
+                 && TextUtil.Similarity(oldArtist, best.RecordingArtist) < 0.4)
+        {
+            // Same title, but a completely different artist (e.g. a fingerprint hit on another song
+            // of the same name) – do not file the song under someone else automatically.
+            certain = false;
+            reason = $"Künstler-Tag \"{oldArtist}\" passt nicht zum besten Kandidaten \"{best.RecordingArtist}\"";
+        }
         else if (margin < settings.ScoreMarginThreshold)
         {
             certain = false;
@@ -185,6 +193,12 @@ public static class ReleaseScorer
         }
 
         return new ScoreResult { Candidates = candidates, RunnerUp = runnerUp, IsCertain = certain, Reason = reason };
+    }
+
+    private static string? OldArtist(TagSet t)
+    {
+        var artist = t.Artist ?? string.Join(" & ", t.Artists);
+        return string.IsNullOrWhiteSpace(artist) ? null : artist;
     }
 
     /// <summary>
