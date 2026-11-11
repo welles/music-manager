@@ -294,6 +294,15 @@ public sealed class LibraryEntry
     /// <summary>Song ID, added date, rating and favorite as last read from or written to the file (<see cref="Model.FileMarkers.Canonical"/>).</summary>
     public string? MarkersInFile { get; set; }
 
+    /// <summary>Tag hash stored in the file (<see cref="Services.TagHashes.TagsTag"/>); null = the file has none yet.</summary>
+    public string? TagsHash { get; set; }
+
+    /// <summary>The tags no longer match the stored hash: they were changed outside Music Manager.</summary>
+    public bool TagsEditedOutside { get; set; }
+
+    /// <summary>The embedded cover no longer matches the stored hash: it was changed outside Music Manager.</summary>
+    public bool CoverEditedOutside { get; set; }
+
     /// <summary>Markers of a file whose song ID was taken from the file in this scan (database rebuilt or file new to it).</summary>
     [System.ComponentModel.DataAnnotations.Schema.NotMapped]
     public Model.FileMarkers? RestoredFromFile { get; set; }

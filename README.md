@@ -78,6 +78,13 @@ files a few seconds after a change. If the database is lost, a scan restores son
 favorites and ratings from the files; a file moved or renamed outside the tool keeps its ID. Play counts,
 the inbox history and settings stay in the database (a play would otherwise rewrite the file).
 
+Tags edited with another tool are noticed: when the app writes a file, it stores a hash of the tags it
+wrote (`MUSICMANAGER_TAGS_HASH`, without the song markers above) and one of the cover
+(`MUSICMANAGER_COVER_HASH`). A scan that finds different tags marks the file as "extern geändert" in the
+library. Re-tagging such a file keeps the edits (the rules are applied to its current tags, and it counts
+as manually tagged from then on) unless "Externe Änderungen verwerfen" rebuilds it from MusicBrainz. Older
+files get their hash with the next marker sync.
+
 Playlists are kept as M3U8 files in the library's `Playlists` folder, with paths relative to the file so
 other players can read them. Extra `#MUSICMANAGER-` comment lines keep the playlist ID, comment and the song
 ID of every entry, so a song that is temporarily missing is not lost. The sync works both ways: changes in

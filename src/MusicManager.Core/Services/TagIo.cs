@@ -240,6 +240,7 @@ public static class TagIo
             }
         }
 
+        TagHashes.Store(apple);
         file.Save();
     }
 
@@ -263,13 +264,44 @@ public static class TagIo
         }
     }
 
-    /// <summary>Writes only the markers into an M4A file; all other tags stay as they are.</summary>
-    public static void WriteMarkers(string path, FileMarkers markers)
+    /// <summary>
+    /// Writes only the markers into an M4A file; all other tags stay as they are. With
+    /// <paramref name="storeHashes"/> the hashes of the current tags are stored as well (baseline for a file
+    /// that has none yet). Returns the stored hashes, if any.
+    /// </summary>
+    public static TagHashes? WriteMarkers(string path, FileMarkers markers, bool storeHashes = false)
     {
         using var file = File.Create(path, "audio/mp4", ReadStyle.Average);
         var apple = (AppleTag)file.GetTag(TagTypes.Apple, true);
         SetMarkers(apple, markers);
+        var hashes = storeHashes ? TagHashes.Store(apple) : null;
         file.Save();
+        return hashes;
+    }
+
+    /// <summary>Compares the hashes stored in an M4A file with its current tags. Null for other formats and unreadable files.</summary>
+    public static TagHashCheck? CheckHashes(string path)
+    {
+        try
+        {
+            using var file = File.Create(path);
+            if (file.GetTag(TagTypes.Apple) is not AppleTag apple) return null;
+            return new TagHashCheck(TagHashes.Stored(apple), TagHashes.Compute(apple));
+        }
+        catch (Exception ex) when (ex is CorruptFileException or UnsupportedFormatException or IOException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>Accepts the current tags of an M4A file as they are: stores their hashes, nothing else changes.</summary>
+    public static TagHashes StoreHashes(string path)
+    {
+        using var file = File.Create(path, "audio/mp4", ReadStyle.Average);
+        var apple = (AppleTag)file.GetTag(TagTypes.Apple, true);
+        var hashes = TagHashes.Store(apple);
+        file.Save();
+        return hashes;
     }
 
     private static void SetMarkers(AppleTag apple, FileMarkers markers)

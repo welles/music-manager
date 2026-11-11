@@ -13,7 +13,7 @@ namespace MusicManager.Core.Pipeline;
 /// (<see cref="FileMarkers"/>), so the library can be rebuilt from the files alone. Runs a few seconds after
 /// the index or the user data changed and only touches files whose markers differ from the database
 /// (<see cref="LibraryEntry.MarkersInFile"/>). Only M4A files written by this tool are changed; other files
-/// are left alone.
+/// are left alone. Files without a tag hash yet (<see cref="TagHashes"/>) get one on the same occasion.
 /// </summary>
 public sealed class FileMarkerSync(
     IDbContextFactory<AppDbContext> dbFactory,
@@ -71,7 +71,9 @@ public sealed class FileMarkerSync(
         {
             var wanted = new FileMarkers(entry.SongId, entry.AddedAt, data.Rating(entry.SongId!), data.Starred(entry.SongId!));
             var canonical = wanted.Canonical();
-            if (canonical == entry.MarkersInFile) continue;
+            // Files written before the tag hash existed get one now, as the baseline for detecting outside edits.
+            var needsHash = entry.TagsHash == null;
+            if (canonical == entry.MarkersInFile && !needsHash) continue;
 
             var path = storage.LibraryPath(entry.RelativePath);
             var info = new FileInfo(path);
@@ -80,9 +82,10 @@ public sealed class FileMarkerSync(
 
             try
             {
-                TagIo.WriteMarkers(path, wanted);
+                var hashes = TagIo.WriteMarkers(path, wanted, storeHashes: needsHash);
                 info.Refresh();
                 entry.MarkersInFile = canonical;
+                if (hashes != null) entry.TagsHash = hashes.Tags;
                 // The index stays "unchanged" for this file, so the next scan does not read it again.
                 entry.FileSize = info.Length;
                 entry.FileModifiedUtc = info.LastWriteTimeUtc;

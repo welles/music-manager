@@ -68,6 +68,10 @@
                        Disabled="@(_tracks.All(t => !t.Problems(_rulesVersion).Contains(LibraryProblem.OldRules)))">
                 Alle mit alten Regeln neu taggen
             </MudButton>
+            <MudButton Variant="Variant.Outlined" Size="Size.Small" StartIcon="@Icons.Material.Filled.EditNote" Href="bibliothek/neu-taggen?problem=EditedOutside"
+                       Disabled="@(_tracks.All(t => !t.Problems(_rulesVersion).Contains(LibraryProblem.EditedOutside)))">
+                Extern geänderte prüfen
+            </MudButton>
         </MudStack>
         <TrackGrid @key="_gridKey" Tracks="_tracks" RulesVersion="@_rulesVersion" InitialSearch="@_genreFilter" InitialProblem="@InitialProblem" />
     </MudTabPanel>

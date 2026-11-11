@@ -25,7 +25,7 @@ public sealed class LibraryIndexer(
     ILogger<LibraryIndexer> logger) : BackgroundService
 {
     /// <summary>Raise when <see cref="Fill"/> reads more or different data, so existing entries are re-read.</summary>
-    public const int CurrentIndexVersion = 5;
+    public const int CurrentIndexVersion = 6;
 
     private readonly SemaphoreSlim _trigger = new(0, 1);
     private long _version;
@@ -316,6 +316,12 @@ public sealed class LibraryIndexer(
         entry.RulesVersion = TagFields.Get(fields, TagIo.RulesMarker).FirstOrDefault();
         entry.TagSource ??= TagFields.Get(fields, TagIo.SourceMarker).FirstOrDefault();
         entry.HasCover = fields.Any(x => x.Name == "COVER") || TagFields.Get(fields, "METADATA_BLOCK_PICTURE").Count > 0;
+
+        // Tags changed outside the tool: only files it wrote carry a hash to compare with.
+        var hashes = entry.TagSource != null ? TagIo.CheckHashes(path) : null;
+        entry.TagsHash = hashes?.Stored?.Tags;
+        entry.TagsEditedOutside = hashes?.TagsEdited == true;
+        entry.CoverEditedOutside = hashes?.CoverEdited == true;
         entry.TrackNumber = tags.TrackNumber;
         entry.DiscNumber = tags.DiscNumber;
         entry.Year = tags.Year;
