@@ -37,6 +37,12 @@ public sealed class MusicManagerOptions
     /// <summary>MusicBrainz server, e.g. for a local mirror. Empty = musicbrainz.org.</summary>
     public string? MusicBrainzServer { get; set; }
 
+    /// <summary>
+    /// API key for the OpenSubsonic API (<c>/rest</c>, apiKey authentication). Without a key every
+    /// authenticated call fails, so the API is effectively off.
+    /// </summary>
+    public string? SubsonicApiKey { get; set; }
+
     public string FfmpegPath { get; set; } = "ffmpeg";
     public string FfprobePath { get; set; } = "ffprobe";
     public string FpcalcPath { get; set; } = "fpcalc";
