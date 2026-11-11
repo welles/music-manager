@@ -95,13 +95,15 @@
                                 @c.MatchSource @c.MatchScore.ToString("P0") · @FormatLength(c.RecordingLengthSeconds) (Datei @FormatLength(_file.DurationSeconds))
                             </MudText>
                         </MudTd>
-                        <MudTd Style="white-space:nowrap">
-                            <MudButton Size="Size.Small" Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Visibility" OnClick="() => Preview(c)">Vorschau</MudButton>
-                            <MudIconButton Icon="@Icons.Material.Filled.Info" Size="Size.Small" title="Punkte" OnClick="() => ToggleBreakdown(c.Key)" />
-                            @if (IsOpen)
-                            {
-                                <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary" OnClick="() => Choose(c)">Wählen</MudButton>
-                            }
+                        <MudTd>
+                            <div class="candidate-actions">
+                                <MudIconButton Icon="@Icons.Material.Outlined.Info" Size="Size.Small" title="Punkte" OnClick="() => ToggleBreakdown(c.Key)" />
+                                <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Visibility" OnClick="() => Preview(c)">Vorschau</MudButton>
+                                @if (IsOpen)
+                                {
+                                    <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary" DropShadow="false" StartIcon="@Icons.Material.Filled.Check" OnClick="() => Choose(c)">Wählen</MudButton>
+                                }
+                            </div>
                         </MudTd>
                     }
                     else if (context.External is { } m)
@@ -144,12 +146,14 @@
                                 @FormatLength(m.DurationSeconds) (Datei @FormatLength(_file.DurationSeconds))@(m.Isrc != null ? $" · ISRC {m.Isrc}" : "")@(m.Genres.Count > 0 ? $" · {string.Join(", ", m.Genres)}" : "")
                             </MudText>
                         </MudTd>
-                        <MudTd Style="white-space:nowrap">
-                            <MudButton Size="Size.Small" Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Visibility" OnClick="() => PreviewExternal(m)">Vorschau</MudButton>
-                            @if (IsOpen)
-                            {
-                                <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary" OnClick="() => ApplyExternal(m)">Wählen</MudButton>
-                            }
+                        <MudTd>
+                            <div class="candidate-actions">
+                                <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Visibility" OnClick="() => PreviewExternal(m)">Vorschau</MudButton>
+                                @if (IsOpen)
+                                {
+                                    <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary" DropShadow="false" StartIcon="@Icons.Material.Filled.Check" OnClick="() => ApplyExternal(m)">Wählen</MudButton>
+                                }
+                            </div>
                         </MudTd>
                     }
                 </RowTemplate>

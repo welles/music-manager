@@ -71,3 +71,12 @@
 .mud-tabs-tabbar .mud-tab:has(.mud-tab-badge) {
     padding-right: 40px;
 }
+
+/* Actions of a match candidate: one row, right-aligned, with room between the buttons. */
+.candidate-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+    white-space: nowrap;
+}

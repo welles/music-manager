@@ -29,6 +29,12 @@ ENV ASPNETCORE_HTTP_PORTS=8080 \
     MusicManager__DataPath=/data \
     HOME=/tmp
 
+# Commit the image was built from, shown in the app bar. Last, so a new commit only changes this layer.
+ARG COMMIT=""
+ARG COMMIT_TIME=""
+ENV MUSICMANAGER_COMMIT=${COMMIT} \
+    MUSICMANAGER_COMMIT_TIME=${COMMIT_TIME}
+
 VOLUME ["/inbox", "/music", "/trash", "/data"]
 EXPOSE 8080
 ENTRYPOINT ["dotnet", "MusicManager.Web.dll"]
