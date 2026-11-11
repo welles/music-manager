@@ -140,6 +140,20 @@ public class RulesTests
     }
 
     [Theory]
+    [InlineData("Black Music Month Playlist", "Liked Songs", null)]
+    [InlineData("Liked Songs", "Liked Songs", null)]
+    [InlineData("Road Trip", "Road Trip", null)]
+    [InlineData("Black Reign", "Liked Songs", "Black Reign")]
+    [InlineData("Eyes Cut Deeper (Remixes)", "Liked Songs", "Eyes Cut Deeper (Remixes)")]
+    public void PreCleaner_MusicFabDropsPlaylistAlbums(string album, string show, string? expected)
+    {
+        var profile = new SourceProfile { Name = "MusicFab", FolderName = "musicfab", DropPlaylistAlbum = true, DeleteTags = ["show"] };
+        var tags = new TagSet { Artist = "A", Title = "t", Album = album };
+        tags.Extra["show"] = show;
+        Assert.Equal(expected, PreCleaner.Clean(tags, "x.m4a", profile).Tags.Album);
+    }
+
+    [Theory]
     [InlineData("The Beatles", "Beatles, The", 0.5)]
     [InlineData("Abbey Road (Remastered 2009)", "Abbey Road", 0.8)]
     [InlineData("Completely different", "Abbey Road", 0)]

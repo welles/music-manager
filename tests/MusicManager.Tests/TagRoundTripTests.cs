@@ -29,6 +29,11 @@ public class TagRoundTripTests
             var expected = TagFields.ForFinalTags(tags, null, "musicbrainz", "1-test");
             var actual = TagFields.ForFinalTags(readBack, null, "musicbrainz", "1-test");
             Assert.Equal(expected.Select(f => $"{f.Name}={string.Join("|", f.Values)}"), actual.Select(f => $"{f.Name}={string.Join("|", f.Values)}"));
+
+            // The fixture carries "encoder=Lavf…" like the downloads; it must not survive.
+            using var file = TagLib.File.Create(path);
+            var apple = (TagLib.Mpeg4.AppleTag)file.GetTag(TagLib.TagTypes.Apple);
+            Assert.Empty(apple.GetText(new TagLib.ByteVector(0xA9, (byte)'t', (byte)'o', (byte)'o')));
         }
         finally
         {

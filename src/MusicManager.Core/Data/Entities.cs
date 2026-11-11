@@ -227,6 +227,9 @@ public sealed class SourceProfile
 
     /// <summary>"3/12" → "3".</summary>
     public bool TrimTrackTotal { get; set; }
+
+    /// <summary>Drops album tags that are playlist names ("Black Music Month Playlist", the playlist in "show").</summary>
+    public bool DropPlaylistAlbum { get; set; }
 }
 
 public sealed class SettingsEntry

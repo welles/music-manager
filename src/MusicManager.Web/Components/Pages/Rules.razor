@@ -77,6 +77,7 @@
                 <PropertyColumn Property="x => x.Enabled" Title="Aktiv" />
                 <PropertyColumn Property="x => x.SplitCommaWithoutSpace" Title="„A,B“ aufteilen" />
                 <PropertyColumn Property="x => x.TrimTrackTotal" Title="Tracknr. „3/12“ → „3“" />
+                <PropertyColumn Property="x => x.DropPlaylistAlbum" Title="Playlist-Album verwerfen" />
                 <TemplateColumn Title="Tags löschen">
                     <CellTemplate>@string.Join(", ", context.Item.DeleteTags)</CellTemplate>
                     <EditTemplate>

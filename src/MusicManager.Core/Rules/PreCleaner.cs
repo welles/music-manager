@@ -88,6 +88,15 @@ public static partial class PreCleaner
             t.Artist = joined;
         }
 
+        // Spotify downloads of a playlist sometimes carry the playlist instead of the album.
+        if (profile.DropPlaylistAlbum && t.Album != null &&
+            (PlaylistName().IsMatch(t.Album) ||
+             t.Extra.TryGetValue("show", out var playlist) && string.Equals(playlist.Trim(), t.Album.Trim(), StringComparison.OrdinalIgnoreCase)))
+        {
+            changes.Add($"[{profile.Name}] Album-Tag \"{t.Album}\" ist ein Playlist-Name, gelöscht");
+            t.Album = null;
+        }
+
         foreach (var tag in profile.DeleteTags)
         {
             if (DeleteTag(t, tag.Trim()))
@@ -164,6 +173,9 @@ public static partial class PreCleaner
 
     [GeneratedRegex(@"\s*[\(\[]\s*(official\s*(music\s*)?(video|audio|visuali[sz]er|lyric(s)?\s*video)?|(official\s*)?lyric(s)?(\s*video)?|music\s*video|video\s*clip|videoclip|audio|visuali[sz]er|hd|hq|4k|1080p|720p|full\s*hd|explicit\s*video|clean|dirty|free\s*download|out\s*now|premiere)\s*[\)\]]", RegexOptions.IgnoreCase)]
     private static partial Regex Noise();
+
+    [GeneratedRegex(@"\bplaylist\b|^liked songs$|^discover weekly$|^release radar$|^daily mix \d+$|^on repeat$", RegexOptions.IgnoreCase)]
+    private static partial Regex PlaylistName();
 
     [GeneratedRegex(@"\S,\S")]
     private static partial Regex CommaWithoutSpace();

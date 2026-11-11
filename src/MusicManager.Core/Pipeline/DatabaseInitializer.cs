@@ -39,6 +39,7 @@ public sealed class DatabaseInitializer(IDbContextFactory<AppDbContext> dbFactor
                 SplitCommaWithoutSpace = true,
                 DeleteTags = ["show", "discnumber"],
                 TrimTrackTotal = true,
+                DropPlaylistAlbum = true,
             });
 
             await db.SaveChangesAsync(ct);
