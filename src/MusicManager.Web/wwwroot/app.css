@@ -14,3 +14,12 @@
     z-index: 2000;
     background: #ffcdd2;
 }
+
+/* Square image area of artist / album cards: covers are shown in full, photos centred on the upper part (faces). */
+.square-media {
+    display: block;
+    width: 100%;
+    aspect-ratio: 1 / 1;
+    object-fit: cover;
+    object-position: center 25%;
+}

@@ -22,7 +22,7 @@
             {
                 <MudItem xs="6" sm="4" md="3" lg="2">
                     <MudCard Outlined="true" Style="cursor:pointer" @onclick="() => Nav.NavigateTo(TrackGrid.ArtistHref(a.Name))">
-                        <MudCardMedia Image="@ArtistImage(a)" Height="160" />
+                        <MudImage Src="@ArtistImage(a)" Class="square-media" Alt="@a.Name" />
                         <MudCardContent Class="pa-2">
                             <MudText Typo="Typo.subtitle2" Style="overflow-wrap:anywhere">@a.Name</MudText>
                             <MudText Typo="Typo.caption">@a.Albums Alben · @a.Tracks Titel</MudText>
@@ -42,7 +42,7 @@
             {
                 <MudItem xs="6" sm="4" md="3" lg="2">
                     <MudCard Outlined="true" Style="cursor:pointer" @onclick="() => OpenAlbum(a)">
-                        <MudCardMedia Image="@($"api/library/{a.CoverTrackId}/cover")" Height="160" />
+                        <MudImage Src="@($"api/library/{a.CoverTrackId}/cover")" Class="square-media" Alt="@a.Album" />
                         <MudCardContent Class="pa-2">
                             <MudText Typo="Typo.subtitle2" Style="overflow-wrap:anywhere">@a.Album</MudText>
                             <MudText Typo="Typo.caption">@a.AlbumArtist@(a.Year != null ? $" · {a.Year}" : "") · @a.Tracks Titel</MudText>
