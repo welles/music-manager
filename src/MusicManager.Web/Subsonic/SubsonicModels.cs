@@ -56,6 +56,10 @@ public sealed class SongDto
     public string DisplayArtist { get; init; } = "";
     public List<ArtistRefDto> AlbumArtists { get; init; } = [];
     public string DisplayAlbumArtist { get; init; } = "";
+    public string? Starred { get; init; }
+    public int? UserRating { get; init; }
+    public long PlayCount { get; init; }
+    public string? Played { get; init; }
 }
 
 /// <summary>AlbumID3 (with <see cref="Song"/> for getAlbum).</summary>
@@ -78,6 +82,10 @@ public sealed class AlbumDto
     public List<string> ReleaseTypes { get; init; } = [];
     public ItemDateDto OriginalReleaseDate { get; init; } = new();
     public bool IsCompilation { get; init; }
+    public string? Starred { get; init; }
+    public int? UserRating { get; init; }
+    public long PlayCount { get; init; }
+    public string? Played { get; init; }
     public List<SongDto>? Song { get; init; }
 }
 
@@ -89,7 +97,25 @@ public sealed class ArtistDto
     public string? CoverArt { get; init; }
     public int AlbumCount { get; init; }
     public string MusicBrainzId { get; init; } = "";
+    public string? Starred { get; init; }
+    public int? UserRating { get; init; }
     public List<AlbumDto>? Album { get; init; }
+}
+
+/// <summary>Playlist (with <see cref="Entry"/> for getPlaylist, createPlaylist).</summary>
+public sealed class PlaylistDto
+{
+    public required string Id { get; init; }
+    public required string Name { get; init; }
+    public string? Comment { get; init; }
+    public required string Owner { get; init; }
+    public bool Public { get; init; }
+    public int SongCount { get; init; }
+    public int Duration { get; init; }
+    public required string Created { get; init; }
+    public required string Changed { get; init; }
+    public string? CoverArt { get; init; }
+    public List<SongDto>? Entry { get; init; }
 }
 
 public static class SubsonicJson

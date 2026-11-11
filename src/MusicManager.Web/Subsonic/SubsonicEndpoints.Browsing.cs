@@ -16,7 +16,7 @@ public static partial class SubsonicEndpoints
         Add("getArtists", async r =>
         {
             var catalog = await Catalog(r);
-            var mapper = new SubsonicMapper();
+            var mapper = await Mapper(r);
             var index = catalog.AlbumArtists
                 .GroupBy(a => IndexName(a.Name))
                 .Select(g => new { name = g.Key, artist = g.Select(a => mapper.Artist(a)).ToList() })
@@ -30,21 +30,21 @@ public static partial class SubsonicEndpoints
             var artist = catalog.Artist(r.Require("id")) ?? throw SubsonicException.NotFound("Artist");
             // Artists that are only track artists show the albums they appear on.
             var albums = artist.Albums.Count > 0 ? artist.Albums : artist.AppearsOn;
-            return Ok("artist", new SubsonicMapper().Artist(artist, albums));
+            return Ok("artist", (await Mapper(r)).Artist(artist, albums));
         });
 
         Add("getAlbum", async r =>
         {
             var catalog = await Catalog(r);
             var album = catalog.Album(r.Require("id")) ?? throw SubsonicException.NotFound("Album");
-            return Ok("album", new SubsonicMapper().Album(album, withSongs: true));
+            return Ok("album", (await Mapper(r)).Album(album, withSongs: true));
         });
 
         Add("getSong", async r =>
         {
             var catalog = await Catalog(r);
             var song = catalog.Song(r.Require("id")) ?? throw SubsonicException.NotFound("Song");
-            return Ok("song", new SubsonicMapper().Song(song));
+            return Ok("song", (await Mapper(r)).Song(song));
         });
 
         Add("getGenres", async r =>
@@ -62,8 +62,9 @@ public static partial class SubsonicEndpoints
             var type = r.Require("type");
             var size = r.GetInt("size", 10, 0, MaxListSize);
             var offset = r.GetInt("offset", 0);
-            var albums = AlbumList(catalog, type, r);
-            var mapper = new SubsonicMapper();
+            var user = await UserData(r);
+            var albums = AlbumList(catalog, user, type, r);
+            var mapper = new SubsonicMapper(user);
             return Ok("albumList2", new { album = albums.Skip(offset).Take(size).Select(a => mapper.Album(a)).ToList() });
         });
 
@@ -78,7 +79,7 @@ public static partial class SubsonicEndpoints
                 (string.IsNullOrEmpty(genre) || s.Genres.Contains(genre, StringComparer.OrdinalIgnoreCase))
                 && (fromYear == null || s.Year >= fromYear) && (toYear == null || s.Year <= toYear)).ToArray();
             Random.Shared.Shuffle(songs);
-            var mapper = new SubsonicMapper();
+            var mapper = await Mapper(r);
             return Ok("randomSongs", new { song = songs.Take(size).Select(mapper.Song).ToList() });
         });
 
@@ -88,7 +89,7 @@ public static partial class SubsonicEndpoints
             var genre = r.Require("genre");
             var count = r.GetInt("count", 10, 0, MaxListSize);
             var offset = r.GetInt("offset", 0);
-            var mapper = new SubsonicMapper();
+            var mapper = await Mapper(r);
             var songs = catalog.Songs.Where(s => s.Genres.Contains(genre, StringComparer.OrdinalIgnoreCase)).Skip(offset).Take(count);
             return Ok("songsByGenre", new { song = songs.Select(mapper.Song).ToList() });
         });
@@ -110,7 +111,7 @@ public static partial class SubsonicEndpoints
                 (artists, albums, songs) = (catalog.SearchArtists(query), catalog.SearchAlbums(query), catalog.SearchSongs(query));
             }
 
-            var mapper = new SubsonicMapper();
+            var mapper = await Mapper(r);
             return Ok("searchResult3", new
             {
                 artist = Page(artists, r, "artist").Select(a => mapper.Artist(a)).ToList(),
@@ -121,6 +122,10 @@ public static partial class SubsonicEndpoints
     }
 
     private static Task<CatalogSnapshot> Catalog(SubsonicRequest r) => r.Service<MediaCatalog>().GetAsync(r.Aborted);
+
+    private static Task<UserDataSnapshot> UserData(SubsonicRequest r) => r.Service<UserDataStore>().GetAsync(r.Aborted);
+
+    private static async Task<SubsonicMapper> Mapper(SubsonicRequest r) => new(await UserData(r));
 
     /// <summary>Query without the quotes Symfonium sends for an empty search (<c>query=""</c>).</summary>
     internal static string SearchQuery(string? query)
@@ -140,7 +145,7 @@ public static partial class SubsonicEndpoints
         return key.Length > 0 && char.IsLetter(key[0]) ? char.ToUpperInvariant(key[0]).ToString() : "#";
     }
 
-    private static IEnumerable<CatalogAlbum> AlbumList(CatalogSnapshot catalog, string type, SubsonicRequest r)
+    private static IEnumerable<CatalogAlbum> AlbumList(CatalogSnapshot catalog, UserDataSnapshot user, string type, SubsonicRequest r)
     {
         var albums = catalog.Albums;
         switch (type)
@@ -166,9 +171,24 @@ public static partial class SubsonicEndpoints
             case "byGenre":
                 var genre = r.Require("genre");
                 return albums.Where(a => a.Genres.Contains(genre, StringComparer.OrdinalIgnoreCase));
-            case "frequent" or "recent" or "starred" or "highest":
-                // Need play counts, stars and ratings (not stored yet).
-                return [];
+            case "frequent":
+                // Album plays are derived from its songs.
+                return albums.Select(a => (Album: a, Plays: user.Plays(a))).Where(x => x.Plays.Count > 0)
+                    .OrderByDescending(x => x.Plays.Count).ThenByDescending(x => x.Plays.LastPlayed).ThenBy(x => x.Album.Id, StringComparer.Ordinal)
+                    .Select(x => x.Album);
+            case "recent":
+                return albums.Select(a => (Album: a, user.Plays(a).LastPlayed)).Where(x => x.LastPlayed != null)
+                    .OrderByDescending(x => x.LastPlayed).ThenBy(x => x.Album.Id, StringComparer.Ordinal)
+                    .Select(x => x.Album);
+            case "starred":
+                return albums.Select(a => (Album: a, Starred: user.Starred(a.Id))).Where(x => x.Starred != null)
+                    .OrderByDescending(x => x.Starred).ThenBy(x => x.Album.Id, StringComparer.Ordinal)
+                    .Select(x => x.Album);
+            case "highest":
+                // OrderBy is stable: equal ratings stay in catalog order.
+                return albums.Select(a => (Album: a, Rating: user.Rating(a.Id))).Where(x => x.Rating != null)
+                    .OrderByDescending(x => x.Rating)
+                    .Select(x => x.Album);
             default:
                 throw new SubsonicException(SubsonicErrors.Generic, $"Unknown list type: {type}");
         }

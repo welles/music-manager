@@ -31,6 +31,8 @@ public static partial class SubsonicEndpoints
         MapSystem();
         MapBrowsing();
         MapMedia();
+        MapAnnotation();
+        MapPlaylists();
     }
 
     private static void Add(string name, Handler handler) => Handlers[name] = handler;
