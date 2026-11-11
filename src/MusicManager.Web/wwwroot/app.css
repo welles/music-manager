@@ -23,3 +23,46 @@
     object-fit: cover;
     object-position: center 25%;
 }
+
+/* Touch devices: swipe the tab bar instead of tapping the scroll arrows. MudTabs moves the
+   wrapper with a transform; here it becomes a normal horizontally scrolling strip. */
+@media (pointer: coarse) {
+    .mud-tabs-tabbar-content {
+        overflow-x: auto !important;
+        overscroll-behavior-x: contain;
+        scrollbar-width: none;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .mud-tabs-tabbar-content::-webkit-scrollbar {
+        display: none;
+    }
+
+    .mud-tabs-tabbar-wrapper {
+        transform: none !important;
+        width: max-content;
+    }
+
+    .mud-tabs-scroll-button {
+        display: none !important;
+    }
+
+    .mud-tabs-tabbar .mud-tab {
+        min-width: 96px !important;
+    }
+}
+
+/* Button groups wider than a phone (e.g. the file actions) scroll sideways instead of widening the page. */
+.mud-button-group-root {
+    max-width: 100%;
+    overflow-x: auto;
+    scrollbar-width: none;
+}
+
+.mud-button-group-root::-webkit-scrollbar {
+    display: none;
+}
+
+.mud-button-group-root > .mud-button-root {
+    flex-shrink: 0;
+}
