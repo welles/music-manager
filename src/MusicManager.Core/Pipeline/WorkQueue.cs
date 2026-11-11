@@ -32,6 +32,11 @@ public sealed class PipelineNotifier
 
     public string? CurrentActivity { get; private set; }
 
+    private long _version;
+
+    /// <summary>Increases with every notification – lets pages detect changes they missed before subscribing.</summary>
+    public long Version => Interlocked.Read(ref _version);
+
     public void SetActivity(string? activity)
     {
         CurrentActivity = activity;
@@ -40,6 +45,7 @@ public sealed class PipelineNotifier
 
     public void Notify()
     {
+        Interlocked.Increment(ref _version);
         // A failing subscriber (e.g. a disconnected page) must not break the pipeline.
         foreach (var handler in Changed?.GetInvocationList() ?? [])
         {

@@ -12,8 +12,13 @@ public abstract class LivePage : ComponentBase, IDisposable
     private bool _reloadPending;
     private bool _subscribed;
     private volatile bool _disposed;
+    private long _loadedVersion;
 
-    protected override async Task OnInitializedAsync() => await ReloadAsync();
+    protected override async Task OnInitializedAsync()
+    {
+        _loadedVersion = Notifier.Version;
+        await ReloadAsync();
+    }
 
     protected override void OnAfterRender(bool firstRender)
     {
@@ -22,6 +27,8 @@ public abstract class LivePage : ComponentBase, IDisposable
         {
             Notifier.Changed += OnChanged;
             _subscribed = true;
+            // Something finished between loading and subscribing (e.g. a short job started on the previous page).
+            if (Notifier.Version != _loadedVersion) OnChanged();
         }
     }
 
