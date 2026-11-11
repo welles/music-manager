@@ -77,13 +77,33 @@ public sealed class MusicBrainzService : IDisposable
 
     // --- Recordings ----------------------------------------------------------------------
 
+    /// <summary>Upper limit of releases per recording (browse requests of 100 each).</summary>
+    private const int MaxBrowsedReleases = 300;
+
     public async Task<RecordingMatch> GetRecordingAsync(string recordingId, double matchScore, string source, CancellationToken ct)
     {
         var rec = await Run($"rec:{recordingId}", async () =>
         {
             var r = await _query.LookupRecordingAsync(Guid.Parse(recordingId),
                 Include.Releases | Include.ReleaseGroups | Include.Media | Include.ArtistCredits, cancellationToken: ct);
-            return MapRecording(r, 0, "");
+            var match = MapRecording(r, 0, "");
+
+            // The lookup returns at most 25 releases; popular songs appear on many more, and the
+            // original album may be missing. Browse the rest (without track positions).
+            if (match.Releases.Count >= 25)
+            {
+                var known = match.Releases.Select(x => x.ReleaseId).ToHashSet();
+                for (var offset = 0; offset < MaxBrowsedReleases; offset += 100)
+                {
+                    var page = await _query.BrowseRecordingReleasesAsync(r.Id, 100, offset, Include.ReleaseGroups | Include.Media | Include.ArtistCredits,
+                        cancellationToken: ct);
+                    foreach (var rel in page.Results.Where(x => known.Add(x.Id.ToString())))
+                        match.Releases.Add(MapAppearance(rel));
+                    if (offset + 100 >= page.TotalResults) break;
+                }
+            }
+
+            return match;
         }, ct);
         return WithScore(rec, matchScore, source);
     }
@@ -103,12 +123,15 @@ public sealed class MusicBrainzService : IDisposable
         LengthSeconds = r.Length?.TotalSeconds,
         MatchScore = score,
         Source = source,
-        Releases = (r.Releases ?? []).Select(rel =>
+        Releases = (r.Releases ?? []).Select(MapAppearance).ToList(),
+    };
+
+    private static ReleaseAppearance MapAppearance(IRelease rel)
+    {
+        var medium = rel.Media?.FirstOrDefault(m => m.Tracks?.Count > 0) ?? rel.Media?.FirstOrDefault();
+        var track = medium?.Tracks?.FirstOrDefault();
+        return new ReleaseAppearance
         {
-            var medium = rel.Media?.FirstOrDefault(m => m.Tracks?.Count > 0) ?? rel.Media?.FirstOrDefault();
-            var track = medium?.Tracks?.FirstOrDefault();
-            return new ReleaseAppearance
-            {
                 ReleaseId = rel.Id.ToString(),
                 Title = rel.Title ?? "",
                 ReleaseGroupId = rel.ReleaseGroup?.Id.ToString(),
@@ -122,9 +145,8 @@ public sealed class MusicBrainzService : IDisposable
                 TrackPosition = track?.Position,
                 TrackCount = medium?.TrackCount,
                 MediumPosition = medium?.Position,
-            };
-        }).ToList(),
-    };
+        };
+    }
 
     /// <summary>Server busy, rate limited or network problems – worth trying again later.</summary>
     public static bool IsTransient(Exception? ex)

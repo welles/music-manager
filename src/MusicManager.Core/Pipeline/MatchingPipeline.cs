@@ -232,6 +232,23 @@ public sealed partial class MatchingPipeline(
                 var rec = await musicBrainz.GetRecordingAsync(taggedRecording.ToString(), 1.0, "tag", ct);
                 var taggedRelease = Guid.TryParse(file.OriginalTags?.MbReleaseId, out var rel) ? rel.ToString() : null;
                 var onRelease = rec.Releases.Where(r => r.ReleaseId == taggedRelease).ToList();
+                if (onRelease.Count == 0 && taggedRelease != null)
+                {
+                    // Not in the release list (very popular recording): check the tagged release itself.
+                    var release = await musicBrainz.GetReleaseAsync(taggedRelease, ct);
+                    if (TagBuilder.FindTrack(release, rec.RecordingId) is var (medium, track))
+                    {
+                        onRelease.Add(new ReleaseAppearance
+                        {
+                            ReleaseId = release.ReleaseId, Title = release.Title, ReleaseGroupId = release.ReleaseGroupId,
+                            PrimaryType = release.PrimaryType, SecondaryTypes = release.SecondaryTypes, Status = release.Status,
+                            Country = release.Country, Date = release.Date, ArtistString = CreditFormatter.Join(release.Credits),
+                            Formats = release.Media.Select(m => m.Format).OfType<string>().Distinct().ToList(),
+                            TrackPosition = track.Position, TrackCount = medium.Tracks.Count, MediumPosition = medium.Position,
+                        });
+                    }
+                }
+
                 if (onRelease.Count > 0 && !rec.IsVideo)
                 {
                     AddEvent(file, $"MusicBrainz-Tags gefunden: Recording \"{rec.Title}\" auf Release \"{onRelease[0].Title}\"");
