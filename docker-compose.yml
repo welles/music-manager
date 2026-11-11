@@ -18,6 +18,8 @@ services:
       # Spotify app (developer.spotify.com, client credentials) – optional fallback source
       MusicManager__SpotifyClientId: ${SPOTIFY_CLIENT_ID:-}
       MusicManager__SpotifyClientSecret: ${SPOTIFY_CLIENT_SECRET:-}
+      # Key for the Subsonic API (/rest, e.g. Symfonium) – optional, the API is off without it
+      MusicManager__SubsonicApiKey: ${SUBSONIC_API_KEY:-}
     volumes:
       # Inbox for new files (subfolders = groups, e.g. musicfab/<album>)
       - ${INBOX_DIR:-./inbox}:/inbox
