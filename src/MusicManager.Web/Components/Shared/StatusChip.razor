@@ -1,17 +1,38 @@
-<MudChip T="string" Size="Size.Small" Color="@Color" Variant="Variant.Text" Icon="@Icon">@Label</MudChip>
+@* Status of an inbox file. With Reason, active files also show what is happening right now. *@
+@if (ShowReason)
+{
+    <div style="min-width:0">
+        <MudChip T="string" Size="Size.Small" Color="@Color" Variant="Variant.Text" Icon="@Icon" Class="ma-0">@Label</MudChip>
+        <MudText Typo="Typo.caption" Class="d-block" Style="opacity:.75;max-width:260px">@Reason</MudText>
+    </div>
+}
+else
+{
+    <MudChip T="string" Size="Size.Small" Color="@Color" Variant="Variant.Text" Icon="@Icon">@Label</MudChip>
+}
 
 @code {
     [Parameter, EditorRequired] public FileStatus Status { get; set; }
+
+    /// <summary><see cref="TrackFile.StatusReason"/>; shown below the chip while the file is still on its way.</summary>
+    [Parameter] public string? Reason { get; set; }
+
+    /// <summary>Statuses whose reason describes the current step (not a result).</summary>
+    public static bool IsActive(FileStatus s) =>
+        s is FileStatus.Waiting or FileStatus.Queued or FileStatus.Processing or FileStatus.Analyzed or FileStatus.Approved;
+
+    private bool ShowReason => !string.IsNullOrWhiteSpace(Reason) && IsActive(Status);
 
     public static string LabelFor(FileStatus s) => s switch
     {
         FileStatus.Waiting => "Wartet",
         FileStatus.Queued => "In Warteschlange",
         FileStatus.Processing => "In Bearbeitung",
+        FileStatus.Analyzed => "Analysiert",
         FileStatus.NeedsReview => "Prüfen",
         FileStatus.NotInMusicBrainz => "Nicht in MusicBrainz",
         FileStatus.Duplicate => "Mögliches Duplikat",
-        FileStatus.Approved => "Wird geschrieben",
+        FileStatus.Approved => "Wird einsortiert",
         FileStatus.Done => "Einsortiert",
         FileStatus.Error => "Fehler",
         FileStatus.Discarded => "Verworfen",
@@ -37,6 +58,7 @@
         FileStatus.NotInMusicBrainz => Icons.Material.Filled.SearchOff,
         FileStatus.Duplicate => Icons.Material.Filled.ContentCopy,
         FileStatus.Processing or FileStatus.Approved => Icons.Material.Filled.Autorenew,
+        FileStatus.Analyzed => Icons.Material.Filled.HourglassTop,
         FileStatus.Discarded => Icons.Material.Filled.Delete,
         _ => Icons.Material.Filled.Schedule,
     };

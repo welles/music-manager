@@ -18,7 +18,7 @@ public sealed class PushNotificationService(
 {
     private static readonly TimeSpan Interval = TimeSpan.FromSeconds(30);
 
-    private static readonly FileStatus[] Busy = [FileStatus.Waiting, FileStatus.Queued, FileStatus.Processing, FileStatus.Approved];
+    private static readonly FileStatus[] Busy = [FileStatus.Waiting, FileStatus.Queued, FileStatus.Processing, FileStatus.Analyzed, FileStatus.Approved];
 
     private int? _notified;
 

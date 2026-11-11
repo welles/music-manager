@@ -20,7 +20,7 @@
             <CellTemplate><TrackSummary File="context.Item" Variant="TrackSummary.SummaryVariant.Original" Href="@($"datei/{context.Item.Id}")" /></CellTemplate>
         </TemplateColumn>
         <PropertyColumn Property="x => x.Status" Title="Status">
-            <CellTemplate><StatusChip Status="context.Item.Status" /></CellTemplate>
+            <CellTemplate><StatusChip Status="context.Item.Status" Reason="@context.Item.StatusReason" /></CellTemplate>
         </PropertyColumn>
         <PropertyColumn Property="x => x.Decision" Title="Entscheidung">
             <CellTemplate><DecisionChip Decision="context.Item.Decision" /></CellTemplate>

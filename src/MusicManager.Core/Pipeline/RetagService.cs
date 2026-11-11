@@ -142,7 +142,7 @@ public sealed class RetagService(
             TagSet tags;
             if (edit == null && !keepOutsideEdits && fromMusicBrainz)
             {
-                tags = await pipeline.BuildReleaseTagsAsync(current.MbReleaseId, current.MbRecordingId, current, settings, CancellationToken.None);
+                tags = await pipeline.BuildReleaseTagsAsync(current.MbReleaseId!, current.MbRecordingId!, current, settings, CancellationToken.None);
                 preview.DiscardsOutsideEdits = outside?.TagsEdited == true;
                 preview.Method = preview.DiscardsOutsideEdits ? "Neu aus MusicBrainz, externe Änderungen verworfen" : "Neu aus MusicBrainz";
             }

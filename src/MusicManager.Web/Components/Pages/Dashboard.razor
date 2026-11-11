@@ -55,7 +55,7 @@
     </HeaderContent>
     <RowTemplate>
         <MudTd><TrackSummary File="context" Variant="TrackSummary.SummaryVariant.Original" /></MudTd>
-        <MudTd><StatusChip Status="context.Status" /> <DecisionChip Decision="context.Decision" /></MudTd>
+        <MudTd><StatusChip Status="context.Status" Reason="@context.StatusReason" /> <DecisionChip Decision="context.Decision" /></MudTd>
         <MudTd><TrackSummary File="context" Variant="TrackSummary.SummaryVariant.Result" /></MudTd>
         <MudTd>@context.UpdatedAt.ToLocalTime().ToString("g")</MudTd>
     </RowTemplate>
@@ -71,7 +71,7 @@
     private static readonly (string, FileStatus[], Color, string)[] Tiles =
     [
         ("Im Eingang", [FileStatus.Waiting, FileStatus.Queued], Color.Default, "dateien?status=Waiting,Queued"),
-        ("In Bearbeitung", [FileStatus.Processing, FileStatus.Approved], Color.Info, "dateien?status=Processing,Approved"),
+        ("In Bearbeitung", [FileStatus.Processing, FileStatus.Analyzed, FileStatus.Approved], Color.Info, "dateien?status=Processing,Analyzed,Approved"),
         ("Zu prüfen", [FileStatus.NeedsReview], Color.Warning, "pruefung?status=NeedsReview"),
         ("Nicht in MusicBrainz", [FileStatus.NotInMusicBrainz], Color.Warning, "pruefung?status=NotInMusicBrainz"),
         ("Duplikate", [FileStatus.Duplicate], Color.Warning, "duplikate"),

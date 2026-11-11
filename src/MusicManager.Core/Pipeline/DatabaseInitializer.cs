@@ -46,7 +46,8 @@ public sealed class DatabaseInitializer(IDbContextFactory<AppDbContext> dbFactor
         }
 
         // Files that were being processed when the app stopped are processed again.
-        await db.Files.Where(f => f.Status == FileStatus.Processing)
-            .ExecuteUpdateAsync(s => s.SetProperty(f => f.Status, FileStatus.Queued), ct);
+        await db.Files.Where(f => f.Status == FileStatus.Processing || f.Status == FileStatus.Analyzed)
+            .ExecuteUpdateAsync(s => s.SetProperty(f => f.Status, FileStatus.Queued)
+                .SetProperty(f => f.StatusReason, "Nach einem Neustart wieder in der Warteschlange"), ct);
     }
 }
