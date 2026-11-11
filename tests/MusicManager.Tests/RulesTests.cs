@@ -179,7 +179,7 @@ public class MatchingFixTests
         Assert.StartsWith("Audio88 & Yassin" + Path.DirectorySeparatorChar, PathBuilder.Build(t));
 
         var many = TaggingRules.Apply(new TagSet { Title = "War Starter", Album = "Wrong Crowd EP", AlbumArtist = "Bou & Friction & MC Eksman" }, Rules);
-        Assert.Equal(Path.Combine("Bou", "Wrong Crowd EP", "Bou & Friction & MC Eksman - War Starter.m4a"), PathBuilder.Build(many));
+        Assert.Equal(Path.Combine("Bou", "Wrong Crowd EP", "Bou - War Starter.m4a"), PathBuilder.Build(many));
     }
 
     [Theory]

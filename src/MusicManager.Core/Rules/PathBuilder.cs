@@ -25,10 +25,12 @@ public static class PathBuilder
         var album = tags.Album.NullIfEmpty() ?? NonAlbumFolder;
         var title = tags.Title.NullIfEmpty() ?? "Unknown Title";
 
-        // Folder: main album artist only ("Bou" instead of "Bou & Friction & MC Eksman & …").
-        var dir1 = SanitizeComponent(tags.FolderArtist.NullIfEmpty() ?? albumArtist);
+        // Folder and file name use the main (first) album artist only, as in the existing library:
+        // "Ceschi/…/Ceschi - Say No More" although ALBUMARTIST is "Ceschi | Commoners Choir".
+        var mainArtist = tags.FolderArtist.NullIfEmpty() ?? albumArtist;
+        var dir1 = SanitizeComponent(mainArtist);
         var dir2 = SanitizeComponent(album);
-        var file = SanitizeComponent($"{albumArtist} - {title}");
+        var file = SanitizeComponent($"{mainArtist} - {title}");
 
         return Path.Combine(dir1, dir2, file + extension);
     }

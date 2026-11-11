@@ -18,7 +18,7 @@ longer needed here.
 | `_force_replace_artists` | Unify artist names ("Bob Seger & the Silver Bullet Band" → "Bob Seger") | Applied **per credit** (exact name), before the display string is assembled. No substring replacement in composed strings. |
 | "Bruce Hornsby & the Range" → "… and the Range" | (workaround) keeps the band name from being split at " & " | Replaced by the **exception list** (`NoSplit`): such names are never split. |
 | `$noop(MEMENTO IDEMPOTENCY)` | Running the script again must not change anything | `TaggingRules.Apply` is a pure function and is tested for idempotence. |
-| File Renaming Script | `{albumartist}/{album}/{albumartist} - {title}` | `PathBuilder`: fallback to the first artist and then the artist string, ASCII only, Windows-compatible, `/` → `_`. |
+| File Renaming Script | `{albumartist}/{album}/{albumartist} - {title}` | `PathBuilder`: with a multi-value album artist only the first one is used (folder and file name, as in the existing library); fallback to the first artist and then the artist string, ASCII only, Windows-compatible, `/` → `_`. |
 | MusicFab Import | Source-specific pre-cleaning | Source profiles (inbox subfolder → rules), editable in the frontend. |
 
 Additionally (new):
