@@ -17,6 +17,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
     public DbSet<LibraryEntry> Library => Set<LibraryEntry>();
     public DbSet<ArtistImage> ArtistImages => Set<ArtistImage>();
     public DbSet<DismissedDuplicateGroup> DismissedDuplicates => Set<DismissedDuplicateGroup>();
+    public DbSet<PushSubscription> PushSubscriptions => Set<PushSubscription>();
 
     protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
     {
@@ -54,6 +55,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
 
         b.Entity<DismissedDuplicateGroup>(e => e.HasIndex(x => x.Key).IsUnique());
         b.Entity<ArtistImage>(e => e.HasIndex(x => x.Key).IsUnique());
+        b.Entity<PushSubscription>(e => e.HasIndex(x => x.Endpoint).IsUnique());
 
         b.Entity<LibraryEntry>(e =>
         {

@@ -1,0 +1,175 @@
+@using MusicManager.Core.Services
+@inject IJSRuntime JS
+@inject IDbContextFactory<AppDbContext> DbFactory
+@inject WebPushSender Sender
+@inject PushNotificationService Notifications
+@inject ISnackbar Snackbar
+
+<MudText Typo="Typo.body2" Class="mb-3">
+    Benachrichtigt die aktivierten Geräte, sobald ein Durchlauf fertig ist und neue Lieder auf dich warten
+    (Prüfung, nicht in MusicBrainz, Duplikate, Fehler). Auf dem Handy die Seite zuerst als App installieren
+    (Chrome-Menü → „App installieren“), dann hier aktivieren.
+</MudText>
+
+@switch (_state)
+{
+    case null:
+        <MudProgressLinear Indeterminate="true" />
+        break;
+    case "unsupported":
+        <MudAlert Severity="Severity.Warning" Dense="true">Dieser Browser unterstützt keine Push-Benachrichtigungen.</MudAlert>
+        break;
+    case "denied":
+        <MudAlert Severity="Severity.Warning" Dense="true">
+            Benachrichtigungen sind für diese Seite blockiert. Erlaube sie in den Website-Einstellungen des Browsers und lade die Seite neu.
+        </MudAlert>
+        break;
+    default:
+        <MudStack Row="true" Spacing="2" Wrap="Wrap.Wrap" AlignItems="AlignItems.Center">
+            @if (_thisDevice)
+            {
+                <MudChip T="string" Color="Color.Success" Icon="@Icons.Material.Filled.NotificationsActive">Auf diesem Gerät aktiv</MudChip>
+                <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.NotificationsOff" OnClick="Disable" Disabled="_busy">Hier deaktivieren</MudButton>
+            }
+            else
+            {
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.NotificationsActive" OnClick="Enable" Disabled="_busy">
+                    Auf diesem Gerät aktivieren
+                </MudButton>
+            }
+            <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Send" OnClick="SendTest" Disabled="_busy || _devices.Count == 0">Test senden</MudButton>
+        </MudStack>
+        break;
+}
+
+@if (_devices.Count > 0)
+{
+    <MudSimpleTable Dense="true" Class="mt-3">
+        <thead><tr><th>Gerät</th><th>Aktiviert</th><th>Zuletzt benachrichtigt</th><th></th></tr></thead>
+        <tbody>
+            @foreach (var d in _devices)
+            {
+                <tr>
+                    <td>@(d.Device ?? "Unbekannt")@(d.Endpoint == _endpoint ? " · dieses Gerät" : "")</td>
+                    <td>@d.CreatedAt.ToLocalTime().ToString("dd.MM.yyyy HH:mm")</td>
+                    <td>@(d.LastSentAt?.ToLocalTime().ToString("dd.MM.yyyy HH:mm") ?? "–")</td>
+                    <td><MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" aria-label="Gerät entfernen" OnClick="() => Remove(d)" /></td>
+                </tr>
+            }
+        </tbody>
+    </MudSimpleTable>
+}
+
+@code {
+    private string? _state;
+    private string? _endpoint;
+    private bool _busy;
+    private List<PushSubscription> _devices = [];
+
+    private bool _thisDevice => _endpoint != null && _devices.Any(d => d.Endpoint == _endpoint);
+
+    private sealed record SubscriptionDto(string Endpoint, string P256dh, string Auth, string? Device);
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        await LoadAsync();
+        StateHasChanged();
+    }
+
+    private async Task LoadAsync()
+    {
+        _state = await JS.InvokeAsync<string>("mmPush.state");
+        _endpoint = _state == "unsupported" ? null : await JS.InvokeAsync<string?>("mmPush.current");
+        await using var db = await DbFactory.CreateDbContextAsync();
+        _devices = await db.PushSubscriptions.AsNoTracking().OrderBy(d => d.CreatedAt).ToListAsync();
+    }
+
+    private async Task Enable()
+    {
+        _busy = true;
+        try
+        {
+            var sub = await JS.InvokeAsync<SubscriptionDto?>("mmPush.subscribe", Sender.PublicKey);
+            if (sub == null)
+            {
+                Snackbar.Add("Benachrichtigungen wurden nicht erlaubt.", Severity.Warning);
+            }
+            else
+            {
+                await using var db = await DbFactory.CreateDbContextAsync();
+                var existing = await db.PushSubscriptions.FirstOrDefaultAsync(d => d.Endpoint == sub.Endpoint);
+                if (existing == null)
+                    db.PushSubscriptions.Add(new PushSubscription { Endpoint = sub.Endpoint, P256dh = sub.P256dh, Auth = sub.Auth, Device = sub.Device });
+                else
+                {
+                    existing.P256dh = sub.P256dh;
+                    existing.Auth = sub.Auth;
+                    existing.Device = sub.Device;
+                }
+
+                await db.SaveChangesAsync();
+                Snackbar.Add("Benachrichtigungen auf diesem Gerät aktiviert.", Severity.Success);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Aktivieren fehlgeschlagen: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+            await LoadAsync();
+        }
+    }
+
+    private async Task Disable()
+    {
+        _busy = true;
+        try
+        {
+            var endpoint = await JS.InvokeAsync<string?>("mmPush.unsubscribe") ?? _endpoint;
+            await using var db = await DbFactory.CreateDbContextAsync();
+            await db.PushSubscriptions.Where(d => d.Endpoint == endpoint).ExecuteDeleteAsync();
+            Snackbar.Add("Benachrichtigungen auf diesem Gerät deaktiviert.", Severity.Info);
+        }
+        finally
+        {
+            _busy = false;
+            await LoadAsync();
+        }
+    }
+
+    private async Task Remove(PushSubscription device)
+    {
+        if (device.Endpoint == _endpoint)
+        {
+            await Disable();
+            return;
+        }
+
+        await using var db = await DbFactory.CreateDbContextAsync();
+        await db.PushSubscriptions.Where(d => d.Id == device.Id).ExecuteDeleteAsync();
+        await LoadAsync();
+    }
+
+    private async Task SendTest()
+    {
+        _busy = true;
+        try
+        {
+            await using var db = await DbFactory.CreateDbContextAsync();
+            var todo = await PushNotificationService.CountAsync(db, CancellationToken.None);
+            var payload = todo.Total > 0
+                ? PushNotificationService.Message(todo)
+                : new { title = "Music Manager", body = "Test: Benachrichtigungen funktionieren.", url = "/", tag = "test" };
+            var sent = await Notifications.SendAsync(db, payload, CancellationToken.None);
+            Snackbar.Add(sent > 0 ? $"An {sent} Gerät(e) gesendet." : "Kein Gerät hat die Nachricht angenommen.", sent > 0 ? Severity.Success : Severity.Warning);
+        }
+        finally
+        {
+            _busy = false;
+            await LoadAsync();
+        }
+    }
+}

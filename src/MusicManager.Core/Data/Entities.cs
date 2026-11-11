@@ -361,3 +361,24 @@ public sealed class ArtistImage
 
     public DateTimeOffset FetchedAt { get; set; } = DateTimeOffset.UtcNow;
 }
+
+/// <summary>A browser (usually the installed PWA on the phone) that receives Web Push notifications.</summary>
+public sealed class PushSubscription
+{
+    public int Id { get; set; }
+
+    /// <summary>Push service URL of the browser (unique per subscription).</summary>
+    public required string Endpoint { get; set; }
+
+    /// <summary>Browser's public ECDH key (base64url).</summary>
+    public required string P256dh { get; set; }
+
+    /// <summary>Authentication secret (base64url).</summary>
+    public required string Auth { get; set; }
+
+    /// <summary>Short description of the device for the settings page.</summary>
+    public string? Device { get; set; }
+
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+    public DateTimeOffset? LastSentAt { get; set; }
+}
