@@ -66,3 +66,8 @@
 .mud-button-group-root > .mud-button-root {
     flex-shrink: 0;
 }
+
+/* Tab badges sit to the right of the label, but .mud-tab clips its overflow: reserve room for them. */
+.mud-tabs-tabbar .mud-tab:has(.mud-tab-badge) {
+    padding-right: 40px;
+}
