@@ -270,7 +270,10 @@ public sealed class MusicBrainzService : IDisposable
         {
             var a = await _query.LookupArtistAsync(Guid.Parse(artistId), Include.Aliases | Include.Genres, cancellationToken: ct);
             var aliases = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-            foreach (var alias in (a.Aliases ?? []).Where(x => x.Locale != null && x.Name != null).OrderByDescending(x => x.Primary))
+            // Like Picard: only the primary alias of a locale counts, never legal names or search hints
+            // (otherwise "JAY-Z" becomes "Shawn Corey Carter").
+            foreach (var alias in (a.Aliases ?? []).Where(x => x is { Primary: true, Locale: not null, Name: not null }
+                         && x.Type is not ("Legal name" or "Search hint")))
                 aliases.TryAdd(alias.Locale!, alias.Name!);
 
             var genres = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
