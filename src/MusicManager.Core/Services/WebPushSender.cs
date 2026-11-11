@@ -128,7 +128,11 @@ public sealed class WebPushSender
         }
 
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-        File.WriteAllText(path, key.ExportECPrivateKeyPem());
+        // Private key: readable by the app user only.
+        var options = new FileStreamOptions { Mode = FileMode.CreateNew, Access = FileAccess.Write };
+        if (!OperatingSystem.IsWindows()) options.UnixCreateMode = UnixFileMode.UserRead | UnixFileMode.UserWrite;
+        using (var writer = new StreamWriter(path, System.Text.Encoding.ASCII, options))
+            writer.Write(key.ExportECPrivateKeyPem());
         return key;
     }
 

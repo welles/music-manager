@@ -53,6 +53,33 @@ public class WebPushTests
         Assert.Equal(message, Decrypt(body, browser, auth));
     }
 
+    private sealed class NoHttp : IHttpClientFactory
+    {
+        public HttpClient CreateClient(string name) => new();
+    }
+
+    [Fact]
+    public void VapidKeyIsPrivateAndSurvivesRestarts()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), $"vapid-{Guid.NewGuid():N}");
+        try
+        {
+            var options = Microsoft.Extensions.Options.Options.Create(new MusicManager.Core.Configuration.MusicManagerOptions { DataPath = dir });
+            var logger = Microsoft.Extensions.Logging.Abstractions.NullLogger<WebPushSender>.Instance;
+            var first = new WebPushSender(new NoHttp(), options, logger);
+            var second = new WebPushSender(new NoHttp(), options, logger);
+
+            Assert.Equal(first.PublicKey, second.PublicKey);
+            Assert.Equal(65, WebPushSender.FromBase64Url(first.PublicKey).Length);
+            if (!OperatingSystem.IsWindows())
+                Assert.Equal(UnixFileMode.UserRead | UnixFileMode.UserWrite, File.GetUnixFileMode(Path.Combine(dir, "vapid.pem")));
+        }
+        finally
+        {
+            Directory.Delete(dir, true);
+        }
+    }
+
     [Fact]
     public void Base64UrlRoundTrip()
     {
