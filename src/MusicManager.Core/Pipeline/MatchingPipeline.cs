@@ -484,10 +484,10 @@ public sealed partial class MatchingPipeline(
     /// <summary>Fetches the full release and builds the final tags and target path for a candidate.</summary>
     public async Task BuildFinalTagsAsync(TrackFile file, ReleaseCandidate candidate, AppSettings settings, CancellationToken ct)
     {
-        var (tags, genreSource) = await BuildReleaseTagsCoreAsync(candidate.Release.ReleaseId, candidate.RecordingId, file.CleanedTags, settings, ct);
+        var (tags, genreResult) = await BuildReleaseTagsCoreAsync(candidate.Release.ReleaseId, candidate.RecordingId, file.CleanedTags, settings, ct);
         file.FinalTags = tags;
         file.FinalTags.AcoustId = file.AcoustId;
-        AddGenreEvent(file, genreSource);
+        AddGenreEvent(file, genreResult);
         await TranslateForeignTitlesAsync(file, settings, ct);
         file.TargetPath = PathBuilder.Build(file.FinalTags);
         file.ManuallyTagged = false;
@@ -501,7 +501,7 @@ public sealed partial class MatchingPipeline(
     public async Task<TagSet> BuildReleaseTagsAsync(string releaseId, string recordingId, TagSet? source, AppSettings settings, CancellationToken ct) =>
         (await BuildReleaseTagsCoreAsync(releaseId, recordingId, source, settings, ct)).Tags;
 
-    private async Task<(TagSet Tags, string? GenreSource)> BuildReleaseTagsCoreAsync(string releaseId, string recordingId, TagSet? source,
+    private async Task<(TagSet Tags, GenreService.Result Genres)> BuildReleaseTagsCoreAsync(string releaseId, string recordingId, TagSet? source,
         AppSettings settings, CancellationToken ct)
     {
         var release = await musicBrainz.GetReleaseAsync(releaseId, ct);
@@ -525,17 +525,22 @@ public sealed partial class MatchingPipeline(
         var artistGenres = found.Track.Credits.Concat(release.Credits).Select(c => c.ArtistId).Distinct()
             .Where(artists.ContainsKey).Select(id => (IReadOnlyDictionary<string, int>)artists[id].Genres).ToList();
         var genre = await genres.ResolveAsync(new GenreService.Request(recordingId, release.Genres, artistGenres,
-            tags.Artists.FirstOrDefault() ?? tags.Artist, tags.Title, tags.AlbumArtist, tags.Album, source?.Genres ?? []), settings, ct);
+            tags.Artists.FirstOrDefault() ?? tags.Artist, tags.Title, tags.AlbumArtist, tags.Album, source?.Genres ?? [],
+            found.Track.Credits.Select(c => c.ArtistId).ToList(), source?.GenreOrigin, tags.Date?[..Math.Min(4, tags.Date.Length)]), settings, ct);
         tags.Genres = genre.Genres;
-        return (tags, genre.Source);
+        tags.GenreOrigin = genre.Origin;
+        return (tags, genre);
     }
 
-    private void AddGenreEvent(TrackFile file, string? source)
+    private void AddGenreEvent(TrackFile file, GenreService.Result genre)
     {
         if (file.FinalTags == null) return;
-        AddEvent(file, file.FinalTags.Genres.Count > 0
-            ? $"Genres aus {source}: {string.Join(", ", file.FinalTags.Genres)}"
-            : "Keine Genres gefunden", file.FinalTags.Genres.Count > 0 ? EventLevel.Info : EventLevel.Warning);
+        var text = genre.Genres.Count > 0
+            ? $"Genres: {string.Join(", ", genre.Genres)} ({GenreOrigin.Describe(genre.Origin)})"
+            : "Keine Genres gefunden";
+        if (genre.Note != null) text += $" – {genre.Note}";
+        var weak = GenreOrigin.Parse(genre.Origin)?.Confidence is null or GenreConfidence.Low or GenreConfidence.VeryLow;
+        AddEvent(file, text, weak ? EventLevel.Warning : EventLevel.Info);
     }
 
     /// <summary>Title and album in non-Latin script become "English (Original)" (translated by Claude).</summary>
@@ -579,13 +584,18 @@ public sealed partial class MatchingPipeline(
         // Genres given by the source (Deezer, manual input) only get the unified spelling; otherwise the usual fallbacks.
         var t = file.FinalTags;
         if (t.Genres.Count > 0)
+        {
             t.Genres = GenreRules.Finish(t.Genres, settings);
+            t.GenreOrigin = GenreOrigin.Format(GenreOrigin.Given, GenreConfidence.Medium);
+        }
         else if (settings.UseGenres)
         {
             var genre = await genres.ResolveAsync(new GenreService.Request(null, new Dictionary<string, int>(), [],
-                t.Artists.FirstOrDefault() ?? t.Artist, t.Title, t.AlbumArtist, t.Album, file.OriginalTags?.Genres ?? []), settings, ct);
+                t.Artists.FirstOrDefault() ?? t.Artist, t.Title, t.AlbumArtist, t.Album, file.OriginalTags?.Genres ?? [],
+                ExistingOrigin: file.OriginalTags?.GenreOrigin, Year: t.Year?.ToString()), settings, ct);
             t.Genres = genre.Genres;
-            AddGenreEvent(file, genre.Source);
+            t.GenreOrigin = genre.Origin;
+            AddGenreEvent(file, genre);
         }
         await TranslateForeignTitlesAsync(file, settings, ct);
         file.TargetPath = PathBuilder.Build(file.FinalTags);

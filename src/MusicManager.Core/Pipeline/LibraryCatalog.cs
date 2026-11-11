@@ -26,6 +26,7 @@ public sealed class LibraryTrack
     public string? MbRecordingId { get; init; }
     public string? MbReleaseId { get; init; }
     public string? TagSource { get; init; }
+    public string? GenreOrigin { get; init; }
     public string? RulesVersion { get; init; }
     public List<string> MbArtistIds { get; init; } = [];
     public List<string> MbAlbumArtistIds { get; init; } = [];
@@ -42,6 +43,8 @@ public sealed class LibraryTrack
         if (MbRecordingId == null) p.Add(LibraryProblem.NoMusicBrainz);
         if (!HasCover) p.Add(LibraryProblem.NoCover);
         if (Genres.Count == 0) p.Add(LibraryProblem.NoGenre);
+        else if (Model.GenreOrigin.Parse(GenreOrigin)?.Confidence is Model.GenreConfidence.Low or Model.GenreConfidence.VeryLow)
+            p.Add(LibraryProblem.WeakGenre);
         if (BitrateKbps is < 192) p.Add(LibraryProblem.LowBitrate);
         return p;
     }
@@ -54,6 +57,9 @@ public enum LibraryProblem
     NoMusicBrainz,
     NoCover,
     NoGenre,
+
+    /// <summary>Genres from a weak source (artist tags, AI suggestion).</summary>
+    WeakGenre,
     LowBitrate,
 }
 
@@ -75,7 +81,7 @@ public sealed class LibraryCatalog(IDbContextFactory<AppDbContext> dbFactory)
             AlbumArtist = e.AlbumArtist, AlbumArtists = e.AlbumArtists, Genres = e.Genres, Year = e.Year, TrackNumber = e.TrackNumber,
             DiscNumber = e.DiscNumber, DurationSeconds = e.DurationSeconds, Codec = e.Codec, BitrateKbps = e.BitrateKbps,
             FileSize = e.FileSize, HasCover = e.HasCover, MbRecordingId = e.MbRecordingId, MbReleaseId = e.MbReleaseId,
-            TagSource = e.TagSource, RulesVersion = e.RulesVersion, MbArtistIds = e.MbArtistIds, MbAlbumArtistIds = e.MbAlbumArtistIds,
+            TagSource = e.TagSource, GenreOrigin = e.GenreOrigin, RulesVersion = e.RulesVersion, MbArtistIds = e.MbArtistIds, MbAlbumArtistIds = e.MbAlbumArtistIds,
         }).ToListAsync(ct);
     }
 

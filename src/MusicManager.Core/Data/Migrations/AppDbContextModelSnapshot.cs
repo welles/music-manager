@@ -209,6 +209,9 @@ namespace MusicManager.Core.Data.Migrations
                     b.Property<bool>("FingerprintFailed")
                         .HasColumnType("INTEGER");
 
+                    b.Property<string>("GenreOrigin")
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("Genres")
                         .IsRequired()
                         .HasColumnType("TEXT");

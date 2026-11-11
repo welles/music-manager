@@ -62,7 +62,7 @@ public sealed class SettingsService(IDbContextFactory<AppDbContext> dbFactory)
         var relevant = JsonSerializer.Serialize(new
         {
             rules, s.ArtistSplitters, s.StandardizeArtists, s.ArtistLocale, s.ConvertPunctuation, s.UseGenres, s.UseArtistGenres,
-            s.UseLastFmGenres, s.KeepOriginalGenres, s.MaxGenres, s.MinGenreUsagePercent, s.GenreFilter, s.GenreMap, s.TranslateForeignTitles,
+            s.UseLastFmGenres, s.KeepOriginalGenres, s.AiGenreCheck, s.AiGenreSuggestions, s.MaxGenres, s.MinGenreUsagePercent, s.GenreFilter, s.GenreMap, s.TranslateForeignTitles,
         });
         var hash = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(relevant)))[..8].ToLowerInvariant();
         return $"{Rules.TaggingRules.Version}-{hash}";

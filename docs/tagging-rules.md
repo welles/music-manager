@@ -45,6 +45,8 @@ first source with a result wins:
 3. MusicBrainz genres of the credited **artists**. In Picard they counted as much as the album's, which
    gave whole discographies the same broad genres; now they are only a fallback.
 4. The genres **already in the file**, so re-tagging or importing the old library never loses them.
+5. Last.fm tags of the **artist**, looked up by MusicBrainz ID only – names are ambiguous ("August Moon"
+   finds a Finnish death metal band).
 
 From the remaining votes, genres with at least 50 % of the strongest one are kept, at most 10. They
 are written in title case as in the existing library ("Drum And Bass", "Hip Hop"), abbreviations in

@@ -288,6 +288,9 @@ public sealed class LibraryEntry
     /// <summary>Value of the MUSICMANAGER_SOURCE tag (null = not written by this tool).</summary>
     public string? TagSource { get; set; }
 
+    /// <summary>Value of the MUSICMANAGER_GENRE_SOURCE tag ("source|confidence").</summary>
+    public string? GenreOrigin { get; set; }
+
     /// <summary>Raw Chromaprint fingerprint (base64 of the uint values), see <see cref="Rules.FingerprintMatcher"/>.</summary>
     public string? Fingerprint { get; set; }
 

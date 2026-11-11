@@ -259,6 +259,7 @@ public sealed class LibraryIndexer(
         entry.Artists = TagFields.Get(fields, "ARTIST");
         entry.AlbumArtists = TagFields.Get(fields, "ALBUMARTIST", "ALBUM ARTIST");
         entry.Genres = TagFields.Get(fields, "GENRE");
+        entry.GenreOrigin = TagFields.Get(fields, Model.GenreOrigin.Marker).FirstOrDefault();
         entry.MbArtistIds = TagFields.Get(fields, "MusicBrainz Artist Id", "MUSICBRAINZ_ARTISTID");
         entry.MbAlbumArtistIds = TagFields.Get(fields, "MusicBrainz Album Artist Id", "MUSICBRAINZ_ALBUMARTISTID");
         entry.MbReleaseGroupId = TagFields.Get(fields, "MusicBrainz Release Group Id", "MUSICBRAINZ_RELEASEGROUPID").FirstOrDefault();

@@ -58,3 +58,26 @@ public class GenreTests
         Assert.Empty(LastFmClient.Parse(error.RootElement));
     }
 }
+
+public class GenreOriginTests
+{
+    [Theory]
+    [InlineData("musicbrainz|high", "musicbrainz", MusicManager.Core.Model.GenreConfidence.High)]
+    [InlineData("lastfm-artist|low", "lastfm-artist", MusicManager.Core.Model.GenreConfidence.Low)]
+    [InlineData("ai|verylow", "ai", MusicManager.Core.Model.GenreConfidence.VeryLow)]
+    [InlineData("existing", "existing", MusicManager.Core.Model.GenreConfidence.Medium)]
+    public void OriginRoundTrips(string value, string source, MusicManager.Core.Model.GenreConfidence confidence)
+    {
+        var parsed = MusicManager.Core.Model.GenreOrigin.Parse(value);
+        Assert.Equal((source, confidence), parsed);
+    }
+
+    [Fact]
+    public void WeakGenresAreALibraryProblem()
+    {
+        var weak = new MusicManager.Core.Pipeline.LibraryTrack { RelativePath = "a.m4a", Genres = ["Hip Hop"], GenreOrigin = "lastfm-artist|low" };
+        var good = new MusicManager.Core.Pipeline.LibraryTrack { RelativePath = "a.m4a", Genres = ["Hip Hop"], GenreOrigin = "musicbrainz|high" };
+        Assert.Contains(MusicManager.Core.Pipeline.LibraryProblem.WeakGenre, weak.Problems("x"));
+        Assert.DoesNotContain(MusicManager.Core.Pipeline.LibraryProblem.WeakGenre, good.Problems("x"));
+    }
+}

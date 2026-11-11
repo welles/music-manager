@@ -76,7 +76,10 @@
         <MudText Typo="Typo.body2" Class="mb-3">
             Die erste Quelle mit einem Ergebnis gewinnt: 1. MusicBrainz-Genres der Aufnahme (doppelt gewichtet) und des Releases,
             2. Last.fm-Tags des Titels, dann des Albums (nur Namen, die MusicBrainz als Genre kennt),
-            3. MusicBrainz-Genres der Künstler, 4. die Genres, die schon in der Datei stehen.
+            3. MusicBrainz-Genres der Künstler, 4. die Genres, die schon in der Datei stehen,
+            5. Last.fm-Tags des Künstlers (nur über die MusicBrainz-ID), 6. Testballon: Vorschlag der KI.
+            Künstler-Genres (3 und 5) prüft die KI und verwirft, was nicht zum Lied passt. Jede Datei bekommt die Herkunft
+            und Belastbarkeit ihrer Genres (Tag MUSICMANAGER_GENRE_SOURCE); unsichere stehen in der Bibliothek unter „Genres unsicher“.
             Geschrieben wird in Titelschreibung wie „Drum And Bass“, Abkürzungen groß („UK Garage“).
         </MudText>
         <MudGrid>
@@ -84,6 +87,8 @@
             <MudItem xs="12" md="3"><MudSwitch @bind-Value="_s.UseLastFmGenres" Color="Color.Primary" Label="Last.fm als Ersatz" Disabled="@string.IsNullOrWhiteSpace(Options.Value.LastFmApiKey)" /></MudItem>
             <MudItem xs="12" md="3"><MudSwitch @bind-Value="_s.UseArtistGenres" Color="Color.Primary" Label="Künstler-Genres als Ersatz" /></MudItem>
             <MudItem xs="12" md="3"><MudSwitch @bind-Value="_s.KeepOriginalGenres" Color="Color.Primary" Label="Vorhandene Genres behalten" /></MudItem>
+            <MudItem xs="12" md="6"><MudSwitch @bind-Value="_s.AiGenreCheck" Color="Color.Primary" Label="KI prüft Künstler-Genres" Disabled="@string.IsNullOrWhiteSpace(Options.Value.AnthropicApiKey)" /></MudItem>
+            <MudItem xs="12" md="6"><MudSwitch @bind-Value="_s.AiGenreSuggestions" Color="Color.Warning" Label="Testballon: KI schlägt Genres vor, wenn nichts gefunden wird" Disabled="@string.IsNullOrWhiteSpace(Options.Value.AnthropicApiKey)" /></MudItem>
             @if (string.IsNullOrWhiteSpace(Options.Value.LastFmApiKey))
             {
                 <MudItem xs="12"><MudAlert Severity="Severity.Info" Dense="true">Kein Last.fm-Schlüssel gesetzt (MusicManager__LastFmApiKey) – Last.fm wird übersprungen.</MudAlert></MudItem>

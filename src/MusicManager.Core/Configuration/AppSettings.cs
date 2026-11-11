@@ -80,6 +80,12 @@ public sealed class AppSettings
     /// <summary>Keep the genres already in the file when no source has any.</summary>
     public bool KeepOriginalGenres { get; set; } = true;
 
+    /// <summary>Claude checks genres from broad sources (artist tags) and drops those that do not fit the song.</summary>
+    public bool AiGenreCheck { get; set; } = true;
+
+    /// <summary>Trial: Claude suggests genres when no source has any (lowest confidence, marked as AI).</summary>
+    public bool AiGenreSuggestions { get; set; }
+
     public int MaxGenres { get; set; } = 10;
     public int MinGenreUsagePercent { get; set; } = 50;
     public List<string> GenreFilter { get; set; } = ["seen live", "favorites", "fixme", "owned"];

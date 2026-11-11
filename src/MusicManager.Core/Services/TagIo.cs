@@ -88,6 +88,7 @@ public static class TagIo
         t.Label ??= One("LABEL");
         t.Isrc ??= One("ISRC");
         t.Remixer ??= One("REMIXER");
+        t.GenreOrigin ??= One(Model.GenreOrigin.Marker);
         t.MbTrackId ??= One("MusicBrainz Release Track Id", "MUSICBRAINZ_RELEASETRACKID");
         t.ReleaseStatus ??= One("MusicBrainz Album Status", "RELEASESTATUS");
         t.ReleaseCountry ??= One("MusicBrainz Album Release Country", "RELEASECOUNTRY");

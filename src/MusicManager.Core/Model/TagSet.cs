@@ -36,6 +36,9 @@ public sealed class TagSet
 
     public List<string> Genres { get; set; } = [];
 
+    /// <summary>Where the genres come from and how reliable they are (<see cref="Model.GenreOrigin"/>, "source|confidence").</summary>
+    public string? GenreOrigin { get; set; }
+
     public string? Remixer { get; set; }
     public string? Isrc { get; set; }
     public string? Label { get; set; }

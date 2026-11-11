@@ -246,6 +246,98 @@ public sealed class AiService(IOptions<MusicManagerOptions> options, ILogger<AiS
 
     private sealed record TranslationItem(string Original, string English);
 
+    // --- Genres ----------------------------------------------------------------------------
+
+    public sealed record GenreContext(string? Artist, string? Title, string? Album, string? Year);
+
+    public sealed record GenreVerdict(List<string> Genres, double Confidence, string Reason);
+
+    private const string GenreCheckSystemPrompt = """
+        You check genre tags of a music file before they are written. The genres come from a broad
+        source (tags of the artist, not of this song), and such sources mix up artists with the same
+        name: a soft pop band and a death metal band can share one page.
+
+        Keep only the given genres that plausibly describe this song by this artist. Drop all of them
+        if they look like they belong to a different artist with the same name or clearly do not fit.
+        Never add genres that are not in the list. If you do not know the artist, keep genres that fit
+        the title, album and the other genres, and lower your confidence.
+        - keep: the genres to keep, spelled exactly as given.
+        - confidence: 0..1 that the kept genres are right.
+        - reason: one short sentence in German.
+        """;
+
+    private const string GenreSuggestSystemPrompt = """
+        You suggest genres for a music file for which no database has any. Use genre names as
+        MusicBrainz uses them (lower case, e.g. "drum and bass", "indie pop", "hip hop").
+        Only suggest genres if you actually know the artist or the song; if you do not, return an
+        empty list – an empty result is better than a guess. At most three genres, most specific first.
+        - genres: the suggested genres.
+        - confidence: 0..1 that they are right.
+        - reason: one short sentence in German.
+        """;
+
+    private static readonly Dictionary<string, JsonElement> GenreCheckSchema = Schema(new
+    {
+        type = "object",
+        properties = new
+        {
+            keep = new { type = "array", items = new { type = "string" } },
+            confidence = new { type = "number" },
+            reason = new { type = "string" },
+        },
+        required = new[] { "keep", "confidence", "reason" },
+        additionalProperties = false,
+    });
+
+    private static readonly Dictionary<string, JsonElement> GenreSuggestSchema = Schema(new
+    {
+        type = "object",
+        properties = new
+        {
+            genres = new { type = "array", items = new { type = "string" } },
+            confidence = new { type = "number" },
+            reason = new { type = "string" },
+        },
+        required = new[] { "genres", "confidence", "reason" },
+        additionalProperties = false,
+    });
+
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, GenreVerdict?> _genreCache = new();
+
+    /// <summary>Which of the given genres fit this song (the rest is dropped). Null when the AI is not available.</summary>
+    public async Task<GenreVerdict?> CheckGenresAsync(GenreContext song, IReadOnlyList<string> genres, string source, AppSettings settings,
+        CancellationToken ct)
+    {
+        var key = $"check|{song.Artist}|{song.Album ?? song.Title}|{string.Join(",", genres)}".ToLowerInvariant();
+        if (_genreCache.TryGetValue(key, out var cached)) return cached;
+
+        var input = new { song.Artist, song.Title, song.Album, song.Year, source, genres };
+        var json = await AskAsync(settings.AiModel, GenreCheckSystemPrompt, JsonSerializer.Serialize(input, JsonOptions), GenreCheckSchema, settings, ct);
+        if (json == null) return null;
+
+        var r = JsonSerializer.Deserialize<GenreCheckResponse>(json, JsonOptions)!;
+        var keep = genres.Where(g => r.Keep.Contains(g, StringComparer.OrdinalIgnoreCase)).ToList();
+        return _genreCache[key] = new GenreVerdict(keep, r.Confidence, r.Reason);
+    }
+
+    /// <summary>Genres the AI knows for the song (trial, lowest confidence). Null when the AI is not available.</summary>
+    public async Task<GenreVerdict?> SuggestGenresAsync(GenreContext song, AppSettings settings, CancellationToken ct)
+    {
+        var key = $"suggest|{song.Artist}|{song.Album ?? song.Title}".ToLowerInvariant();
+        if (_genreCache.TryGetValue(key, out var cached)) return cached;
+
+        var input = new { song.Artist, song.Title, song.Album, song.Year };
+        var json = await AskAsync(settings.AiModel, GenreSuggestSystemPrompt, JsonSerializer.Serialize(input, JsonOptions), GenreSuggestSchema, settings, ct);
+        if (json == null) return null;
+
+        var r = JsonSerializer.Deserialize<GenreSuggestResponse>(json, JsonOptions)!;
+        return _genreCache[key] = new GenreVerdict(r.Genres.Take(3).ToList(), r.Confidence, r.Reason);
+    }
+
+    private sealed record GenreCheckResponse(List<string> Keep, double Confidence, string Reason);
+
+    private sealed record GenreSuggestResponse(List<string> Genres, double Confidence, string Reason);
+
     // --- Shared ----------------------------------------------------------------------------
 
     private async Task<string?> AskAsync(string model, string system, string userJson, Dictionary<string, JsonElement> schema,

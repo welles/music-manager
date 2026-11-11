@@ -26,6 +26,10 @@ public sealed class LastFmClient(HttpClient http, IOptions<MusicManagerOptions> 
     public Task<List<KeyValuePair<string, int>>> GetAlbumTagsAsync(string artist, string album, CancellationToken ct) =>
         GetTagsAsync(new() { ["method"] = "album.gettoptags", ["artist"] = artist, ["album"] = album }, ct);
 
+    /// <summary>Artist tags by MusicBrainz ID only – names are ambiguous ("August Moon" finds a death metal band).</summary>
+    public Task<List<KeyValuePair<string, int>>> GetArtistTagsAsync(string mbid, CancellationToken ct) =>
+        GetTagsAsync(new() { ["method"] = "artist.gettoptags", ["mbid"] = mbid }, ct);
+
     private async Task<List<KeyValuePair<string, int>>> GetTagsAsync(Dictionary<string, string> query, CancellationToken ct)
     {
         if (!Enabled) return [];

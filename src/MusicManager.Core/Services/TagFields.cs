@@ -26,7 +26,7 @@ public static class TagFields
         "ORIGINALDATE", "GENRE", "REMIXER", "LABEL", "ISRC", "COVER", "Acoustid Id", "MusicBrainz Track Id",
         "MusicBrainz Release Track Id", "MusicBrainz Album Id", "MusicBrainz Release Group Id", "MusicBrainz Artist Id",
         "MusicBrainz Album Artist Id", "MusicBrainz Album Type", "MusicBrainz Album Status", "MusicBrainz Album Release Country",
-        TagIo.SourceMarker,
+        TagIo.SourceMarker, Model.GenreOrigin.Marker,
     ];
 
     private static readonly Dictionary<string, string> Mp4Names = new()
@@ -201,6 +201,7 @@ public static class TagFields
         One("DATE", t.Date);
         One("ORIGINALDATE", t.OriginalDate);
         Many("GENRE", t.Genres);
+        if (t.Genres.Count > 0) One(Model.GenreOrigin.Marker, t.GenreOrigin);
         One("REMIXER", t.Remixer);
         One("LABEL", t.Label);
         One("ISRC", t.Isrc);
