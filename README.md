@@ -64,6 +64,14 @@ to the owner of the music share.
 The app has no login of its own. Run it behind the Cloudflare Tunnel and protect it
 with Cloudflare Access. Forwarded headers are honored.
 
+### App and notifications
+
+The web app can be installed as a PWA (HTTPS required, e.g. through the tunnel). Under
+Settings → Notifications each device can subscribe to Web Push: after a batch, it gets one
+summary when new files wait for review, have no MusicBrainz match, look like duplicates or
+failed. The VAPID key pair is created on first start as `vapid.pem` in the data folder; keep it,
+otherwise all devices have to subscribe again.
+
 ## Development
 
 ```bash
