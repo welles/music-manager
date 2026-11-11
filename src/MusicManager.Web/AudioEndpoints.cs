@@ -40,12 +40,21 @@ public static class AudioEndpoints
         });
 
         // Cover of a library file.
-        app.MapGet("/api/library/{id:int}/cover", async (int id, IDbContextFactory<AppDbContext> dbFactory, Storage storage, CancellationToken ct) =>
+        app.MapGet("/api/library/{id:int}/cover", async (int id, IDbContextFactory<AppDbContext> dbFactory, Storage storage, HttpContext http, CancellationToken ct) =>
         {
             await using var db = await dbFactory.CreateDbContextAsync(ct);
             var entry = await db.Library.FindAsync([id], ct);
-            var path = entry == null ? null : storage.LibraryPath(entry.RelativePath);
-            var data = path != null && File.Exists(path) ? TagIo.ReadEmbeddedCover(path) : null;
+            var info = entry == null ? null : new FileInfo(storage.LibraryPath(entry.RelativePath));
+            if (info is not { Exists: true }) return Results.Content(Placeholder, "image/svg+xml");
+
+            // The browser keeps covers for a day and then asks again; the ETag changes when the file is rewritten,
+            // so an unchanged cover costs a 304 instead of reading the picture from the audio file.
+            var etag = new Microsoft.Net.Http.Headers.EntityTagHeaderValue($"\"{info.LastWriteTimeUtc.Ticks:x}-{info.Length:x}\"");
+            http.Response.Headers.CacheControl = "private, max-age=86400";
+            http.Response.Headers.ETag = etag.ToString();
+            if (http.Request.Headers.IfNoneMatch.ToString() == etag.ToString()) return Results.StatusCode(StatusCodes.Status304NotModified);
+
+            var data = TagIo.ReadEmbeddedCover(info.FullName);
             return data == null
                 ? Results.Content(Placeholder, "image/svg+xml")
                 : Results.File(data, data.Length > 3 && data[0] == 0x89 ? "image/png" : "image/jpeg");
@@ -55,7 +64,8 @@ public static class AudioEndpoints
         app.MapGet("/api/artists/image", async (string name, string? mbid, ArtistImageService images, HttpContext http, CancellationToken ct) =>
         {
             var path = await images.GetImagePathAsync(name, mbid, ct);
-            http.Response.Headers.CacheControl = path == null ? "no-store" : "private, max-age=3600";
+            // Physical file results answer If-Modified-Since themselves, so a week costs at most a 304 per image.
+            http.Response.Headers.CacheControl = path == null ? "no-store" : "private, max-age=604800";
             return path == null ? Results.Content(Placeholder, "image/svg+xml") : Results.File(path, "image/jpeg");
         });
 

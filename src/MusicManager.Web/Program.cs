@@ -69,7 +69,8 @@ app.MapGet("/api/files/{id:int}/cover", async (int id, string? which, Microsoft.
         }
     }
 
-    http.Response.Headers.CacheControl = "private, max-age=300";
+    // With ?v= (the file's last change) the URL changes whenever the cover can change.
+    http.Response.Headers.CacheControl = http.Request.Query.ContainsKey("v") ? "private, max-age=604800, immutable" : "private, max-age=300";
     if (data == null)
     {
         const string placeholder = "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\"><rect width=\"24\" height=\"24\" fill=\"#9e9e9e33\"/><path fill=\"#9e9e9e\" d=\"M12 3v10.55A4 4 0 1 0 14 17V7h4V3z\"/></svg>";
