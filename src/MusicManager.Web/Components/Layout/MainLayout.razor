@@ -1,6 +1,7 @@
 @inherits LayoutComponentBase
 @implements IDisposable
 @inject PipelineNotifier Notifier
+@inject PlayerService Player
 
 <MudThemeProvider @bind-IsDarkMode="_dark" ObserveSystemDarkModeChange="true" />
 <MudPopoverProvider />
@@ -31,7 +32,24 @@
     <MudMainContent>
         <MudContainer MaxWidth="MaxWidth.ExtraExtraLarge" Class="py-4">
             @Body
+            @if (Player.Current != null)
+            {
+                <div style="height:96px"></div>
+            }
         </MudContainer>
+        @if (Player.Current is { } track)
+        {
+            @* Player bar for listening to library files. *@
+            <MudPaper Elevation="8" Class="pa-2 d-flex align-center" Style="position:fixed;bottom:0;left:0;right:0;z-index:1200;gap:12px">
+                <MudImage Src="@($"api/library/{track.Id}/cover")" Width="56" Height="56" ObjectFit="ObjectFit.Cover" Class="rounded flex-shrink-0" />
+                <div style="min-width:0;max-width:30%">
+                    <MudText Typo="Typo.subtitle2" Style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">@track.Title</MudText>
+                    <MudText Typo="Typo.caption" Style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">@string.Join(", ", track.ArtistNames) · @track.Album</MudText>
+                </div>
+                <audio controls autoplay src="@($"api/audio/library/{track.Id}")" style="flex:1;min-width:0"></audio>
+                <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small" OnClick="Player.Stop" aria-label="Player schließen" />
+            </MudPaper>
+        }
     </MudMainContent>
 </MudLayout>
 
@@ -51,6 +69,7 @@
         if (firstRender && !_subscribed)
         {
             Notifier.Changed += OnChanged;
+            Player.Changed += OnChanged;
             _subscribed = true;
         }
     }
@@ -70,5 +89,6 @@
     public void Dispose()
     {
         if (_subscribed) Notifier.Changed -= OnChanged;
+        Player.Changed -= OnChanged;
     }
 }

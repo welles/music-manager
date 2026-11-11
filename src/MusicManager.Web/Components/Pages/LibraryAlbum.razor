@@ -1,0 +1,53 @@
+@page "/bibliothek/album"
+@inject LibraryCatalog Catalog
+@inject SettingsService SettingsService
+@inject PlayerService Player
+
+<PageTitle>@Album – Music Manager</PageTitle>
+
+<PageHeader Title="@(Album ?? "Album")" UseHistory="true" />
+
+@if (_tracks == null)
+{
+    <MudProgressLinear Indeterminate="true" />
+    return;
+}
+
+<MudPaper Outlined="true" Class="pa-3 mb-4">
+    <div class="d-flex align-center" style="gap:16px">
+        <MudImage Src="@($"api/library/{(_tracks.FirstOrDefault(t => t.HasCover) ?? _tracks.FirstOrDefault())?.Id}/cover")" Width="180" Height="180" ObjectFit="ObjectFit.Cover" Class="rounded" />
+        <div>
+            <MudText Typo="Typo.h5">@Album</MudText>
+            <MudLink Href="@TrackGrid.ArtistHref(Artist ?? "")" Typo="Typo.subtitle1">@Artist</MudLink>
+            <MudText Typo="Typo.body2">@_tracks.Max(t => t.Year) · @_tracks.Count Titel · @Length(_tracks.Sum(t => t.DurationSeconds ?? 0))</MudText>
+            @if (_tracks.Select(t => t.MbReleaseId).FirstOrDefault(id => id != null) is { } rel)
+            {
+                <MudLink Href="@($"https://musicbrainz.org/release/{rel}")" Target="_blank" Typo="Typo.body2">MusicBrainz</MudLink>
+            }
+            <div class="mt-2">
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.PlayArrow" Size="Size.Small"
+                           OnClick="() => Player.Play(_tracks.First())" Disabled="_tracks.Count == 0">Abspielen</MudButton>
+            </div>
+        </div>
+    </div>
+</MudPaper>
+
+<TrackGrid Tracks="_tracks" RulesVersion="_rulesVersion" />
+
+@code {
+    [SupplyParameterFromQuery] public string? Artist { get; set; }
+    [SupplyParameterFromQuery] public string? Album { get; set; }
+
+    private List<LibraryTrack>? _tracks;
+    private string _rulesVersion = "";
+
+    protected override async Task OnParametersSetAsync()
+    {
+        var all = await Catalog.GetTracksAsync();
+        _tracks = LibraryCatalog.AlbumOrder(all.Where(t => string.Equals(t.Album, Album, StringComparison.OrdinalIgnoreCase)
+                                                          && string.Equals(t.MainAlbumArtist, Artist, StringComparison.OrdinalIgnoreCase))).ToList();
+        _rulesVersion = await SettingsService.GetRulesVersionAsync();
+    }
+
+    private static string Length(double s) => TimeSpan.FromSeconds(s).ToString(s >= 3600 ? @"h\:mm\:ss" : @"m\:ss");
+}

@@ -1,0 +1,68 @@
+@page "/bibliothek/kuenstler/{Name}"
+@inject LibraryCatalog Catalog
+@inject SettingsService SettingsService
+@inject NavigationManager Nav
+
+<PageTitle>@Name – Music Manager</PageTitle>
+
+<PageHeader Title="@Name" UseHistory="true" />
+
+@if (_tracks == null)
+{
+    <MudProgressLinear Indeterminate="true" />
+    return;
+}
+
+<MudPaper Outlined="true" Class="pa-3 mb-4">
+    <div class="d-flex align-center" style="gap:16px">
+        <MudImage Src="@($"api/artists/image?name={Uri.EscapeDataString(Name)}&mbid={_mbid}")" Width="160" Height="160" ObjectFit="ObjectFit.Cover" Class="rounded" />
+        <div>
+            <MudText Typo="Typo.h5">@Name</MudText>
+            <MudText Typo="Typo.body2">@_albums.Count Alben · @_tracks.Count Titel</MudText>
+            @if (_mbid != null)
+            {
+                <MudLink Href="@($"https://musicbrainz.org/artist/{_mbid}")" Target="_blank" Typo="Typo.body2">MusicBrainz</MudLink>
+            }
+        </div>
+    </div>
+</MudPaper>
+
+@if (_albums.Count > 0)
+{
+    <MudText Typo="Typo.h6" Class="mb-2">Alben</MudText>
+    <MudGrid Spacing="2" Class="mb-4">
+        @foreach (var a in _albums)
+        {
+            <MudItem xs="6" sm="4" md="3" lg="2">
+                <MudCard Outlined="true" Style="cursor:pointer" @onclick="@(() => Nav.NavigateTo($"bibliothek/album?artist={Uri.EscapeDataString(a.AlbumArtist ?? "")}&album={Uri.EscapeDataString(a.Album)}"))">
+                    <MudCardMedia Image="@($"api/library/{a.CoverTrackId}/cover")" Height="140" />
+                    <MudCardContent Class="pa-2">
+                        <MudText Typo="Typo.subtitle2">@a.Album</MudText>
+                        <MudText Typo="Typo.caption">@a.AlbumArtist@(a.Year != null ? $" · {a.Year}" : "") · @a.Tracks Titel</MudText>
+                    </MudCardContent>
+                </MudCard>
+            </MudItem>
+        }
+    </MudGrid>
+}
+
+<MudText Typo="Typo.h6" Class="mb-2">Titel</MudText>
+<TrackGrid Tracks="_tracks" RulesVersion="_rulesVersion" />
+
+@code {
+    [Parameter] public string Name { get; set; } = "";
+
+    private List<LibraryTrack>? _tracks;
+    private List<AlbumSummary> _albums = [];
+    private string _rulesVersion = "";
+    private string? _mbid;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        var all = await Catalog.GetTracksAsync();
+        _tracks = all.Where(t => LibraryCatalog.HasArtist(t, Name)).OrderBy(t => t.Album).ThenBy(t => t.DiscNumber).ThenBy(t => t.TrackNumber).ToList();
+        _albums = LibraryCatalog.Albums(_tracks);
+        _mbid = LibraryCatalog.Artists(_tracks).FirstOrDefault(a => a.Name.Equals(Name, StringComparison.OrdinalIgnoreCase))?.MbArtistId;
+        _rulesVersion = await SettingsService.GetRulesVersionAsync();
+    }
+}

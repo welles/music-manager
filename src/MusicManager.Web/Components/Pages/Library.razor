@@ -1,0 +1,107 @@
+@page "/bibliothek"
+@inject LibraryCatalog Catalog
+@inject SettingsService SettingsService
+@inject NavigationManager Nav
+
+<PageTitle>Bibliothek – Music Manager</PageTitle>
+
+<PageHeader Title="Bibliothek" />
+
+@if (_tracks == null)
+{
+    <MudProgressLinear Indeterminate="true" />
+    return;
+}
+
+<MudTabs Outlined="true" Border="true" TabPanelsClass="pa-4" @bind-ActivePanelIndex="_tab">
+    <MudTabPanel Text="Künstler" BadgeData="_artists.Count">
+        <MudTextField @bind-Value="_artistSearch" Placeholder="Künstler suchen" Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"
+                      Immediate="true" Clearable="true" Class="mb-3" Style="max-width:360px" />
+        <MudGrid Spacing="2">
+            @foreach (var a in _artists.Where(a => string.IsNullOrWhiteSpace(_artistSearch) || a.Name.Contains(_artistSearch, StringComparison.OrdinalIgnoreCase)).Take(300))
+            {
+                <MudItem xs="6" sm="4" md="3" lg="2">
+                    <MudCard Outlined="true" Style="cursor:pointer" @onclick="() => Nav.NavigateTo(TrackGrid.ArtistHref(a.Name))">
+                        <MudCardMedia Image="@ArtistImage(a)" Height="160" />
+                        <MudCardContent Class="pa-2">
+                            <MudText Typo="Typo.subtitle2" Style="overflow-wrap:anywhere">@a.Name</MudText>
+                            <MudText Typo="Typo.caption">@a.Albums Alben · @a.Tracks Titel</MudText>
+                        </MudCardContent>
+                    </MudCard>
+                </MudItem>
+            }
+        </MudGrid>
+    </MudTabPanel>
+
+    <MudTabPanel Text="Alben" BadgeData="_albums.Count">
+        <MudTextField @bind-Value="_albumSearch" Placeholder="Album oder Künstler suchen" Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"
+                      Immediate="true" Clearable="true" Class="mb-3" Style="max-width:360px" />
+        <MudGrid Spacing="2">
+            @foreach (var a in _albums.Where(a => string.IsNullOrWhiteSpace(_albumSearch) || a.Album.Contains(_albumSearch, StringComparison.OrdinalIgnoreCase)
+                                                  || (a.AlbumArtist?.Contains(_albumSearch, StringComparison.OrdinalIgnoreCase) ?? false)).Take(300))
+            {
+                <MudItem xs="6" sm="4" md="3" lg="2">
+                    <MudCard Outlined="true" Style="cursor:pointer" @onclick="() => OpenAlbum(a)">
+                        <MudCardMedia Image="@($"api/library/{a.CoverTrackId}/cover")" Height="160" />
+                        <MudCardContent Class="pa-2">
+                            <MudText Typo="Typo.subtitle2" Style="overflow-wrap:anywhere">@a.Album</MudText>
+                            <MudText Typo="Typo.caption">@a.AlbumArtist@(a.Year != null ? $" · {a.Year}" : "") · @a.Tracks Titel</MudText>
+                        </MudCardContent>
+                    </MudCard>
+                </MudItem>
+            }
+        </MudGrid>
+    </MudTabPanel>
+
+    <MudTabPanel Text="Genres" BadgeData="_genres.Count">
+        <MudStack Row="true" Wrap="Wrap.Wrap" Spacing="1">
+            @foreach (var g in _genres)
+            {
+                <MudChip T="string" Variant="Variant.Outlined" OnClick="() => ShowGenre(g.Genre)">@g.Genre (@g.Tracks)</MudChip>
+            }
+        </MudStack>
+    </MudTabPanel>
+
+    <MudTabPanel Text="Titel" BadgeData="_tracks.Count">
+        <TrackGrid @key="_gridKey" Tracks="_tracks" RulesVersion="_rulesVersion" InitialSearch="@_genreFilter" InitialProblem="@InitialProblem" />
+    </MudTabPanel>
+</MudTabs>
+
+@code {
+    [SupplyParameterFromQuery(Name = "problem")] public string? Problem { get; set; }
+
+    private List<LibraryTrack>? _tracks;
+    private List<ArtistSummary> _artists = [];
+    private List<AlbumSummary> _albums = [];
+    private List<GenreSummary> _genres = [];
+    private string _rulesVersion = "";
+    private string? _artistSearch, _albumSearch, _genreFilter;
+    private int _tab, _gridKey;
+
+    private LibraryProblem? InitialProblem => Enum.TryParse<LibraryProblem>(Problem, true, out var p) ? p : null;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _tracks = await Catalog.GetTracksAsync();
+        _artists = LibraryCatalog.Artists(_tracks);
+        _albums = LibraryCatalog.Albums(_tracks);
+        _genres = LibraryCatalog.Genres(_tracks);
+        _rulesVersion = await SettingsService.GetRulesVersionAsync();
+        if (InitialProblem != null) _tab = 3;
+    }
+
+    private static string ArtistImage(ArtistSummary a) => $"api/artists/image?name={Uri.EscapeDataString(a.Name)}&mbid={a.MbArtistId}";
+
+    private void OpenAlbum(AlbumSummary a)
+    {
+        var parts = a.Key.Split('\u001f');
+        Nav.NavigateTo($"bibliothek/album?artist={Uri.EscapeDataString(parts[0])}&album={Uri.EscapeDataString(parts[1])}");
+    }
+
+    private void ShowGenre(string genre)
+    {
+        _genreFilter = genre;
+        _gridKey++;
+        _tab = 3;
+    }
+}

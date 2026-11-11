@@ -1,0 +1,132 @@
+@inject PlayerService Player
+@inject NavigationManager Nav
+@* Track table of the library: search, problem filters, multi-selection, playback. *@
+
+<MudDataGrid T="LibraryTrack" Items="Filtered" Dense="true" Hover="true" MultiSelection="true" @bind-SelectedItems="_selected"
+             RowsPerPage="50" SortMode="SortMode.Multiple">
+    <ToolBarContent>
+        <MudStack Spacing="1" Style="width:100%">
+            <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap">
+                <MudTextField @bind-Value="_search" Placeholder="Titel, Künstler, Album suchen" Adornment="Adornment.Start" Immediate="true"
+                              AdornmentIcon="@Icons.Material.Filled.Search" Clearable="true" Class="mt-0" Style="max-width:360px" />
+                <MudSpacer />
+                <MudText Typo="Typo.body2">@Filtered.Count() Titel@(_selected.Count > 0 ? $" · {_selected.Count} ausgewählt" : "")</MudText>
+                <MudButtonGroup Variant="Variant.Outlined" Size="Size.Small">
+                    <MudButton StartIcon="@Icons.Material.Filled.AutoFixHigh" Disabled="_selected.Count == 0" OnClick="Retag">Neu taggen</MudButton>
+                    <MudButton StartIcon="@Icons.Material.Filled.Edit" Disabled="_selected.Count == 0" OnClick="Edit">Bearbeiten</MudButton>
+                </MudButtonGroup>
+            </MudStack>
+            <MudChipSet T="LibraryProblem" @bind-SelectedValues="_problemFilter" SelectionMode="SelectionMode.MultiSelection" CheckMark="true" Size="Size.Small">
+                @foreach (var p in Enum.GetValues<LibraryProblem>())
+                {
+                    <MudChip T="LibraryProblem" Value="p" Text="@($"{ProblemLabel(p)} ({Count(p)})")" Variant="Variant.Outlined" />
+                }
+            </MudChipSet>
+        </MudStack>
+    </ToolBarContent>
+    <Columns>
+        <SelectColumn T="LibraryTrack" />
+        <TemplateColumn Title="" Sortable="false" Style="width:56px">
+            <CellTemplate>
+                <MudIconButton Icon="@Icons.Material.Filled.PlayArrow" Size="Size.Small" OnClick="() => Player.Play(context.Item)" aria-label="Abspielen" />
+            </CellTemplate>
+        </TemplateColumn>
+        <TemplateColumn Title="Titel" SortBy="x => x.Title ?? x.RelativePath">
+            <CellTemplate>
+                <div class="d-flex align-center" style="gap:10px">
+                    <MudImage Src="@($"api/library/{context.Item.Id}/cover")" Width="40" Height="40" ObjectFit="ObjectFit.Cover" Class="rounded flex-shrink-0" />
+                    <div style="min-width:0">
+                        <MudText Typo="Typo.body2"><b>@(context.Item.Title ?? Path.GetFileName(context.Item.RelativePath))</b></MudText>
+                        <MudText Typo="Typo.caption" Class="mono" Style="opacity:.55">@context.Item.RelativePath</MudText>
+                    </div>
+                </div>
+            </CellTemplate>
+        </TemplateColumn>
+        <TemplateColumn Title="Künstler" SortBy="x => x.ArtistNames.FirstOrDefault()">
+            <CellTemplate>
+                @foreach (var (name, i) in context.Item.ArtistNames.Select((n, i) => (n, i)))
+                {
+                    @(i > 0 ? ", " : "")<MudLink Href="@ArtistHref(name)" Typo="Typo.body2">@name</MudLink>
+                }
+            </CellTemplate>
+        </TemplateColumn>
+        <TemplateColumn Title="Album" SortBy="x => x.Album">
+            <CellTemplate>
+                @if (context.Item.Album != null)
+                {
+                    <MudLink Href="@AlbumHref(context.Item)" Typo="Typo.body2">@context.Item.Album</MudLink>
+                }
+            </CellTemplate>
+        </TemplateColumn>
+        <PropertyColumn Property="x => x.Year" Title="Jahr" />
+        <TemplateColumn Title="Genre" SortBy="x => x.Genres.FirstOrDefault()">
+            <CellTemplate>@string.Join(", ", context.Item.Genres)</CellTemplate>
+        </TemplateColumn>
+        <TemplateColumn Title="Format" SortBy="x => x.BitrateKbps">
+            <CellTemplate>@context.Item.Codec @(context.Item.BitrateKbps != null ? $"{context.Item.BitrateKbps} kbps" : "")</CellTemplate>
+        </TemplateColumn>
+        <TemplateColumn Title="Hinweise" Sortable="false">
+            <CellTemplate>
+                @foreach (var p in context.Item.Problems(RulesVersion))
+                {
+                    <MudChip T="string" Size="Size.Small" Variant="Variant.Text" Color="@(p == LibraryProblem.OldRules ? Color.Info : Color.Warning)">@ProblemLabel(p)</MudChip>
+                }
+            </CellTemplate>
+        </TemplateColumn>
+    </Columns>
+    <PagerContent>
+        <MudDataGridPager T="LibraryTrack" />
+    </PagerContent>
+</MudDataGrid>
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<LibraryTrack> Tracks { get; set; } = [];
+    [Parameter, EditorRequired] public string RulesVersion { get; set; } = "";
+
+    /// <summary>Preset problem filter (e.g. from a link).</summary>
+    [Parameter] public LibraryProblem? InitialProblem { get; set; }
+
+    [Parameter] public string? InitialSearch { get; set; }
+
+    private HashSet<LibraryTrack> _selected = [];
+    private IReadOnlyCollection<LibraryProblem> _problemFilter = [];
+    private string? _search;
+
+    protected override void OnInitialized()
+    {
+        if (InitialProblem is { } p) _problemFilter = [p];
+        _search = InitialSearch;
+    }
+
+    private IEnumerable<LibraryTrack> Filtered => Tracks.Where(t =>
+        (string.IsNullOrWhiteSpace(_search)
+         || (t.Title?.Contains(_search, StringComparison.OrdinalIgnoreCase) ?? false)
+         || (t.Album?.Contains(_search, StringComparison.OrdinalIgnoreCase) ?? false)
+         || t.ArtistNames.Any(a => a.Contains(_search, StringComparison.OrdinalIgnoreCase))
+         || t.Genres.Any(g => g.Equals(_search, StringComparison.OrdinalIgnoreCase)))
+        && _problemFilter.All(p => t.Problems(RulesVersion).Contains(p)));
+
+    private int Count(LibraryProblem p) => Tracks.Count(t => t.Problems(RulesVersion).Contains(p));
+
+    public static string ProblemLabel(LibraryProblem p) => p switch
+    {
+        LibraryProblem.NotFromThisTool => "nicht von diesem Tool",
+        LibraryProblem.OldRules => "alte Regeln",
+        LibraryProblem.NoMusicBrainz => "ohne MusicBrainz",
+        LibraryProblem.NoCover => "ohne Cover",
+        LibraryProblem.NoGenre => "ohne Genre",
+        LibraryProblem.LowBitrate => "Bitrate < 192",
+        _ => p.ToString(),
+    };
+
+    public static string ArtistHref(string name) => $"bibliothek/kuenstler/{Uri.EscapeDataString(name)}";
+
+    public static string AlbumHref(LibraryTrack t) =>
+        $"bibliothek/album?artist={Uri.EscapeDataString(t.MainAlbumArtist ?? "")}&album={Uri.EscapeDataString(t.Album ?? "")}";
+
+    private string Ids => string.Join(",", _selected.Select(t => t.Id));
+
+    private void Retag() => Nav.NavigateTo($"bibliothek/neu-taggen?ids={Ids}");
+
+    private void Edit() => Nav.NavigateTo($"bibliothek/bearbeiten?ids={Ids}");
+}

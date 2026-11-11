@@ -46,9 +46,13 @@ public static class AudioEndpoints
             var entry = await db.Library.FindAsync([id], ct);
             var path = entry == null ? null : storage.LibraryPath(entry.RelativePath);
             var data = path != null && File.Exists(path) ? TagIo.ReadEmbeddedCover(path) : null;
-            if (data == null) return Results.NotFound();
-            return Results.File(data, data.Length > 3 && data[0] == 0x89 ? "image/png" : "image/jpeg");
+            return data == null
+                ? Results.Content(Placeholder, "image/svg+xml")
+                : Results.File(data, data.Length > 3 && data[0] == 0x89 ? "image/png" : "image/jpeg");
         });
+
+        // Artist image (filled by the artist image service; placeholder until then).
+        app.MapGet("/api/artists/image", () => Results.Content(Placeholder, "image/svg+xml"));
 
         // Loudness of both versions (LUFS) for the volume match.
         app.MapGet("/api/audio/loudness", async (int file, int entry, IDbContextFactory<AppDbContext> dbFactory, Storage storage, AudioTools audio,
@@ -66,6 +70,10 @@ public static class AudioEndpoints
             });
         });
     }
+
+    /// <summary>Neutral note icon for missing covers and artist images.</summary>
+    public const string Placeholder =
+        "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\"><rect width=\"24\" height=\"24\" fill=\"#9e9e9e33\"/><path fill=\"#9e9e9e\" d=\"M12 3v10.55A4 4 0 1 0 14 17V7h4V3z\"/></svg>";
 
     private static async Task<IResult> Serve(string path, AudioTools audio, CancellationToken ct)
     {

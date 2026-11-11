@@ -11,6 +11,7 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 builder.Services.AddMudServices();
+builder.Services.AddScoped<PlayerService>();
 builder.Services.AddMusicManager(builder.Configuration);
 
 // Keep Data Protection keys (antiforgery, circuits) on the data volume.

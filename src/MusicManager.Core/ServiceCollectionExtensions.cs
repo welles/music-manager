@@ -44,6 +44,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<PipelineNotifier>();
         services.AddSingleton<DuplicateDetector>();
         services.AddSingleton<LibraryDuplicateScanner>();
+        services.AddSingleton<LibraryCatalog>();
         services.AddSingleton<MatchingPipeline>();
         services.AddSingleton<ReviewService>();
 
