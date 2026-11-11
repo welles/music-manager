@@ -50,6 +50,7 @@ public static class TagIo
 
             t.Date = FullDate(file) ?? t.Date;
             ReadExtra(file, t);
+            ReadWrittenFields(path, t);
             t.AcoustId = (t.Extra.GetValueOrDefault("Acoustid Id") ?? t.Extra.GetValueOrDefault("acoustid_id")).NullIfEmpty();
         }
         catch (Exception ex) when (ex is CorruptFileException or UnsupportedFormatException)
@@ -71,6 +72,33 @@ public static class TagIo
         else if (file.GetTag(TagTypes.Xiph) is TagLib.Ogg.XiphComment xiph)
             value = xiph.GetFirstField("DATE");
         return value is { Length: >= 4 } && char.IsDigit(value[0]) ? value.Trim() : null;
+    }
+
+    /// <summary>
+    /// Fields the writer produces but TagLib's generic properties do not cover (freeform atoms,
+    /// Vorbis comments, multi-value IDs). Without them, re-tagging or editing a file would drop them.
+    /// </summary>
+    private static void ReadWrittenFields(string path, TagSet t)
+    {
+        var fields = TagFields.Read(path);
+        string? One(params string[] names) => TagFields.Get(fields, names).FirstOrDefault();
+        List<string> Many(params string[] names) => TagFields.Get(fields, names);
+
+        t.OriginalDate ??= One("ORIGINALDATE");
+        t.Label ??= One("LABEL");
+        t.Isrc ??= One("ISRC");
+        t.Remixer ??= One("REMIXER");
+        t.MbTrackId ??= One("MusicBrainz Release Track Id", "MUSICBRAINZ_RELEASETRACKID");
+        t.ReleaseStatus ??= One("MusicBrainz Album Status", "RELEASESTATUS");
+        t.ReleaseCountry ??= One("MusicBrainz Album Release Country", "RELEASECOUNTRY");
+        var types = Many("MusicBrainz Album Type", "RELEASETYPE");
+        if (types.Count > 0) t.ReleaseType ??= string.Join("; ", types);
+        if (t.MbArtistIds.Count == 0) t.MbArtistIds = Many("MusicBrainz Artist Id", "MUSICBRAINZ_ARTISTID");
+        if (t.MbAlbumArtistIds.Count == 0) t.MbAlbumArtistIds = Many("MusicBrainz Album Artist Id", "MUSICBRAINZ_ALBUMARTISTID");
+        var albumArtists = Many("ALBUMARTIST", "ALBUM ARTIST");
+        if (albumArtists.Count > 1 && t.AlbumArtists.Count == 0) t.AlbumArtists = albumArtists;
+        var artists = Many("ARTIST");
+        if (artists.Count > 1 && t.Artists.Count == 0) t.Artists = artists;
     }
 
     private static void ReadExtra(File file, TagSet t)
