@@ -1,0 +1,21 @@
+name: Claude Review
+# AI review of pull requests with the central reviewer welles/claude-reviewer: every new or updated
+# PR gets a review, the label "claude-review" starts a thorough one. The reviewer approves the PR
+# or requests changes while a finding of severity "kritisch" or "fehler" is open. What to look for
+# in this repo is in .github/review-instructions.md; setup and costs: README of welles/claude-reviewer.
+on:
+  pull_request:
+    types: [opened, reopened, ready_for_review, synchronize, labeled]
+# The reusable workflow can only use what is granted here
+permissions:
+  contents: read
+  pull-requests: write
+  actions: read
+jobs:
+  review:
+    uses: welles/claude-reviewer/.github/workflows/review.yml@v1
+    # Only the secrets of the review, not `inherit`: the workflow lives in another repository
+    secrets:
+      ANTHROPIC_REVIEW_KEY: ${{ secrets.ANTHROPIC_REVIEW_KEY }}
+      REVIEWER_APP_CLIENT_ID: ${{ secrets.REVIEWER_APP_CLIENT_ID }}
+      REVIEWER_APP_KEY: ${{ secrets.REVIEWER_APP_KEY }}
