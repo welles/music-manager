@@ -18,7 +18,7 @@ longer needed here.
 | `_force_replace_artists` | Unify artist names ("Bob Seger & the Silver Bullet Band" → "Bob Seger") | Applied **per credit** (exact name), before the display string is assembled. No substring replacement in composed strings. |
 | "Bruce Hornsby & the Range" → "… and the Range" | (workaround) keeps the band name from being split at " & " | Replaced by the **exception list** (`NoSplit`): such names are never split. |
 | `$noop(MEMENTO IDEMPOTENCY)` | Running the script again must not change anything | `TaggingRules.Apply` is a pure function and is tested for idempotence. |
-| File Renaming Script | `{albumartist}/{album}/{artist} - {title}` (final, lost version of the script) | `PathBuilder`: folder uses the first album artist, the file name the first artist of the track (as in the existing library, e.g. `Various Artists/Shell Shock/Fox Stevenson - Sandblast`); fallback to the first artist and then the artist string, ASCII only, Windows-compatible, `/` → `_`. |
+| File Renaming Script | `{albumartist}/{album}/{artist} - {title}` (final, lost version of the script) | `PathBuilder`: folder uses the first album artist, the file name the first artist of the track (as in the existing library, e.g. `Various Artists/Shell Shock/Fox Stevenson - Sandblast`); fallback to the first artist and then the artist string. Names are kept exactly as tagged (Unicode, NFC – decision 2026-11-11: the Picard backup had `ascii_filenames` on, but the library is mostly Unicode). Only `/` → `∕` (U+2215) and a leading `.` → `․` (U+2024, Navidrome skips hidden folders); long names are cut to 240 bytes. |
 | MusicFab Import | Source-specific pre-cleaning | Source profiles (inbox subfolder → rules), editable in the frontend. |
 
 Additionally (new):

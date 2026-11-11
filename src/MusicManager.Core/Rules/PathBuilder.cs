@@ -6,14 +6,13 @@ namespace MusicManager.Core.Rules;
 /// <summary>
 /// File naming after the (lost) final version of the Picard "File Renaming Script":
 /// <c>{main album artist}/{album}/{main track artist} - {title}</c>
-/// with ASCII-only and Windows-compatible file names.
+/// with the names exactly as in the tags (Unicode, see <see cref="SanitizeComponent"/>).
 /// </summary>
 public static class PathBuilder
 {
     public const string NonAlbumFolder = "[non-album tracks]";
     private const int MaxComponentLength = 180;
-
-    private static readonly char[] WindowsReplacements = ['|', '?', '>', '<', ':', '*', '"'];
+    private const int MaxComponentBytes = 240;
 
     /// <summary>Returns the target path relative to the library root.</summary>
     public static string Build(TagSet tags, string extension = ".m4a")
@@ -32,41 +31,40 @@ public static class PathBuilder
         var trackArtist = tags.Artists.FirstOrDefault().NullIfEmpty() ?? tags.Artist.NullIfEmpty() ?? mainArtist;
         var dir1 = SanitizeComponent(mainArtist);
         var dir2 = SanitizeComponent(album);
-        var file = SanitizeComponent($"{trackArtist} - {title}", directory: false);
+        var file = SanitizeComponent($"{trackArtist} - {title}");
 
         return Path.Combine(dir1, dir2, file + extension);
     }
 
     /// <summary>
-    /// ASCII only, Windows compatible, slashes in values replaced by "_". Like Picard, a trailing dot
-    /// of a folder name becomes "_" ("Fred again.." → "Fred again._", "J.B.O." → "J.B.O_"); file
-    /// names keep it because the extension follows ("Born in the U.S.A..m4a").
+    /// Keeps the name exactly as in the tags (Unicode, NFC) – Linux only forbids "/" and NUL in a name.
+    /// The few unavoidable changes use look-alike characters instead of "_": "/" → "∕" (U+2215, "AC∕DC"),
+    /// a leading dot → "․" (U+2024, otherwise the folder would be hidden and skipped by Navidrome).
+    /// Control characters are dropped and long names are cut to fit the 255-byte limit of the file system.
     /// </summary>
-    public static string SanitizeComponent(string value, bool directory = true)
+    public static string SanitizeComponent(string value)
     {
-        // "Little World (リトルワールド)" → "Little World": bracket parts without any Latin letters
-        // would only become underscores in an ASCII file name.
-        var withoutForeign = System.Text.RegularExpressions.Regex.Replace(value, @"\s*[\(\[]([^\)\]]*)[\)\]]",
-            m => ForeignTitles.HasNonLatinLetters(m.Value) && !ForeignTitles.HasLatinLetters(m.Groups[1].Value) ? "" : m.Value).Trim();
-        if (withoutForeign.Length > 0) value = withoutForeign;
-
-        var s = TextUtil.ToAscii(value);
+        var s = value.Normalize(NormalizationForm.FormC);
         var sb = new StringBuilder(s.Length);
         foreach (var ch in s)
         {
-            if (ch is '/' or '\\' || WindowsReplacements.Contains(ch))
-                sb.Append('_');
+            if (ch == '/')
+                sb.Append('∕');
             else if (!char.IsControl(ch))
                 sb.Append(ch);
         }
 
         var result = sb.ToString().Trim();
-        if (result.Length > MaxComponentLength)
-            result = result[..MaxComponentLength].TrimEnd();
+        if (result.StartsWith('.'))
+            result = "․" + result[1..];
 
-        // Windows does not allow folder names ending in a dot.
-        if (directory && result.EndsWith('.'))
-            result = result[..^1] + "_";
+        // ext4/ZFS allow 255 bytes per name; leave room for the extension.
+        while (result.Length > 0 && (result.Length > MaxComponentLength || Encoding.UTF8.GetByteCount(result) > MaxComponentBytes))
+        {
+            var cut = result.Length - 1;
+            if (char.IsLowSurrogate(result[cut])) cut--;
+            result = result[..cut].TrimEnd();
+        }
 
         return result.Length == 0 ? "_" : result;
     }

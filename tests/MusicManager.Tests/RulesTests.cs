@@ -85,14 +85,14 @@ public class RulesTests
     public void PathBuilder_FollowsRenamingScript()
     {
         var path = PathBuilder.Build(new TagSet { AlbumArtist = "Sigur Rós", Album = "Ágætis byrjun", Title = "Svefn-g-englar: AC/DC?", Artists = ["Sigur Rós"] });
-        Assert.Equal(Path.Combine("Sigur Ros", "Agaetis byrjun", "Sigur Ros - Svefn-g-englar_ AC_DC_.m4a"), path);
+        Assert.Equal(Path.Combine("Sigur Rós", "Ágætis byrjun", "Sigur Rós - Svefn-g-englar: AC∕DC?.m4a"), path);
     }
 
     [Theory]
-    [InlineData("Fred again..", "leavemealone", "Fred again._", "Fred again.. - leavemealone.m4a")]
+    [InlineData("Fred again..", "leavemealone", "Fred again..", "Fred again.. - leavemealone.m4a")]
     [InlineData("Bruce Springsteen", "Born in the U.S.A.", "Bruce Springsteen", "Bruce Springsteen - Born in the U.S.A..m4a")]
-    [InlineData("J.B.O.", "Song", "J.B.O_", "J.B.O. - Song.m4a")]
-    public void TrailingDotsFollowPicard(string artist, string title, string folder, string file) =>
+    [InlineData("J.B.O.", "Song", "J.B.O.", "J.B.O. - Song.m4a")]
+    public void NamesKeepTrailingDots(string artist, string title, string folder, string file) =>
         Assert.Equal(Path.Combine(folder, "Album", file), PathBuilder.Build(new TagSet { AlbumArtist = artist, Artists = [artist], Album = "Album", Title = title }));
 
     [Fact]
@@ -250,13 +250,21 @@ public class ForeignTitleTests
         Assert.Equal("Little World (リトルワールド)", ForeignTitles.Combine("リトルワールド", "Little World"));
 
     [Fact]
-    public void FileNameDropsNonLatinBracketPart() =>
-        Assert.Equal(Path.Combine("PompadollS", "Little World", "PompadollS - Little World.m4a"),
-            PathBuilder.Build(new TagSet { AlbumArtist = "PompadollS", Album = "Little World (リトルワールド)", Title = "Little World (リトルワールド)" }));
+    public void PathKeepsNonLatinNames() =>
+        Assert.Equal(Path.Combine("PompadollS", "Little World (リトルワールド)", "PompadollS - 入曽.m4a"),
+            PathBuilder.Build(new TagSet { AlbumArtist = "PompadollS", Album = "Little World (リトルワールド)", Title = "入曽" }));
 
     [Fact]
-    public void FileNameKeepsUntranslatedTitleAsFallback() =>
-        Assert.Equal("_______", PathBuilder.SanitizeComponent("リトルワールド"));
+    public void LeadingDotWouldHideTheFolder() =>
+        Assert.Equal("․..And You Will Know Us", PathBuilder.SanitizeComponent("...And You Will Know Us"));
+
+    [Fact]
+    public void LongNamesFitTheByteLimit()
+    {
+        var s = PathBuilder.SanitizeComponent(new string('入', 150));
+        Assert.True(System.Text.Encoding.UTF8.GetByteCount(s) <= 240);
+        Assert.Equal(80, s.Length);
+    }
 }
 
 public class ExternalLinkTests
