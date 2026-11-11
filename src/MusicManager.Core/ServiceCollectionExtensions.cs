@@ -75,6 +75,8 @@ public static class ServiceCollectionExtensions
         services.AddHostedService<TrashCleanupService>();
         services.AddSingleton<FileMarkerSync>();
         services.AddHostedService(sp => sp.GetRequiredService<FileMarkerSync>());
+        services.AddSingleton<PlaylistFileSync>();
+        services.AddHostedService(sp => sp.GetRequiredService<PlaylistFileSync>());
 
         services.AddHttpClient("webpush", c => c.Timeout = TimeSpan.FromSeconds(30));
         services.AddSingleton<WebPushSender>();

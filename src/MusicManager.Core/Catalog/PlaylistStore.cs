@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using MusicManager.Core.Data;
+using MusicManager.Core.Pipeline;
 
 namespace MusicManager.Core.Catalog;
 
@@ -16,8 +17,11 @@ public sealed record PlaylistChanges(
 /// kept but hidden from clients, so positions the client sends refer to the visible entries only
 /// (<c>inLibrary</c> decides what is visible).
 /// </summary>
-public sealed class PlaylistStore(IDbContextFactory<AppDbContext> dbFactory)
+public sealed class PlaylistStore(IDbContextFactory<AppDbContext> dbFactory, Storage storage)
 {
+    /// <summary>Raised after a playlist was created, changed or deleted.</summary>
+    public event Action? Changed;
+
     public async Task<List<Playlist>> ListAsync(CancellationToken ct = default)
     {
         await using var db = await dbFactory.CreateDbContextAsync(ct);
@@ -40,6 +44,7 @@ public sealed class PlaylistStore(IDbContextFactory<AppDbContext> dbFactory)
         playlist.Entries.AddRange(songIds.Select((id, i) => new PlaylistEntry { SongId = id, Position = i }));
         db.Playlists.Add(playlist);
         await db.SaveChangesAsync(ct);
+        Changed?.Invoke();
         return playlist;
     }
 
@@ -81,6 +86,9 @@ public sealed class PlaylistStore(IDbContextFactory<AppDbContext> dbFactory)
         if (playlist == null) return false;
         db.Playlists.Remove(playlist);
         await db.SaveChangesAsync(ct);
+        // Otherwise the file sync would take the left-over file for a new playlist.
+        if (playlist.FileName != null) File.Delete(storage.LibraryPath(Path.Combine(PlaylistFile.Folder, playlist.FileName)));
+        Changed?.Invoke();
         return true;
     }
 
@@ -94,6 +102,7 @@ public sealed class PlaylistStore(IDbContextFactory<AppDbContext> dbFactory)
         for (var i = 0; i < playlist.Entries.Count; i++) playlist.Entries[i].Position = i;
         playlist.ChangedAt = DateTimeOffset.UtcNow;
         await db.SaveChangesAsync(ct);
+        Changed?.Invoke();
         return playlist;
     }
 

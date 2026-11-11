@@ -96,6 +96,9 @@ public sealed class AppSettings
     /// <summary>Song ID, added date, favorite and rating are mirrored into the library files (M4A written by this tool).</summary>
     public bool WriteMarkersToFiles { get; set; } = true;
 
+    /// <summary>Playlists are kept as M3U8 files in the library's "Playlists" folder; edits made there are taken over.</summary>
+    public bool PlaylistFiles { get; set; } = true;
+
     public int CoverSize { get; set; } = 500;
 
     /// <summary>Additional files moved along with the audio files.</summary>

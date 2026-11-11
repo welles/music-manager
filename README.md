@@ -78,6 +78,13 @@ files a few seconds after a change. If the database is lost, a scan restores son
 favorites and ratings from the files; a file moved or renamed outside the tool keeps its ID. Play counts,
 the inbox history and settings stay in the database (a play would otherwise rewrite the file).
 
+Playlists are kept as M3U8 files in the library's `Playlists` folder, with paths relative to the file so
+other players can read them. Extra `#MUSICMANAGER-` comment lines keep the playlist ID, comment and the song
+ID of every entry, so a song that is temporarily missing is not lost. The sync works both ways: changes in
+the app (Symfonium) and moved songs rewrite the file within seconds; a file edited, added or renamed in the
+folder is taken over within a minute (the newer change wins). A lost database gets all playlists back, with
+their old IDs. A deleted file is written again; delete playlists in the app.
+
 ### App and notifications
 
 The web app can be installed as a PWA (HTTPS required, e.g. through the tunnel). Under

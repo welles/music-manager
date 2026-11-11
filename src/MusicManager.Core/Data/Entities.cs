@@ -450,6 +450,12 @@ public sealed class Playlist
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset ChangedAt { get; set; } = DateTimeOffset.UtcNow;
 
+    /// <summary>Name of the playlist's M3U8 file in the library's playlist folder (null until written).</summary>
+    public string? FileName { get; set; }
+
+    /// <summary>SHA-256 of the file as last written or read; a different hash means it was edited outside the tool.</summary>
+    public string? FileHash { get; set; }
+
     /// <summary>Entries; order by <see cref="PlaylistEntry.Position"/>.</summary>
     public List<PlaylistEntry> Entries { get; set; } = [];
 }
