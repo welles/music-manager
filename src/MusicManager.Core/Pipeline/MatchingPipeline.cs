@@ -483,10 +483,24 @@ public sealed partial class MatchingPipeline(
     /// <summary>Fetches the full release and builds the final tags and target path for a candidate.</summary>
     public async Task BuildFinalTagsAsync(TrackFile file, ReleaseCandidate candidate, AppSettings settings, CancellationToken ct)
     {
-        var release = await musicBrainz.GetReleaseAsync(candidate.Release.ReleaseId, ct);
+        file.FinalTags = await BuildReleaseTagsAsync(candidate.Release.ReleaseId, candidate.RecordingId, file.CleanedTags, settings, ct);
+        file.FinalTags.AcoustId = file.AcoustId;
+        await TranslateForeignTitlesAsync(file, settings, ct);
+        file.TargetPath = PathBuilder.Build(file.FinalTags);
+        file.ManuallyTagged = false;
+        AddEvent(file, $"Release gewählt: {file.FinalTags.Album} ({file.FinalTags.Date}, {file.FinalTags.ReleaseCountry}) → {file.TargetPath}");
+    }
+
+    /// <summary>
+    /// Tags for a recording on a MusicBrainz release with all rules (credits, translation of artist
+    /// names, genres, additional artists from <paramref name="source"/>). Used for new files and re-tagging.
+    /// </summary>
+    public async Task<TagSet> BuildReleaseTagsAsync(string releaseId, string recordingId, TagSet? source, AppSettings settings, CancellationToken ct)
+    {
+        var release = await musicBrainz.GetReleaseAsync(releaseId, ct);
         var rules = await settingsService.GetArtistRulesAsync(ct);
 
-        var found = TagBuilder.FindTrack(release, candidate.RecordingId)
+        var found = TagBuilder.FindTrack(release, recordingId)
                     ?? throw new InvalidOperationException("Recording nicht auf dem gewählten Release gefunden");
 
         var artists = new Dictionary<string, ArtistInfo>();
@@ -498,39 +512,37 @@ public sealed partial class MatchingPipeline(
                 artists[id] = await musicBrainz.GetArtistAsync(id, ct);
         }
 
-        file.FinalTags = TagBuilder.Build(release, candidate.RecordingId, artists, settings, rules);
-        file.FinalTags = TaggingRules.AddSourceArtists(file.FinalTags, file.CleanedTags, rules);
-        file.FinalTags.AcoustId = file.AcoustId;
-        await TranslateForeignTitlesAsync(file, settings, ct);
-        file.TargetPath = PathBuilder.Build(file.FinalTags);
-        file.ManuallyTagged = false;
-        AddEvent(file, $"Release gewählt: {release.Title} ({release.Date}, {release.Country}) → {file.TargetPath}");
+        var tags = TagBuilder.Build(release, recordingId, artists, settings, rules);
+        return TaggingRules.AddSourceArtists(tags, source, rules);
     }
 
     /// <summary>Title and album in non-Latin script become "English (Original)" (translated by Claude).</summary>
     private async Task TranslateForeignTitlesAsync(TrackFile file, AppSettings settings, CancellationToken ct)
     {
-        var t = file.FinalTags;
-        if (t == null || !settings.TranslateForeignTitles) return;
+        if (file.FinalTags == null) return;
+        var (message, warning) = await TranslateTagsAsync(file.FinalTags, settings, ct);
+        if (message != null) AddEvent(file, message, warning ? EventLevel.Warning : EventLevel.Info);
+    }
 
+    /// <summary>Title and album in non-Latin script become "English (Original)". Returns a message for the log.</summary>
+    public async Task<(string? Message, bool Warning)> TranslateTagsAsync(TagSet t, AppSettings settings, CancellationToken ct)
+    {
+        if (!settings.TranslateForeignTitles) return (null, false);
         var texts = new[] { t.Title, t.Album }.Where(ForeignTitles.NeedsTranslation).Distinct().Cast<string>().ToList();
-        if (texts.Count == 0) return;
+        if (texts.Count == 0) return (null, false);
         if (!ai.IsConfigured)
-        {
-            AddEvent(file, "Nicht-lateinischer Titel – Übersetzung braucht einen Anthropic-API-Key", EventLevel.Warning);
-            return;
-        }
+            return ("Nicht-lateinischer Titel – Übersetzung braucht einen Anthropic-API-Key", true);
 
         try
         {
             var translations = await ai.TranslateAsync(texts, t.Artist, settings, ct);
             if (ForeignTitles.NeedsTranslation(t.Title)) t.Title = ForeignTitles.Combine(t.Title!, translations.GetValueOrDefault(t.Title!));
             if (ForeignTitles.NeedsTranslation(t.Album)) t.Album = ForeignTitles.Combine(t.Album!, translations.GetValueOrDefault(t.Album!));
-            AddEvent(file, $"Übersetzt: {string.Join(", ", texts.Select(x => $"\"{x}\" → \"{translations.GetValueOrDefault(x)}\""))}");
+            return ($"Übersetzt: {string.Join(", ", texts.Select(x => $"\"{x}\" → \"{translations.GetValueOrDefault(x)}\""))}", false);
         }
         catch (Exception ex) when (!ct.IsCancellationRequested)
         {
-            AddEvent(file, $"Übersetzung fehlgeschlagen: {ex.Message}", EventLevel.Warning);
+            return ($"Übersetzung fehlgeschlagen: {ex.Message}", true);
         }
     }
 

@@ -1,0 +1,148 @@
+@page "/bibliothek/neu-taggen"
+@inherits LivePage
+@inject RetagService Retag
+@inject LibraryCatalog Catalog
+@inject SettingsService SettingsService
+@inject ISnackbar Snackbar
+
+<PageTitle>Neu taggen – Music Manager</PageTitle>
+
+<PageHeader Title="Neu taggen" UseHistory="true" />
+
+<MudText Typo="Typo.body2" Class="mb-3">
+    Dateien aus MusicBrainz bekommen frische Tags von ihrem Release, manuell oder über Spotify/Deezer getaggte Dateien nur die
+    aktuellen Regeln. Es werden nur Tags geschrieben, das Audio bleibt unverändert. Erst nach „Übernehmen“ wird etwas geändert.
+</MudText>
+
+@if (State.Running)
+{
+    <MudPaper Outlined="true" Class="pa-4 mb-3">
+        <MudText Typo="Typo.subtitle1" Class="mb-2">@State.Phase … @State.Progress / @State.Total</MudText>
+        <MudProgressLinear Color="Color.Primary" Value="@(State.Total == 0 ? 0 : 100.0 * State.Progress / State.Total)" />
+    </MudPaper>
+}
+
+@if (!State.Running && Retag.Previews.Count > 0)
+{
+    var changed = Retag.Previews.Where(p => p.Changed && !p.Applied).ToList();
+    var applied = Retag.Previews.Count(p => p.Applied);
+    var errors = Retag.Previews.Where(p => p.Error != null).ToList();
+
+    <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Class="mb-3">
+        <MudChip T="string" Color="Color.Warning" Variant="Variant.Text">@changed.Count mit Änderungen</MudChip>
+        <MudChip T="string" Variant="Variant.Text">@Retag.Previews.Count(p => !p.Changed && p.Error == null && !p.Applied) unverändert</MudChip>
+        @if (applied > 0)
+        {
+            <MudChip T="string" Color="Color.Success" Variant="Variant.Text">@applied übernommen</MudChip>
+        }
+        @if (errors.Count > 0)
+        {
+            <MudChip T="string" Color="Color.Error" Variant="Variant.Text">@errors.Count Fehler</MudChip>
+        }
+        <MudSpacer />
+        <MudSwitch @bind-Value="_movePaths" Color="Color.Primary" Label="Dateien bei geändertem Pfad verschieben" />
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Save" OnClick="Apply"
+                   Disabled="@(SelectedChanged.Count == 0)">
+            Übernehmen (@SelectedChanged.Count)
+        </MudButton>
+    </MudStack>
+
+    @if (changed.Any(p => p.PathChanged))
+    {
+        <MudAlert Severity="Severity.Info" Dense="true" Class="mb-3">
+            @changed.Count(p => p.PathChanged) Datei(en) hätten nach den aktuellen Regeln einen anderen Pfad. Beim Verschieben verliert
+            Navidrome für diese Titel Wiedergabezähler, Favoriten und Playlist-Einträge.
+        </MudAlert>
+    }
+
+    <MudExpansionPanels MultiExpansion="true">
+        @foreach (var p in changed)
+        {
+            <MudExpansionPanel>
+                <TitleContent>
+                    <div class="d-flex align-center" style="gap:8px">
+                        <MudCheckBox T="bool" Value="!_deselected.Contains(p.EntryId)" ValueChanged="@(v => Toggle(p, v))" Size="Size.Small"
+                                     @onclick:stopPropagation="true" />
+                        <MudImage Src="@($"api/library/{p.EntryId}/cover")" Width="36" Height="36" ObjectFit="ObjectFit.Cover" Class="rounded" />
+                        <div style="min-width:0">
+                            <MudText Typo="Typo.body2"><b>@p.NewTags?.Title</b> · @string.Join(", ", p.NewTags?.Artists ?? [])</MudText>
+                            <MudText Typo="Typo.caption" Class="mono" Style="opacity:.6">@p.RelativePath@(p.PathChanged ? $"  →  {p.NewRelativePath}" : "")</MudText>
+                        </div>
+                        <MudSpacer />
+                        <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">@p.Method</MudChip>
+                    </div>
+                </TitleContent>
+                <ChildContent>
+                    <FieldDiff Before="p.Before" After="p.After" HideUnchanged="true" />
+                </ChildContent>
+            </MudExpansionPanel>
+        }
+    </MudExpansionPanels>
+
+    @if (errors.Count > 0)
+    {
+        <MudText Typo="Typo.subtitle2" Class="mt-4">Fehler</MudText>
+        @foreach (var e in errors)
+        {
+            <MudText Typo="Typo.body2"><span class="mono">@e.RelativePath</span>: @e.Error</MudText>
+        }
+    }
+}
+
+@code {
+    [SupplyParameterFromQuery] public string? Ids { get; set; }
+    [SupplyParameterFromQuery] public string? Problem { get; set; }
+    [SupplyParameterFromQuery] public bool All { get; set; }
+
+    private readonly HashSet<int> _deselected = [];
+    private bool _movePaths, _started;
+
+    private RetagState State => Retag.State;
+
+    private List<RetagPreview> SelectedChanged =>
+        Retag.Previews.Where(p => p.Changed && !p.Applied && !_deselected.Contains(p.EntryId)).ToList();
+
+    protected override async Task ReloadAsync()
+    {
+        if (_started) return;
+        _started = true;
+
+        List<int> ids;
+        if (!string.IsNullOrWhiteSpace(Ids))
+        {
+            ids = Ids.Split(',', StringSplitOptions.RemoveEmptyEntries).Select(int.Parse).ToList();
+        }
+        else
+        {
+            var tracks = await Catalog.GetTracksAsync();
+            var rulesVersion = await SettingsService.GetRulesVersionAsync();
+            ids = Enum.TryParse<LibraryProblem>(Problem, true, out var p)
+                ? tracks.Where(t => t.Problems(rulesVersion).Contains(p)).Select(t => t.Id).ToList()
+                : All ? tracks.Select(t => t.Id).ToList() : [];
+        }
+
+        if (ids.Count == 0)
+        {
+            Snackbar.Add("Keine Dateien ausgewählt.", Severity.Info);
+            return;
+        }
+
+        if (!await Retag.StartPreviewAsync(ids))
+            Snackbar.Add("Es läuft bereits ein Vorgang – bitte warten.", Severity.Warning);
+    }
+
+    private void Toggle(RetagPreview p, bool selected)
+    {
+        if (selected) _deselected.Remove(p.EntryId);
+        else _deselected.Add(p.EntryId);
+    }
+
+    private async Task Apply()
+    {
+        var selected = SelectedChanged;
+        if (!await Retag.StartApplyAsync(selected, _movePaths))
+            Snackbar.Add("Es läuft bereits ein Vorgang – bitte warten.", Severity.Warning);
+        else
+            Snackbar.Add($"{selected.Count} Datei(en) werden neu getaggt.", Severity.Info);
+    }
+}

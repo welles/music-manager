@@ -45,6 +45,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<DuplicateDetector>();
         services.AddSingleton<LibraryDuplicateScanner>();
         services.AddSingleton<LibraryCatalog>();
+        services.AddSingleton<RetagService>();
         services.AddHttpClient("wikimedia", c =>
         {
             // Wikimedia requires a descriptive User-Agent.
