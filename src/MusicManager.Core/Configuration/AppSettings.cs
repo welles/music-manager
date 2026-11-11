@@ -93,6 +93,9 @@ public sealed class AppSettings
     /// <summary>Own spellings, "from = to" per line (e.g. "Drum And Bass = Drum & Bass"); an empty right side drops the genre.</summary>
     public List<string> GenreMap { get; set; } = [];
 
+    /// <summary>Song ID, added date, favorite and rating are mirrored into the library files (M4A written by this tool).</summary>
+    public bool WriteMarkersToFiles { get; set; } = true;
+
     public int CoverSize { get; set; } = 500;
 
     /// <summary>Additional files moved along with the audio files.</summary>

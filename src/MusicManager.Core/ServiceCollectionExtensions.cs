@@ -73,6 +73,8 @@ public static class ServiceCollectionExtensions
         services.AddHostedService(sp => sp.GetRequiredService<LibraryIndexer>());
         services.AddHostedService<PipelineWorker>();
         services.AddHostedService<TrashCleanupService>();
+        services.AddSingleton<FileMarkerSync>();
+        services.AddHostedService(sp => sp.GetRequiredService<FileMarkerSync>());
 
         services.AddHttpClient("webpush", c => c.Timeout = TimeSpan.FromSeconds(30));
         services.AddSingleton<WebPushSender>();

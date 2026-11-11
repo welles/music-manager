@@ -93,6 +93,9 @@ public sealed class UserDataStore(IDbContextFactory<AppDbContext> dbFactory)
         }
     }
 
+    /// <summary>Raised after favorites or ratings changed, with the affected item IDs (songs are mirrored into their files).</summary>
+    public event Action<IReadOnlyCollection<string>>? MarksChanged;
+
     /// <summary>Stars the items; items that are already starred keep their date.</summary>
     public Task StarAsync(IEnumerable<string> ids, CancellationToken ct = default) => WriteAsync(async db =>
     {
@@ -101,13 +104,13 @@ public sealed class UserDataStore(IDbContextFactory<AppDbContext> dbFactory)
         var now = DateTimeOffset.UtcNow;
         db.Stars.AddRange(wanted.Except(existing, StringComparer.Ordinal).Select(id => new Star { ItemId = id, StarredAt = now }));
         await db.SaveChangesAsync(ct);
-    }, ct);
+    }, ct, ids);
 
     public Task UnstarAsync(IEnumerable<string> ids, CancellationToken ct = default) => WriteAsync(async db =>
     {
         var list = ids.Distinct(StringComparer.Ordinal).ToList();
         await db.Stars.Where(s => list.Contains(s.ItemId)).ExecuteDeleteAsync(ct);
-    }, ct);
+    }, ct, ids);
 
     /// <summary>Sets the rating (1..5); 0 removes it.</summary>
     public Task SetRatingAsync(string id, int rating, CancellationToken ct = default)
@@ -131,7 +134,7 @@ public sealed class UserDataStore(IDbContextFactory<AppDbContext> dbFactory)
             }
 
             await db.SaveChangesAsync(ct);
-        }, ct);
+        }, ct, [id]);
     }
 
     /// <summary>Counts one play per entry; the last play is the latest time seen (scrobbles may arrive late).</summary>
@@ -155,8 +158,9 @@ public sealed class UserDataStore(IDbContextFactory<AppDbContext> dbFactory)
         await db.SaveChangesAsync(ct);
     }, ct);
 
-    private async Task WriteAsync(Func<AppDbContext, Task> write, CancellationToken ct)
+    private async Task WriteAsync(Func<AppDbContext, Task> write, CancellationToken ct, IEnumerable<string>? marked = null)
     {
+        var markedIds = marked?.ToList();
         await _writeLock.WaitAsync(ct);
         try
         {
@@ -169,5 +173,41 @@ public sealed class UserDataStore(IDbContextFactory<AppDbContext> dbFactory)
             Interlocked.Increment(ref _version);
             _writeLock.Release();
         }
+
+        if (markedIds is { Count: > 0 }) MarksChanged?.Invoke(markedIds);
+    }
+
+    /// <summary>
+    /// Favorites and ratings read back from files (database rebuilt): only rows that do not exist yet are added,
+    /// so nothing the user changed since is overwritten. Returns the number of added rows.
+    /// </summary>
+    public async Task<int> RestoreAsync(IReadOnlyList<(string SongId, DateTimeOffset? Favorite, int? Rating)> songs, CancellationToken ct = default)
+    {
+        var added = 0;
+        await WriteAsync(async db =>
+        {
+            var ids = songs.Select(s => s.SongId).ToList();
+            var starred = await db.Stars.Where(s => ids.Contains(s.ItemId)).Select(s => s.ItemId).ToListAsync(ct);
+            var rated = await db.Ratings.Where(r => ids.Contains(r.ItemId)).Select(r => r.ItemId).ToListAsync(ct);
+            foreach (var (songId, favorite, rating) in songs)
+            {
+                if (favorite != null && !starred.Contains(songId))
+                {
+                    db.Stars.Add(new Star { ItemId = songId, StarredAt = favorite.Value });
+                    starred.Add(songId);
+                    added++;
+                }
+
+                if (rating is >= 1 and <= 5 && !rated.Contains(songId))
+                {
+                    db.Ratings.Add(new Rating { ItemId = songId, Value = rating.Value });
+                    rated.Add(songId);
+                    added++;
+                }
+            }
+
+            await db.SaveChangesAsync(ct);
+        }, ct);
+        return added;
     }
 }

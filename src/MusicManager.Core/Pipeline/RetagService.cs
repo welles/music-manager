@@ -148,6 +148,8 @@ public sealed class RetagService(
             preview.NewTags = tags;
             preview.Source = source ?? "manual";
             preview.After = TagFields.ForFinalTags(tags, cover, preview.Source, rulesVersion);
+            // The writer keeps song ID, added date, favorite and rating of the file.
+            preview.After.AddRange(preview.Before.Where(b => Model.FileMarkers.TagNames.Contains(b.Name, StringComparer.OrdinalIgnoreCase)));
             preview.NewRelativePath = PathBuilder.Build(tags);
         }
         catch (Exception ex)

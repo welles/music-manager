@@ -291,6 +291,13 @@ public sealed class LibraryEntry
     /// <summary>Value of the MUSICMANAGER_GENRE_SOURCE tag ("source|confidence").</summary>
     public string? GenreOrigin { get; set; }
 
+    /// <summary>Song ID, added date, rating and favorite as last read from or written to the file (<see cref="Model.FileMarkers.Canonical"/>).</summary>
+    public string? MarkersInFile { get; set; }
+
+    /// <summary>Markers of a file whose song ID was taken from the file in this scan (database rebuilt or file new to it).</summary>
+    [System.ComponentModel.DataAnnotations.Schema.NotMapped]
+    public Model.FileMarkers? RestoredFromFile { get; set; }
+
     /// <summary>Raw Chromaprint fingerprint (base64 of the uint values), see <see cref="Rules.FingerprintMatcher"/>.</summary>
     public string? Fingerprint { get; set; }
 

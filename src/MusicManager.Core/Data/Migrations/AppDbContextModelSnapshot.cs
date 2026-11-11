@@ -231,6 +231,9 @@ namespace MusicManager.Core.Data.Migrations
                     b.Property<string>("Isrc")
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("MarkersInFile")
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("MbAlbumArtistIds")
                         .IsRequired()
                         .HasColumnType("TEXT");

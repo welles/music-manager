@@ -21,10 +21,11 @@ public sealed class LibraryIndexer(
     Storage storage,
     AudioTools audio,
     PipelineNotifier notifier,
+    UserDataStore userData,
     ILogger<LibraryIndexer> logger) : BackgroundService
 {
     /// <summary>Raise when <see cref="Fill"/> reads more or different data, so existing entries are re-read.</summary>
-    public const int CurrentIndexVersion = 4;
+    public const int CurrentIndexVersion = 5;
 
     private readonly SemaphoreSlim _trigger = new(0, 1);
     private long _version;
@@ -41,7 +42,14 @@ public sealed class LibraryIndexer(
 
     public bool Scanning => _scanning;
 
-    internal void OnChanged() => Interlocked.Increment(ref _version);
+    /// <summary>Raised after the index changed (scan, upsert, remove).</summary>
+    public event Action? IndexChanged;
+
+    internal void OnChanged()
+    {
+        Interlocked.Increment(ref _version);
+        IndexChanged?.Invoke();
+    }
 
     public async Task<LibraryIndexStatus> GetStatusAsync(CancellationToken ct = default)
     {
@@ -149,6 +157,8 @@ public sealed class LibraryIndexer(
             var removed = existing.Values.Where(e => !seen.Contains(e.RelativePath)).ToList();
             var moved = CarryOverMoved(removed, newEntries);
 
+            DropDuplicateSongIds(existing.Values.Where(e => seen.Contains(e.RelativePath)));
+
             // Removed rows go first, so carried-over song IDs do not collide with the unique index.
             await using (var tx = await db.Database.BeginTransactionAsync(ct))
             {
@@ -159,6 +169,8 @@ public sealed class LibraryIndexer(
                 await tx.CommitAsync(ct);
                 if (added + updated + removed.Count + assigned > 0) OnChanged();
             }
+
+            await RestoreUserDataAsync(existing.Values, ct);
 
             _lastScan = DateTimeOffset.UtcNow;
             if (added + updated + removed.Count > 0)
@@ -212,6 +224,33 @@ public sealed class LibraryIndexer(
     /// Gives every entry without one a song ID: "tr-" + the release track ID if no other entry uses it,
     /// otherwise a random one. Entries without an added date get their file's mtime (existing rows).
     /// </summary>
+    /// <summary>
+    /// A song ID taken from a file can be in use already (the file was copied): the entry that had it first
+    /// keeps it, the others get a new one (and their file is rewritten by <see cref="FileMarkerSync"/>).
+    /// </summary>
+    internal static void DropDuplicateSongIds(IEnumerable<LibraryEntry> entries)
+    {
+        foreach (var group in entries.Where(e => e.SongId != null).GroupBy(e => e.SongId!, StringComparer.OrdinalIgnoreCase).Where(g => g.Count() > 1))
+        {
+            foreach (var e in group.OrderBy(e => e.RestoredFromFile != null).ThenBy(e => e.Id == 0 ? int.MaxValue : e.Id)
+                         .ThenBy(e => e.RelativePath, StringComparer.Ordinal).Skip(1))
+            {
+                e.SongId = null;
+                e.RestoredFromFile = null;
+            }
+        }
+    }
+
+    /// <summary>Favorites and ratings of songs that took their identity from the file come back from the file.</summary>
+    private async Task RestoreUserDataAsync(IEnumerable<LibraryEntry> entries, CancellationToken ct)
+    {
+        var restored = entries.Where(e => e is { SongId: not null, RestoredFromFile: not null }).ToList();
+        if (restored.Count == 0) return;
+        var count = await userData.RestoreAsync(restored.Select(e => (e.SongId!, e.RestoredFromFile!.Favorite, e.RestoredFromFile.Rating)).ToList(), ct);
+        if (count > 0) logger.LogInformation("Restored {Count} favorites/ratings from the files", count);
+        foreach (var e in restored) e.RestoredFromFile = null;
+    }
+
     internal static int AssignSongIds(IEnumerable<LibraryEntry> entries, IEnumerable<string> usedElsewhere)
     {
         var list = entries.ToList();
@@ -260,6 +299,17 @@ public sealed class LibraryIndexer(
         entry.AlbumArtists = TagFields.Get(fields, "ALBUMARTIST", "ALBUM ARTIST");
         entry.Genres = TagFields.Get(fields, "GENRE");
         entry.GenreOrigin = TagFields.Get(fields, Model.GenreOrigin.Marker).FirstOrDefault();
+
+        // Identity and user data mirrored into the file: a song the index does not know yet (rebuilt database,
+        // file moved outside the tool) takes its song ID and added date from the file.
+        var markers = Model.FileMarkers.FromTags(name => TagFields.Get(fields, name).FirstOrDefault());
+        entry.MarkersInFile = markers.Canonical();
+        if (entry.SongId == null && markers.SongId?.StartsWith(CatalogIds.SongPrefix, StringComparison.Ordinal) == true)
+        {
+            entry.SongId = markers.SongId;
+            entry.AddedAt = markers.AddedAt ?? entry.AddedAt;
+            entry.RestoredFromFile = markers;
+        }
         entry.MbArtistIds = TagFields.Get(fields, "MusicBrainz Artist Id", "MUSICBRAINZ_ARTISTID");
         entry.MbAlbumArtistIds = TagFields.Get(fields, "MusicBrainz Album Artist Id", "MUSICBRAINZ_ALBUMARTISTID");
         entry.MbReleaseGroupId = TagFields.Get(fields, "MusicBrainz Release Group Id", "MUSICBRAINZ_RELEASEGROUPID").FirstOrDefault();
@@ -346,6 +396,13 @@ public sealed class LibraryIndexer(
         Fill(entry, path, new FileInfo(path));
         if (fingerprint is { Length: > 0 })
             entry.Fingerprint = FingerprintMatcher.Encode(fingerprint);
+        // A song ID from the file that another entry already has (copied file) is not taken over.
+        if (entry.RestoredFromFile != null && await db.Library.AnyAsync(e => e.SongId == entry.SongId && e.Id != entry.Id, ct))
+        {
+            entry.SongId = null;
+            entry.RestoredFromFile = null;
+        }
+
         if (entry.SongId == null)
         {
             var mbId = entry.MbTrackId == null ? null : $"{CatalogIds.SongPrefix}{entry.MbTrackId.ToLowerInvariant()}";
@@ -353,9 +410,11 @@ public sealed class LibraryIndexer(
             AssignSongIds([entry], taken ? [mbId!] : []);
         }
 
+        var restore = entry;
         await db.SaveChangesAsync(ct);
         await tx.CommitAsync(ct);
         OnChanged();
+        await RestoreUserDataAsync([restore], ct);
     }
 
     /// <summary>Removes an entry (file moved to the trash).</summary>

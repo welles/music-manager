@@ -210,7 +210,10 @@ public static class TagIo
     {
         using var file = File.Create(path, "audio/mp4", ReadStyle.Average);
         var apple = (AppleTag)file.GetTag(TagTypes.Apple, true);
+        // Identity and user data (song ID, added date, rating, favorite) survive re-tagging.
+        var markers = FileMarkers.FromTags(name => apple.GetDashBox(ITunesMean, name).NullIfEmpty());
         apple.Clear();
+        SetMarkers(apple, markers);
         Tag tag = apple;
 
         foreach (var field in TagFields.ForFinalTags(t, cover != null ? "Front-Cover" : null, source, rulesVersion))
@@ -242,6 +245,38 @@ public static class TagIo
 
     private static AppleDataBox TextBox(string value) =>
         new(ByteVector.FromString("data", StringType.Latin1), (uint)AppleDataBox.FlagType.ContainsText) { Text = value };
+
+    /// <summary>Song ID, added date, rating and favorite of a file (all null when absent or unreadable).</summary>
+    public static FileMarkers ReadMarkers(string path)
+    {
+        try
+        {
+            using var file = File.Create(path);
+            if (file.GetTag(TagTypes.Apple) is AppleTag apple)
+                return FileMarkers.FromTags(name => apple.GetDashBox(ITunesMean, name).NullIfEmpty());
+            var fields = TagFields.Read(path);
+            return FileMarkers.FromTags(name => TagFields.Get(fields, name).FirstOrDefault());
+        }
+        catch (Exception ex) when (ex is CorruptFileException or UnsupportedFormatException or IOException)
+        {
+            return FileMarkers.None;
+        }
+    }
+
+    /// <summary>Writes only the markers into an M4A file; all other tags stay as they are.</summary>
+    public static void WriteMarkers(string path, FileMarkers markers)
+    {
+        using var file = File.Create(path, "audio/mp4", ReadStyle.Average);
+        var apple = (AppleTag)file.GetTag(TagTypes.Apple, true);
+        SetMarkers(apple, markers);
+        file.Save();
+    }
+
+    private static void SetMarkers(AppleTag apple, FileMarkers markers)
+    {
+        foreach (var (name, value) in markers.ToTags())
+            apple.SetDashBox(ITunesMean, name, value ?? "");
+    }
 
     /// <summary>Freeform atom (----:com.apple.iTunes:NAME) with one data child per value.</summary>
     private static void SetDashValues(AppleTag apple, string name, List<string> values)

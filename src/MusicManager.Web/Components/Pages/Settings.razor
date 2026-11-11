@@ -66,6 +66,7 @@
             <MudItem xs="6" md="4"><MudTextField @bind-Value="_s.ArtistLocale" Label="Künstlernamen übersetzen (Locale)" Variant="Variant.Outlined" HelperText="z. B. en; leer = aus" /></MudItem>
             <MudItem xs="12" md="4"><MudSwitch @bind-Value="_s.ArtistImagesEnabled" Color="Color.Primary" Label="Künstlerbilder laden (Wikidata, Deezer, Spotify)" /></MudItem>
             <MudItem xs="12" md="4"><MudSwitch @bind-Value="_s.WriteArtistJpg" Color="Color.Primary" Label="artist.jpg in den Künstlerordner schreiben" /></MudItem>
+            <MudItem xs="12" md="4"><MudSwitch @bind-Value="_s.WriteMarkersToFiles" Color="Color.Primary" Label="Song-ID, Hinzugefügt-Datum, Favorit und Bewertung in die Dateien schreiben" /></MudItem>
             <MudItem xs="12" md="4"></MudItem>
             <MudItem xs="6" md="2"><MudNumericField @bind-Value="_s.CoverSize" Label="Cover-Größe (px)" Variant="Variant.Outlined" Min="100" /></MudItem>
             <MudItem xs="6" md="2"><MudNumericField @bind-Value="_s.AacBitrateKbps" Label="AAC-Bitrate (kbps)" Variant="Variant.Outlined" Min="64" Max="512" /></MudItem>

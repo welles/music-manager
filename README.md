@@ -68,6 +68,16 @@ to the owner of the music share.
 The app has no login of its own. Run it behind the Cloudflare Tunnel and protect it
 with Cloudflare Access. Forwarded headers are honored.
 
+### Data in the files
+
+The library files are the source of truth for everything that describes a song. Besides the tags, files
+written by this tool carry their song ID (`MUSICMANAGER_SONG_ID`, the Subsonic ID Symfonium keys favorites
+and playlists on), the date they were added (`MUSICMANAGER_ADDED`), the favorite (`MUSICMANAGER_FAVORITE`)
+and the rating (`RATING`, 1–5), plus the origin of the tags and genres. The database mirrors them into the
+files a few seconds after a change. If the database is lost, a scan restores song IDs, added dates,
+favorites and ratings from the files; a file moved or renamed outside the tool keeps its ID. Play counts,
+the inbox history and settings stay in the database (a play would otherwise rewrite the file).
+
 ### App and notifications
 
 The web app can be installed as a PWA (HTTPS required, e.g. through the tunnel). Under
