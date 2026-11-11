@@ -287,7 +287,7 @@ public sealed class ReviewService(
 
     private static void Approve(TrackFile file, string message)
     {
-        MatchingPipeline.SetStatus(file, FileStatus.Approved, null);
+        MatchingPipeline.SetStatus(file, FileStatus.Approved, "Freigegeben – wird gleich einsortiert");
         MatchingPipeline.AddEvent(file, message);
     }
 }

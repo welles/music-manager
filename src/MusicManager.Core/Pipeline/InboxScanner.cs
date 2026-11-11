@@ -107,6 +107,7 @@ public sealed class InboxScanner(
                 {
                     RelativePath = relative,
                     FileSize = info.Length,
+                    StatusReason = $"Ordner wird noch befüllt – startet {settings.InboxQuietSeconds} s nach der letzten neuen Datei",
                     FileModifiedUtc = info.LastWriteTimeUtc,
                     Events = [new FileEvent { Message = $"Im Eingang gefunden (Gruppe \"{(groupFolder == "" ? "Eingang" : groupFolder)}\")" }],
                 });
@@ -125,6 +126,7 @@ public sealed class InboxScanner(
                 foreach (var f in group.Files.Where(f => f.Status == FileStatus.Waiting))
                 {
                     f.Status = FileStatus.Queued;
+                    f.StatusReason = null;
                     f.UpdatedAt = DateTimeOffset.UtcNow;
                 }
 

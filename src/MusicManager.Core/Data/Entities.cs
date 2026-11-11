@@ -10,7 +10,14 @@ public enum FileStatus
     /// <summary>Ready for processing.</summary>
     Queued,
 
+    /// <summary>Being worked on right now; <see cref="TrackFile.StatusReason"/> says which step.</summary>
     Processing,
+
+    /// <summary>
+    /// Analyzed, waiting for the other files of its group: releases are scored with the whole group as
+    /// context. Stored as text, so no migration is needed.
+    /// </summary>
+    Analyzed,
 
     /// <summary>Uncertain match – waits for a decision in the frontend.</summary>
     NeedsReview,
@@ -72,7 +79,7 @@ public sealed class TrackFile
 
     public FileStatus Status { get; set; } = FileStatus.Waiting;
 
-    /// <summary>Short explanation of the current status (e.g. why it needs review).</summary>
+    /// <summary>Short explanation of the current status: why it needs review, or the step being worked on right now.</summary>
     public string? StatusReason { get; set; }
 
     public string? Codec { get; set; }

@@ -57,14 +57,18 @@ public sealed partial class MatchingPipeline(
         var assignedByTags = new HashSet<int>();
         foreach (var file in files)
         {
-            notifier.SetActivity($"Analysiere {file.FileName}");
             try
             {
                 SetStatus(file, FileStatus.Processing, null);
                 await db.SaveChangesAsync(ct);
+                await StepAsync(file, "Audio und Tags werden gelesen", ct);
                 var identification = await AnalyzeAsync(file, profile, settings, ct);
                 recordings[file.Id] = identification.Recordings;
                 if (identification.AssignedByTags) assignedByTags.Add(file.Id);
+                // The decision needs the whole group as context: the file waits for the others.
+                SetStatus(file, FileStatus.Analyzed, files.Count > 1
+                    ? $"Analysiert – wartet, bis alle {files.Count} Dateien der Gruppe analysiert sind"
+                    : "Analysiert – wird gleich bewertet");
             }
             catch (Exception ex) when (!ct.IsCancellationRequested)
             {
@@ -81,18 +85,22 @@ public sealed partial class MatchingPipeline(
             .Select(f => CandidatesAsRecordings(f.Candidates)).ToList();
 
         // Phase 2: score releases with group context and decide.
-        foreach (var file in files.Where(f => f.Status == FileStatus.Processing))
+        foreach (var file in files.Where(f => f.Status == FileStatus.Analyzed))
         {
+            SetStatus(file, FileStatus.Processing, null);
+            await db.SaveChangesAsync(ct);
             var recs = recordings.GetValueOrDefault(file.Id) ?? [];
             if (recs.Count == 0)
             {
                 await HandleNotInMusicBrainzAsync(file, settings, ct);
                 await db.SaveChangesAsync(ct);
+                notifier.Notify();
                 continue;
             }
 
             try
             {
+                await StepAsync(file, "Releases werden bewertet", ct);
                 var context = GroupContext.From(recordings.Where(r => r.Key != file.Id).Select(r => r.Value).Concat(earlier));
                 var result = ReleaseScorer.Score(file.CleanedTags ?? new TagSet(), file.DurationSeconds, recs, context, settings);
                 file.Candidates = result.Candidates.Take(40).ToList();
@@ -117,10 +125,12 @@ public sealed partial class MatchingPipeline(
 
                 if (file.SelectedCandidateKey != null)
                 {
-                    notifier.SetActivity($"Erzeuge Tags für {file.FileName}");
+                    await StepAsync(file, "Tags werden erzeugt (Release, Genres, Übersetzungen)", ct);
                     await BuildFinalTagsAsync(file, file.SelectedCandidate!, settings, ct);
                     if (settings.AutoFileConfidentMatches)
-                        SetStatus(file, FileStatus.Approved, null);
+                        SetStatus(file, FileStatus.Approved, files.Count > 1
+                            ? "Tags fertig – wird einsortiert, sobald die ganze Gruppe bewertet ist"
+                            : "Tags fertig – wird gleich einsortiert");
                     else
                         SetStatus(file, FileStatus.NeedsReview, "Vorschau: bitte Tags bestätigen (automatisches Einsortieren ist aus)");
                 }
@@ -179,6 +189,7 @@ public sealed partial class MatchingPipeline(
         {
             try
             {
+                await StepAsync(file, "KI bereinigt die Tags", ct);
                 var suggestion = await ai.CleanupTagsAsync(file.FileName, file.OriginalTags, cleaned.Tags, settings, ct);
                 if (suggestion != null)
                 {
@@ -230,6 +241,7 @@ public sealed partial class MatchingPipeline(
         {
             try
             {
+                await StepAsync(file, "MusicBrainz-IDs aus den Tags werden geprüft", ct);
                 var rec = await musicBrainz.GetRecordingAsync(taggedRecording.ToString(), 1.0, "tag", ct);
                 var taggedRelease = Guid.TryParse(file.OriginalTags?.MbReleaseId, out var rel) ? rel.ToString() : null;
                 var onRelease = rec.Releases.Where(r => r.ReleaseId == taggedRelease).ToList();
@@ -284,6 +296,7 @@ public sealed partial class MatchingPipeline(
         file.ExternalMatches = [];
         if (ids.Count == 0)
         {
+            if (file.OriginalFields.Count > 0) await StepAsync(file, "Spotify-/Deezer-Links aus den Tags werden geprüft", ct);
             var (linked, messages) = await external.FromLinksAsync(file.OriginalFields, ct);
             foreach (var message in messages) AddEvent(file, message);
             file.ExternalMatches.AddRange(linked);
@@ -296,7 +309,7 @@ public sealed partial class MatchingPipeline(
             AddEvent(file, "Kein Künstler bekannt – MusicBrainz-Textsuche übersprungen");
         else if (ids.Count == 0 && !string.IsNullOrWhiteSpace(tags.Title))
         {
-            notifier.SetActivity($"Textsuche für {file.FileName}");
+            await StepAsync(file, "Textsuche in MusicBrainz", ct);
             var artist = tags.Artists.FirstOrDefault() ?? tags.Artist;
 
             // With an album tag first search on that album, then without.
@@ -321,9 +334,10 @@ public sealed partial class MatchingPipeline(
         }
 
         var recordings = new List<RecordingMatch>();
-        foreach (var (id, score, source) in ids.DistinctBy(i => i.Id).Take(settings.MaxRecordingsPerFile))
+        var lookups = ids.DistinctBy(i => i.Id).Take(settings.MaxRecordingsPerFile).ToList();
+        foreach (var (index, (id, score, source)) in lookups.Index())
         {
-            notifier.SetActivity($"MusicBrainz-Abfrage für {file.FileName}");
+            await StepAsync(file, lookups.Count > 1 ? $"MusicBrainz-Abfrage ({index + 1}/{lookups.Count})" : "MusicBrainz-Abfrage", ct);
             var rec = await musicBrainz.GetRecordingAsync(id, score, source, ct);
 
             if (rec.IsVideo)
@@ -344,7 +358,7 @@ public sealed partial class MatchingPipeline(
 
     private async Task<AcoustIdResult?> LookupAcoustIdAsync(TrackFile file, string path, AppSettings settings, CancellationToken ct)
     {
-        notifier.SetActivity($"Fingerabdruck für {file.FileName}");
+        await StepAsync(file, "Fingerabdruck wird berechnet", ct);
         var fp = await audio.FingerprintAsync(path, ct);
         if (fp == null)
         {
@@ -354,6 +368,7 @@ public sealed partial class MatchingPipeline(
 
         try
         {
+            await StepAsync(file, "AcoustID-Abfrage", ct);
             var result = await acoustId.LookupAsync(fp, ct);
             if (result.Tracks.Count == 0)
                 AddEvent(file, "AcoustID: Fingerabdruck unbekannt");
@@ -376,7 +391,7 @@ public sealed partial class MatchingPipeline(
     /// <summary>Searches Spotify/Deezer; a confident hit with an ISRC is looked up in MusicBrainz again.</summary>
     private async Task<List<RecordingMatch>> ExternalSearchAsync(TrackFile file, AppSettings settings, CancellationToken ct)
     {
-        notifier.SetActivity($"Fremdquellen für {file.FileName}");
+        await StepAsync(file, "Suche bei Spotify und Deezer", ct);
         var (found, messages) = await external.SearchAsync(file.CleanedTags!, file.DurationSeconds, settings, ct);
         foreach (var message in messages) AddEvent(file, message);
         file.ExternalMatches.AddRange(found);
@@ -420,15 +435,12 @@ public sealed partial class MatchingPipeline(
 
     private async Task HandleNotInMusicBrainzAsync(TrackFile file, AppSettings settings, CancellationToken ct)
     {
-        SetStatus(file, FileStatus.NotInMusicBrainz, file.ExternalMatches.Count > 0
-            ? $"Nicht in MusicBrainz – {file.ExternalMatches.Count} Vorschläge aus {string.Join(" und ", file.ExternalMatches.Select(m => SourceName(m.Source)).Distinct())}"
-            : "Weder Fingerabdruck noch Textsuche haben einen MusicBrainz-Eintrag gefunden");
-
         // The AI suggestion is only needed when no source delivered a usable match.
         if (settings.AiSuggestForUnknown && ai.IsConfigured && file.AiSuggestion == null && file.ExternalMatches.Count == 0)
         {
             try
             {
+                await StepAsync(file, "KI schlägt Tags vor", ct);
                 file.AiSuggestion = await ai.CleanupTagsAsync(file.FileName, file.OriginalTags ?? new TagSet(), file.CleanedTags ?? new TagSet(), settings, ct);
                 if (file.AiSuggestion != null)
                     AddEvent(file, $"KI-Vorschlag für manuelles Taggen: {file.AiSuggestion.Artist} – {file.AiSuggestion.Title}");
@@ -438,13 +450,18 @@ public sealed partial class MatchingPipeline(
                 AddEvent(file, $"KI-Vorschlag fehlgeschlagen: {ex.Message}", EventLevel.Warning);
             }
         }
+
+        // Last, so the step texts above do not overwrite the reason.
+        SetStatus(file, FileStatus.NotInMusicBrainz, file.ExternalMatches.Count > 0
+            ? $"Nicht in MusicBrainz – {file.ExternalMatches.Count} Vorschläge aus {string.Join(" und ", file.ExternalMatches.Select(m => SourceName(m.Source)).Distinct())}"
+            : "Weder Fingerabdruck noch Textsuche haben einen MusicBrainz-Eintrag gefunden");
     }
 
     private async Task DecideWithAiAsync(TrackFile file, List<string> groupFileNames, ScoreResult result, AppSettings settings, CancellationToken ct)
     {
         if (!settings.AiDecisionEnabled || !ai.IsConfigured) return;
 
-        notifier.SetActivity($"KI-Entscheidung für {file.FileName}");
+        await StepAsync(file, "KI wählt das Release", ct);
         try
         {
             var decision = await ai.DecideReleaseAsync(file, groupFileNames, result.Candidates, settings, ct);
@@ -619,7 +636,6 @@ public sealed partial class MatchingPipeline(
 
     private async Task WriteAndFileAsync(AppDbContext db, TrackFile file, CancellationToken ct)
     {
-        notifier.SetActivity($"Schreibe {file.FileName}");
         var settings = await settingsService.GetAsync(ct);
         string? tmp = null;
         try
@@ -632,7 +648,7 @@ public sealed partial class MatchingPipeline(
                 throw new FileNotFoundException("Datei ist nicht mehr im Eingang vorhanden", source);
 
             // Duplicate check against the library index (unless already decided in the duplicate view).
-            notifier.SetActivity($"Duplikatprüfung für {file.FileName}");
+            await StepAsync(file, "Duplikatprüfung gegen die Bibliothek", ct);
             var fingerprint = (await audio.RawFingerprintAsync(source, ct))?.Values;
             if (file.DuplicateDecision == null)
             {
@@ -665,6 +681,7 @@ public sealed partial class MatchingPipeline(
             // Convert into the work folder.
             Directory.CreateDirectory(storage.WorkRoot);
             tmp = Path.Combine(storage.WorkRoot, $"{file.Id}-{Guid.NewGuid():N}.m4a");
+            await StepAsync(file, "Audio wird nach M4A umgewandelt", ct);
             var info = await audio.ProbeAsync(source, ct);
             var remuxed = await audio.ConvertToM4aAsync(source, tmp, info.Codec, settings.AacBitrateKbps, ct);
             var alreadyM4a = Path.GetExtension(source).ToLowerInvariant() is ".m4a" or ".mp4";
@@ -675,6 +692,7 @@ public sealed partial class MatchingPipeline(
                 _ => $"Konvertiert {info.Codec} → AAC {settings.AacBitrateKbps} kbps",
             });
 
+            await StepAsync(file, "Cover wird geladen, Tags werden geschrieben", ct);
             var cover = await GetCoverAsync(file, source, settings, ct);
             TagIo.WriteM4a(tmp, file.FinalTags, cover, SourceFor(file), await settingsService.GetRulesVersionAsync(ct));
 
@@ -690,6 +708,7 @@ public sealed partial class MatchingPipeline(
                 }
             }
 
+            await StepAsync(file, "Wird in die Bibliothek einsortiert", ct);
             // Keep the timestamp of the original file.
             File.SetLastWriteTimeUtc(tmp, File.GetLastWriteTimeUtc(source));
             Storage.MovePreservingTime(tmp, target);
@@ -818,6 +837,18 @@ public sealed partial class MatchingPipeline(
         file.StatusReason = reason;
         file.UpdatedAt = DateTimeOffset.UtcNow;
         if (status != FileStatus.Error) file.Error = null;
+    }
+
+    /// <summary>
+    /// What is being done with the file right now, shown as its status text (and in the app bar). Written at
+    /// once, separately from the pipeline's own context, so open pages see the step while it runs.
+    /// </summary>
+    private async Task StepAsync(TrackFile file, string step, CancellationToken ct)
+    {
+        file.StatusReason = step;
+        await using (var db = await dbFactory.CreateDbContextAsync(ct))
+            await db.Files.Where(f => f.Id == file.Id).ExecuteUpdateAsync(s => s.SetProperty(f => f.StatusReason, step), ct);
+        notifier.SetActivity($"{step}: {file.FileName}");
     }
 
     public static void AddEvent(TrackFile file, string message, EventLevel level = EventLevel.Info) =>

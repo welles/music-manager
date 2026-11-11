@@ -3,7 +3,8 @@
 
 @if (Variant == SummaryVariant.Result && Tags == null)
 {
-    <MudText Typo="Typo.body2" Style="opacity:.75">@(File.StatusReason ?? "Noch kein Ergebnis")</MudText>
+    @* While the file is on its way the reason is the current step (shown with the status), not a result. *@
+    <MudText Typo="Typo.body2" Style="opacity:.75">@(StatusChip.IsActive(File.Status) ? "Noch kein Ergebnis" : File.StatusReason ?? "Noch kein Ergebnis")</MudText>
 }
 else
 {
