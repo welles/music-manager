@@ -106,7 +106,7 @@ public sealed partial class MatchingPipeline(
 
                 // A weak or wrong MusicBrainz match (e.g. a fingerprint linked to a remix) must not hide the
                 // song on Spotify/Deezer: search there too, their ISRC may also lead to the right recording.
-                if (!assignedByTags.Contains(file.Id) && !result.IsCertain && file.ExternalMatches.Count == 0)
+                if (ShouldSearchExternally(assignedByTags.Contains(file.Id), result, file))
                 {
                     var more = await ExternalSearchForUncertainAsync(file, recs, settings, ct);
                     if (more.Count > 0)
@@ -423,6 +423,20 @@ public sealed partial class MatchingPipeline(
     }
 
     /// <summary>
+    /// Whether an uncertain file also gets the Spotify/Deezer search: not when its MusicBrainz tags assigned it,
+    /// the scoring is certain, or it already has external matches (from links in its tags).
+    /// </summary>
+    internal static bool ShouldSearchExternally(bool assignedByTags, ScoreResult result, TrackFile file) =>
+        !assignedByTags && !result.IsCertain && file.ExternalMatches.Count == 0;
+
+    /// <summary>Recordings of <paramref name="found"/> not among <paramref name="known"/> (each once).</summary>
+    internal static List<RecordingMatch> NewRecordings(IEnumerable<RecordingMatch> found, IEnumerable<RecordingMatch> known)
+    {
+        var ids = known.Select(k => k.RecordingId).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        return found.Where(r => ids.Add(r.RecordingId)).ToList();
+    }
+
+    /// <summary>
     /// Spotify/Deezer search for a file whose MusicBrainz candidates are uncertain. The hits become suggestions
     /// in the review; recordings found through their ISRC that are not among <paramref name="known"/> are returned.
     /// </summary>
@@ -432,13 +446,13 @@ public sealed partial class MatchingPipeline(
         try
         {
             AddEvent(file, "MusicBrainz-Kandidaten unsicher – suche zusätzlich bei Spotify und Deezer");
-            var found = await ExternalSearchAsync(file, settings, ct);
-            var added = found.Where(r => known.All(k => k.RecordingId != r.RecordingId)).ToList();
+            var added = NewRecordings(await ExternalSearchAsync(file, settings, ct), known);
             if (added.Count > 0)
                 AddEvent(file, $"{added.Count} weitere MusicBrainz-Recording(s) über die ISRC gefunden");
             return added;
         }
-        catch (Exception ex) when (!ct.IsCancellationRequested)
+        // MusicBrainz busy (ISRC lookup): let Fail queue the group again instead of deciding without the recording.
+        catch (Exception ex) when (!ct.IsCancellationRequested && !MusicBrainzService.IsTransient(ex))
         {
             // The MusicBrainz candidates are still there: the file goes on without the extra suggestions.
             AddEvent(file, $"Zusätzliche Suche bei Spotify/Deezer fehlgeschlagen: {ex.Message}", EventLevel.Warning);
