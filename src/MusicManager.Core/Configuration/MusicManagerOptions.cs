@@ -43,6 +43,9 @@ public sealed class MusicManagerOptions
     /// </summary>
     public string? SubsonicApiKey { get; set; }
 
+    /// <summary>Last.fm API key (https://www.last.fm/api/account/create) – genre fallback when MusicBrainz has none.</summary>
+    public string? LastFmApiKey { get; set; }
+
     public string FfmpegPath { get; set; } = "ffmpeg";
     public string FfprobePath { get; set; } = "ffprobe";
     public string FpcalcPath { get; set; } = "fpcalc";

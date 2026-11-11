@@ -21,6 +21,7 @@ public sealed partial class MatchingPipeline(
     AudioTools audio,
     AcoustIdClient acoustId,
     MusicBrainzService musicBrainz,
+    GenreService genres,
     CoverArtService coverArt,
     AiService ai,
     ExternalSourceService external,
@@ -483,8 +484,10 @@ public sealed partial class MatchingPipeline(
     /// <summary>Fetches the full release and builds the final tags and target path for a candidate.</summary>
     public async Task BuildFinalTagsAsync(TrackFile file, ReleaseCandidate candidate, AppSettings settings, CancellationToken ct)
     {
-        file.FinalTags = await BuildReleaseTagsAsync(candidate.Release.ReleaseId, candidate.RecordingId, file.CleanedTags, settings, ct);
+        var (tags, genreSource) = await BuildReleaseTagsCoreAsync(candidate.Release.ReleaseId, candidate.RecordingId, file.CleanedTags, settings, ct);
+        file.FinalTags = tags;
         file.FinalTags.AcoustId = file.AcoustId;
+        AddGenreEvent(file, genreSource);
         await TranslateForeignTitlesAsync(file, settings, ct);
         file.TargetPath = PathBuilder.Build(file.FinalTags);
         file.ManuallyTagged = false;
@@ -495,7 +498,11 @@ public sealed partial class MatchingPipeline(
     /// Tags for a recording on a MusicBrainz release with all rules (credits, translation of artist
     /// names, genres, additional artists from <paramref name="source"/>). Used for new files and re-tagging.
     /// </summary>
-    public async Task<TagSet> BuildReleaseTagsAsync(string releaseId, string recordingId, TagSet? source, AppSettings settings, CancellationToken ct)
+    public async Task<TagSet> BuildReleaseTagsAsync(string releaseId, string recordingId, TagSet? source, AppSettings settings, CancellationToken ct) =>
+        (await BuildReleaseTagsCoreAsync(releaseId, recordingId, source, settings, ct)).Tags;
+
+    private async Task<(TagSet Tags, string? GenreSource)> BuildReleaseTagsCoreAsync(string releaseId, string recordingId, TagSet? source,
+        AppSettings settings, CancellationToken ct)
     {
         var release = await musicBrainz.GetReleaseAsync(releaseId, ct);
         var rules = await settingsService.GetArtistRulesAsync(ct);
@@ -513,7 +520,22 @@ public sealed partial class MatchingPipeline(
         }
 
         var tags = TagBuilder.Build(release, recordingId, artists, settings, rules);
-        return TaggingRules.AddSourceArtists(tags, source, rules);
+        tags = TaggingRules.AddSourceArtists(tags, source, rules);
+
+        var artistGenres = found.Track.Credits.Concat(release.Credits).Select(c => c.ArtistId).Distinct()
+            .Where(artists.ContainsKey).Select(id => (IReadOnlyDictionary<string, int>)artists[id].Genres).ToList();
+        var genre = await genres.ResolveAsync(new GenreService.Request(recordingId, release.Genres, artistGenres,
+            tags.Artists.FirstOrDefault() ?? tags.Artist, tags.Title, tags.AlbumArtist, tags.Album, source?.Genres ?? []), settings, ct);
+        tags.Genres = genre.Genres;
+        return (tags, genre.Source);
+    }
+
+    private void AddGenreEvent(TrackFile file, string? source)
+    {
+        if (file.FinalTags == null) return;
+        AddEvent(file, file.FinalTags.Genres.Count > 0
+            ? $"Genres aus {source}: {string.Join(", ", file.FinalTags.Genres)}"
+            : "Keine Genres gefunden", file.FinalTags.Genres.Count > 0 ? EventLevel.Info : EventLevel.Warning);
     }
 
     /// <summary>Title and album in non-Latin script become "English (Original)" (translated by Claude).</summary>
@@ -553,6 +575,18 @@ public sealed partial class MatchingPipeline(
         var rules = await settingsService.GetArtistRulesAsync(ct);
         file.FinalTags = TaggingRules.Apply(manual, rules, settings.ConvertPunctuation);
         file.FinalTags.AcoustId = file.AcoustId;
+
+        // Genres given by the source (Deezer, manual input) only get the unified spelling; otherwise the usual fallbacks.
+        var t = file.FinalTags;
+        if (t.Genres.Count > 0)
+            t.Genres = GenreRules.Finish(t.Genres, settings);
+        else if (settings.UseGenres)
+        {
+            var genre = await genres.ResolveAsync(new GenreService.Request(null, new Dictionary<string, int>(), [],
+                t.Artists.FirstOrDefault() ?? t.Artist, t.Title, t.AlbumArtist, t.Album, file.OriginalTags?.Genres ?? []), settings, ct);
+            t.Genres = genre.Genres;
+            AddGenreEvent(file, genre.Source);
+        }
         await TranslateForeignTitlesAsync(file, settings, ct);
         file.TargetPath = PathBuilder.Build(file.FinalTags);
         file.ManuallyTagged = true;

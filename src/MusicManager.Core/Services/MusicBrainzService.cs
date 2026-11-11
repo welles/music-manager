@@ -108,6 +108,24 @@ public sealed class MusicBrainzService : IDisposable
         return WithScore(rec, matchScore, source);
     }
 
+    /// <summary>Genre votes of one recording (more specific than the release, e.g. for remixes).</summary>
+    public Task<Dictionary<string, int>> GetRecordingGenresAsync(string recordingId, CancellationToken ct) =>
+        Run($"recgenres:{recordingId}", async () =>
+        {
+            var r = await _query.LookupRecordingAsync(Guid.Parse(recordingId), Include.Genres, cancellationToken: ct);
+            var genres = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            AddGenres(genres, r.Genres);
+            return genres;
+        }, ct);
+
+    /// <summary>All genre names MusicBrainz knows (lower case) – tells genres apart from other Last.fm tags.</summary>
+    public Task<HashSet<string>> GetGenreNamesAsync(CancellationToken ct) =>
+        Run("genres:all", async () =>
+        {
+            var names = await _query.GetAllGenreNamesAsync(ct);
+            return names.Select(n => n.Trim().ToLowerInvariant()).Where(n => n.Length > 0).ToHashSet(StringComparer.Ordinal);
+        }, ct);
+
     private static RecordingMatch WithScore(RecordingMatch r, double score, string source) => new()
     {
         RecordingId = r.RecordingId, Title = r.Title, Credits = r.Credits, LengthSeconds = r.LengthSeconds,

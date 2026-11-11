@@ -20,6 +20,8 @@ services:
       MusicManager__SpotifyClientSecret: ${SPOTIFY_CLIENT_SECRET:-}
       # Key for the Subsonic API (/rest, e.g. Symfonium) – optional, the API is off without it
       MusicManager__SubsonicApiKey: ${SUBSONIC_API_KEY:-}
+      # Last.fm API key (https://www.last.fm/api/account/create) – optional genre fallback
+      MusicManager__LastFmApiKey: ${LASTFM_API_KEY:-}
     volumes:
       # Inbox for new files (subfolders = groups, e.g. musicfab/<album>)
       - ${INBOX_DIR:-./inbox}:/inbox

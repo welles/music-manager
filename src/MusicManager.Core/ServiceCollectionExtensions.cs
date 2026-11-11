@@ -36,6 +36,12 @@ public static class ServiceCollectionExtensions
         });
         services.AddSingleton<ExternalSourceService>();
         services.AddSingleton<MusicBrainzService>();
+        services.AddHttpClient<LastFmClient>(c =>
+        {
+            c.DefaultRequestHeaders.UserAgent.ParseAdd(userAgent);
+            c.Timeout = TimeSpan.FromSeconds(20);
+        });
+        services.AddSingleton<GenreService>();
         services.AddSingleton<AudioTools>();
         services.AddSingleton<AiService>();
         services.AddSingleton<SettingsService>();

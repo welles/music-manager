@@ -70,10 +70,22 @@ public sealed class AppSettings
     public bool ConvertPunctuation { get; set; } = true;
 
     public bool UseGenres { get; set; } = true;
+
+    /// <summary>MusicBrainz genres of the artists, used when recording and release have none.</summary>
     public bool UseArtistGenres { get; set; } = true;
+
+    /// <summary>Last.fm tags (track, then album; only real genres) when MusicBrainz has none. Needs a Last.fm API key.</summary>
+    public bool UseLastFmGenres { get; set; } = true;
+
+    /// <summary>Keep the genres already in the file when no source has any.</summary>
+    public bool KeepOriginalGenres { get; set; } = true;
+
     public int MaxGenres { get; set; } = 10;
     public int MinGenreUsagePercent { get; set; } = 50;
     public List<string> GenreFilter { get; set; } = ["seen live", "favorites", "fixme", "owned"];
+
+    /// <summary>Own spellings, "from = to" per line (e.g. "Drum And Bass = Drum & Bass"); an empty right side drops the genre.</summary>
+    public List<string> GenreMap { get; set; } = [];
 
     public int CoverSize { get; set; } = 500;
 

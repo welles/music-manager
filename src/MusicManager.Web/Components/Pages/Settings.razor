@@ -67,13 +67,36 @@
             <MudItem xs="12" md="4"><MudSwitch @bind-Value="_s.ArtistImagesEnabled" Color="Color.Primary" Label="Künstlerbilder laden (Wikidata, Deezer, Spotify)" /></MudItem>
             <MudItem xs="12" md="4"><MudSwitch @bind-Value="_s.WriteArtistJpg" Color="Color.Primary" Label="artist.jpg in den Künstlerordner schreiben" /></MudItem>
             <MudItem xs="12" md="4"></MudItem>
-            <MudItem xs="12" md="4"><MudSwitch @bind-Value="_s.UseGenres" Color="Color.Primary" Label="Genres übernehmen" /></MudItem>
-            <MudItem xs="12" md="4"><MudSwitch @bind-Value="_s.UseArtistGenres" Color="Color.Primary" Label="Künstler-Genres einbeziehen" /></MudItem>
-            <MudItem xs="6" md="2"><MudNumericField @bind-Value="_s.MaxGenres" Label="Max. Genres" Variant="Variant.Outlined" Min="0" /></MudItem>
-            <MudItem xs="6" md="2"><MudNumericField @bind-Value="_s.MinGenreUsagePercent" Label="Mindestnutzung %" Variant="Variant.Outlined" Min="0" Max="100" /></MudItem>
-            <MudItem xs="12" md="8"><ListField @bind-Values="_s.GenreFilter" Label="Genres ausfiltern" /></MudItem>
             <MudItem xs="6" md="2"><MudNumericField @bind-Value="_s.CoverSize" Label="Cover-Größe (px)" Variant="Variant.Outlined" Min="100" /></MudItem>
             <MudItem xs="6" md="2"><MudNumericField @bind-Value="_s.AacBitrateKbps" Label="AAC-Bitrate (kbps)" Variant="Variant.Outlined" Min="64" Max="512" /></MudItem>
+        </MudGrid>
+    </MudExpansionPanel>
+
+    <MudExpansionPanel Text="Genres">
+        <MudText Typo="Typo.body2" Class="mb-3">
+            Die erste Quelle mit einem Ergebnis gewinnt: 1. MusicBrainz-Genres der Aufnahme (doppelt gewichtet) und des Releases,
+            2. Last.fm-Tags des Titels, dann des Albums (nur Namen, die MusicBrainz als Genre kennt),
+            3. MusicBrainz-Genres der Künstler, 4. die Genres, die schon in der Datei stehen.
+            Geschrieben wird in Titelschreibung wie „Drum And Bass“, Abkürzungen groß („UK Garage“).
+        </MudText>
+        <MudGrid>
+            <MudItem xs="12" md="3"><MudSwitch @bind-Value="_s.UseGenres" Color="Color.Primary" Label="Genres schreiben" /></MudItem>
+            <MudItem xs="12" md="3"><MudSwitch @bind-Value="_s.UseLastFmGenres" Color="Color.Primary" Label="Last.fm als Ersatz" Disabled="@string.IsNullOrWhiteSpace(Options.Value.LastFmApiKey)" /></MudItem>
+            <MudItem xs="12" md="3"><MudSwitch @bind-Value="_s.UseArtistGenres" Color="Color.Primary" Label="Künstler-Genres als Ersatz" /></MudItem>
+            <MudItem xs="12" md="3"><MudSwitch @bind-Value="_s.KeepOriginalGenres" Color="Color.Primary" Label="Vorhandene Genres behalten" /></MudItem>
+            @if (string.IsNullOrWhiteSpace(Options.Value.LastFmApiKey))
+            {
+                <MudItem xs="12"><MudAlert Severity="Severity.Info" Dense="true">Kein Last.fm-Schlüssel gesetzt (MusicManager__LastFmApiKey) – Last.fm wird übersprungen.</MudAlert></MudItem>
+            }
+            <MudItem xs="6" md="2"><MudNumericField @bind-Value="_s.MaxGenres" Label="Max. Genres" Variant="Variant.Outlined" Min="0" /></MudItem>
+            <MudItem xs="6" md="2"><MudNumericField @bind-Value="_s.MinGenreUsagePercent" Label="Mindestanteil %" Variant="Variant.Outlined" Min="0" Max="100"
+                                                       HelperText="vom stärksten Genre" /></MudItem>
+            <MudItem xs="12" md="8"><ListField @bind-Values="_s.GenreFilter" Label="Genres ausfiltern" /></MudItem>
+            <MudItem xs="12">
+                <MudTextField T="string" Value="@string.Join("\n", _s.GenreMap)" ValueChanged="@(v => _s.GenreMap = (v ?? "").Split('\n', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries).ToList())"
+                              Label="Eigene Schreibweisen" Variant="Variant.Outlined" Lines="5" AutoGrow="true"
+                              HelperText="Eine Zeile pro Genre: „Drum And Bass = Drum & Bass“; rechts leer lassen, um ein Genre zu streichen" />
+            </MudItem>
         </MudGrid>
     </MudExpansionPanel>
 

@@ -1,4 +1,3 @@
-using System.Globalization;
 using MusicManager.Core.Configuration;
 using MusicManager.Core.Model;
 
@@ -61,7 +60,6 @@ public static class TagBuilder
             MbReleaseGroupId = release.ReleaseGroupId,
             MbArtistIds = track.Credits.Select(c => c.ArtistId).Where(id => id.Length > 0).ToList(),
             MbAlbumArtistIds = release.Credits.Select(c => c.ArtistId).Where(id => id.Length > 0).ToList(),
-            Genres = BuildGenres(release, track, artists, settings),
         };
 
         if (track.Remixers.Count > 0)
@@ -86,34 +84,4 @@ public static class TagBuilder
         return null;
     }
 
-    public static List<string> BuildGenres(ReleaseDetail release, TrackDetail track, IReadOnlyDictionary<string, ArtistInfo> artists,
-        AppSettings settings)
-    {
-        if (!settings.UseGenres) return [];
-
-        var counts = new Dictionary<string, int>(release.Genres, StringComparer.OrdinalIgnoreCase);
-        if (settings.UseArtistGenres)
-        {
-            foreach (var id in track.Credits.Select(c => c.ArtistId).Concat(release.Credits.Select(c => c.ArtistId)).Distinct())
-            {
-                if (!artists.TryGetValue(id, out var info)) continue;
-                foreach (var (g, c) in info.Genres)
-                    counts[g] = counts.GetValueOrDefault(g) + c;
-            }
-        }
-
-        var filtered = counts
-            .Where(g => !settings.GenreFilter.Contains(g.Key, StringComparer.OrdinalIgnoreCase))
-            .Where(g => g.Value > 0)
-            .ToList();
-        if (filtered.Count == 0) return [];
-
-        var max = filtered.Max(g => g.Value);
-        return filtered
-            .Where(g => g.Value * 100 >= max * settings.MinGenreUsagePercent)
-            .OrderByDescending(g => g.Value).ThenBy(g => g.Key)
-            .Take(settings.MaxGenres)
-            .Select(g => CultureInfo.InvariantCulture.TextInfo.ToTitleCase(g.Key))
-            .ToList();
-    }
 }

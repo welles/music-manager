@@ -107,12 +107,4 @@ public class TagBuilderTests
         Assert.Equal("DJ R", t.Remixer);
         Assert.Equal(["A", "DJ R"], t.Artists);
     }
-
-    [Fact]
-    public void GenresAreFilteredByUsageAndBlacklist()
-    {
-        var t = TagBuilder.Build(Release([new CreditPart("a", "A", "A", "")]), "rec", new Dictionary<string, ArtistInfo>(), new AppSettings(), Rules);
-
-        Assert.Equal(["Hip Hop", "German Hip Hop"], t.Genres);
-    }
 }

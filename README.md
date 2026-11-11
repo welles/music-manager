@@ -59,6 +59,7 @@ docker compose up -d
 | `MusicManager__SpotifyClientId`, `MusicManager__SpotifyClientSecret` | Spotify app for the fallback search (optional; Deezer needs no key) |
 | `MusicManager__MusicBrainzServer` | Optional own MusicBrainz mirror                           |
 | `MusicManager__SubsonicApiKey`    | API key for the Subsonic API (optional; without it the API is off) |
+| `MusicManager__LastFmApiKey`      | Last.fm API key (optional, https://www.last.fm/api/account/create) – genre fallback |
 | `MusicManager__InboxPath` …       | Override the container paths (default `/inbox`, `/music`, `/trash`, `/data`) |
 
 The container runs as `PUID:PGID` (see `docker-compose.yml`), so filed files belong

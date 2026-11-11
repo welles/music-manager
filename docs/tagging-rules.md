@@ -30,3 +30,25 @@ Additionally (new):
 
 - Features in the title (`Song (feat. B)`) are moved into the artist field.
 - Typographic punctuation is converted to plain ASCII punctuation (Picard `convert_punctuation`).
+
+## Genres
+
+Picard's genre options (`use_genres`, `artists_genres`, `max_genres=10`, `min_genre_usage=50`, the
+`genres_filter`, no folksonomy) are the defaults. Picard only knew MusicBrainz; the app goes further
+because a quarter of the first files got no genre at all (`GenreService`, decision 2026-11-11). The
+first source with a result wins:
+
+1. MusicBrainz genres of the **recording** (double weight, more specific e.g. for remixes) plus the
+   release and release group.
+2. **Last.fm** top tags of the track, then of the album – only names that MusicBrainz lists as genres,
+   so tags like "seen live" or "2010s" never get in. Needs `MusicManager__LastFmApiKey`.
+3. MusicBrainz genres of the credited **artists**. In Picard they counted as much as the album's, which
+   gave whole discographies the same broad genres; now they are only a fallback.
+4. The genres **already in the file**, so re-tagging or importing the old library never loses them.
+
+From the remaining votes, genres with at least 50 % of the strongest one are kept, at most 10. They
+are written in title case as in the existing library ("Drum And Bass", "Hip Hop"), abbreviations in
+capitals ("UK Garage", "EDM", "MPB", "R&B"), and Last.fm/Deezer spellings ("dnb", "hip-hop") are
+mapped to the MusicBrainz name. Own spellings can be set in the settings ("Drum And Bass = Drum &
+Bass"; an empty right side drops a genre). Genres given by Deezer or entered by hand only get the
+spelling rules.
