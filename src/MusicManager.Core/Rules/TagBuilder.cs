@@ -47,7 +47,8 @@ public static class TagBuilder
             TrackCount = medium.Tracks.Count,
             DiscNumber = medium.Position,
             DiscCount = release.Media.Count,
-            Date = release.Date,
+            // Some releases have no date in MusicBrainz; the first release date is better than none.
+            Date = release.Date.NullIfEmpty() ?? release.OriginalDate,
             OriginalDate = release.OriginalDate,
             Isrc = track.Isrcs.FirstOrDefault(),
             Label = release.Label,

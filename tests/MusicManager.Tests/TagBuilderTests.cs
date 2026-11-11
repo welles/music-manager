@@ -54,6 +54,20 @@ public class TagBuilderTests
     }
 
     [Fact]
+    public void ReleaseWithoutDateFallsBackToOriginalDate()
+    {
+        var credits = new List<CreditPart> { new("a1", "Air", "Air", "") };
+        var release = Release(credits);
+        release = new ReleaseDetail
+        {
+            ReleaseId = release.ReleaseId, Title = release.Title, ReleaseGroupId = release.ReleaseGroupId, PrimaryType = release.PrimaryType,
+            Status = release.Status, Date = null, OriginalDate = "1998-01-16", Credits = release.Credits, Media = release.Media,
+        };
+        var t = TagBuilder.Build(release, "rec", new Dictionary<string, ArtistInfo>(), new AppSettings(), Rules);
+        Assert.Equal("1998-01-16", t.Date);
+    }
+
+    [Fact]
     public void TranslatesArtistNamesWithLocaleAlias()
     {
         var credits = new List<CreditPart> { new("x", "Сплин", "Сплин", "") };
