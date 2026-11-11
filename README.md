@@ -18,7 +18,7 @@ a review queue in the web frontend, optionally after Claude had a look first.
    with a MusicBrainz text search as fallback. Every file gets an AcoustID, even
    when it was already assigned.
 4. **Release selection**: every release of the matching recordings is scored (old
-   tags, release type, group context, date, country, format, length). Close calls
+   tags incl. their date, exact album name, release type, group context, date, country, format, length). Close calls
    go to Claude, then to the review queue.
 5. **Tagging**: tags are built from the MusicBrainz data with the own rules (see
    [docs/tagging-rules.md](docs/tagging-rules.md)). `ARTIST` and `ALBUMARTIST` hold the

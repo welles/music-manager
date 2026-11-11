@@ -82,10 +82,13 @@ public static class ReleaseScorer
                 var parts = new Dictionary<string, double>(recParts);
 
                 if (!string.IsNullOrWhiteSpace(oldTags.Album))
-                    parts["Album-Ähnlichkeit"] = w.AlbumSimilarity * TextUtil.Similarity(oldTags.Album, rel.Title);
+                    parts["Album-Ähnlichkeit"] = w.AlbumSimilarity * AlbumMatch(oldTags.Album, rel.Title);
 
                 if (!string.IsNullOrWhiteSpace(oldTags.AlbumArtist) && rel.ArtistString != null)
                     parts["Album-Künstler"] = w.AlbumArtistSimilarity * TextUtil.Similarity(oldTags.AlbumArtist, rel.ArtistString);
+
+                if (DateMatch(oldTags.Date, rel.Date) is { } dateMatch)
+                    parts["Datum-Tag"] = w.DateTag * dateMatch;
 
                 if (oldTags.TrackNumber != null && rel.TrackPosition != null)
                     parts["Tracknummer"] = oldTags.TrackNumber == rel.TrackPosition ? w.TrackNumber : 0;
@@ -184,6 +187,25 @@ public static class ReleaseScorer
         return new ScoreResult { Candidates = candidates, RunnerUp = runnerUp, IsCertain = certain, Reason = reason };
     }
 
+    /// <summary>
+    /// Album similarity where an exact name counts clearly more than a name with additions
+    /// ("Black Habits" vs. "Black Habits (Deluxe)"), which the token similarity treats as almost equal.
+    /// </summary>
+    internal static double AlbumMatch(string album, string releaseTitle) =>
+        TextUtil.Normalize(album) == TextUtil.Normalize(releaseTitle) ? 1 : 0.8 * TextUtil.Similarity(album, releaseTitle);
+
+    /// <summary>
+    /// How well the date of the old tags fits the release date: 1 for the same day (or the same
+    /// year when the tag only has a year), 0.5 for the same year, 0 otherwise; null without dates.
+    /// </summary>
+    internal static double? DateMatch(string? tagDate, string? releaseDate)
+    {
+        if (tagDate is not { Length: >= 4 } || releaseDate is not { Length: >= 4 }) return null;
+        if (tagDate[..4] != releaseDate[..4]) return 0;
+        if (tagDate.Length == 4) return 1;
+        return tagDate.Length >= 10 && releaseDate.Length >= 10 && tagDate[..10] == releaseDate[..10] ? 1 : 0.5;
+    }
+
     private static bool SameReleaseGroup(ReleaseCandidate a, ReleaseCandidate b) =>
         a.Release.ReleaseGroupId != null
             ? a.Release.ReleaseGroupId == b.Release.ReleaseGroupId
@@ -200,6 +222,7 @@ public static class ReleaseScorer
         if (!string.IsNullOrWhiteSpace(old.Album)) max["Album-Ähnlichkeit"] = w.AlbumSimilarity;
         if (!string.IsNullOrWhiteSpace(old.AlbumArtist)) max["Album-Künstler"] = w.AlbumArtistSimilarity;
         if (old.TrackNumber != null) max["Tracknummer"] = w.TrackNumber;
+        if (old.Date is { Length: >= 4 }) max["Datum-Tag"] = w.DateTag;
         max["Status"] = w.Status.Values.DefaultIfEmpty(0).Max();
         max["Typ"] = w.PrimaryType.Values.DefaultIfEmpty(0).Max();
         max["Sekundärtyp"] = 0;

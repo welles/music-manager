@@ -52,6 +52,31 @@ public class ReleaseScorerTests
     }
 
     [Fact]
+    public void OriginalReleaseFromTheTagsBeatsLaterWorldwideDeluxe()
+    {
+        // D Smoke – Gaspar Yanga: the tags name the 2020 US original, MusicBrainz also has a 2021 XW deluxe.
+        var recs = new[]
+        {
+            Rec(Rel("deluxe", "Black Habits (Deluxe)", "rg", date: "2021-02-05", country: "XW", track: 4),
+                Rel("original", "Black Habits", "rg", date: "2020-02-07", country: "US", track: 4)),
+        };
+
+        var result = ReleaseScorer.Score(new TagSet { Title = "Song", Artist = "Artist", Album = "Black Habits", Date = "2020-02-07", TrackNumber = 4 },
+            200, recs, GroupContext.Empty, new AppSettings());
+
+        Assert.Equal("original", result.Best!.Release.ReleaseId);
+    }
+
+    [Theory]
+    [InlineData("2020-02-07", "2020-02-07", 1.0)]
+    [InlineData("2020", "2020-02-07", 1.0)]
+    [InlineData("2020-02-07", "2020-08-01", 0.5)]
+    [InlineData("2020-02-07", "2020", 0.5)]
+    [InlineData("2020-02-07", "2021-02-07", 0.0)]
+    public void DateTagMatch(string tag, string release, double expected) =>
+        Assert.Equal(expected, ReleaseScorer.DateMatch(tag, release));
+
+    [Fact]
     public void GroupContextBreaksTies()
     {
         var recs = new[] { Rec(Rel("a", "Album A", "rg-a"), Rel("b", "Album B", "rg-b")) };

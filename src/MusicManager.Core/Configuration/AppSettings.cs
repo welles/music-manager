@@ -152,6 +152,9 @@ public sealed class ScoringWeights
     public double LengthMismatchPerSecond { get; set; } = 1;
     public double LengthMismatchMax { get; set; } = 20;
 
+    /// <summary>Date in the old tags equals the release date (half for the same year only).</summary>
+    public double DateTag { get; set; } = 15;
+
     public double EarliestRelease { get; set; } = 10;
 
     /// <summary>Number of years after which the date bonus reaches zero.</summary>
