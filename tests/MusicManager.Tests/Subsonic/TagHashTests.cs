@@ -154,6 +154,28 @@ public class TagHashTests
         Assert.False((await app.EntryAsync("A/B/1.m4a"))!.TagsEditedOutside);
     }
 
+    [Fact]
+    public async Task DiscardingIsOnlyOfferedForMusicBrainzFiles()
+    {
+        using var app = new SubsonicTestHost();
+        var path = app.AddFile("A/B/1.m4a", Tags("One"));
+        TagIo.WriteM4a(path, Tags("One"), null, "manual");
+        EditOutside(path, apple => apple.Title = "One (fixed by hand)");
+        await app.ScanAsync();
+        var entry = (await app.EntryAsync("A/B/1.m4a"))!;
+
+        // Asked to discard, but a manually tagged file has nothing to rebuild from: the edit stays.
+        var retag = app.Get<RetagService>();
+        Assert.True(await retag.StartPreviewAsync([entry.Id], discardOutsideEdits: true));
+        await WaitAsync(retag);
+        var preview = Assert.Single(retag.Previews);
+        Assert.True(preview.EditedOutside);
+        Assert.False(preview.CanDiscardOutsideEdits);
+        Assert.False(preview.DiscardsOutsideEdits);
+        Assert.Equal("One (fixed by hand)", preview.NewTags!.Title);
+        Assert.Contains("nicht verwerfbar", preview.Method);
+    }
+
     private static async Task WaitAsync(RetagService retag)
     {
         for (var i = 0; i < 200 && retag.State.Running; i++) await Task.Delay(50);
