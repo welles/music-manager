@@ -64,6 +64,9 @@
             <MudItem xs="12" md="4"><MudSwitch @bind-Value="_s.StandardizeArtists" Color="Color.Primary" Label="Künstlernamen standardisieren" /></MudItem>
             <MudItem xs="12" md="4"><MudSwitch @bind-Value="_s.ConvertPunctuation" Color="Color.Primary" Label="Typografische Satzzeichen umwandeln" /></MudItem>
             <MudItem xs="6" md="4"><MudTextField @bind-Value="_s.ArtistLocale" Label="Künstlernamen übersetzen (Locale)" Variant="Variant.Outlined" HelperText="z. B. en; leer = aus" /></MudItem>
+            <MudItem xs="12" md="4"><MudSwitch @bind-Value="_s.ArtistImagesEnabled" Color="Color.Primary" Label="Künstlerbilder laden (Wikidata, Deezer, Spotify)" /></MudItem>
+            <MudItem xs="12" md="4"><MudSwitch @bind-Value="_s.WriteArtistJpg" Color="Color.Primary" Label="artist.jpg in den Künstlerordner schreiben" /></MudItem>
+            <MudItem xs="12" md="4"></MudItem>
             <MudItem xs="12" md="4"><MudSwitch @bind-Value="_s.UseGenres" Color="Color.Primary" Label="Genres übernehmen" /></MudItem>
             <MudItem xs="12" md="4"><MudSwitch @bind-Value="_s.UseArtistGenres" Color="Color.Primary" Label="Künstler-Genres einbeziehen" /></MudItem>
             <MudItem xs="6" md="2"><MudNumericField @bind-Value="_s.MaxGenres" Label="Max. Genres" Variant="Variant.Outlined" Min="0" /></MudItem>

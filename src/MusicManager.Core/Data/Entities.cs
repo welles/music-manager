@@ -338,3 +338,23 @@ public sealed class DismissedDuplicateGroup
 
     public DateTimeOffset DismissedAt { get; set; } = DateTimeOffset.UtcNow;
 }
+
+/// <summary>Cached artist image (or the knowledge that none was found).</summary>
+public sealed class ArtistImage
+{
+    public int Id { get; set; }
+
+    /// <summary>Normalized artist name (lookup key).</summary>
+    public required string Key { get; set; }
+
+    public required string Name { get; set; }
+    public string? MbArtistId { get; set; }
+
+    /// <summary>"wikidata", "deezer", "spotify" – null if nothing was found.</summary>
+    public string? Source { get; set; }
+
+    /// <summary>Image file in the data folder (relative to it).</summary>
+    public string? FilePath { get; set; }
+
+    public DateTimeOffset FetchedAt { get; set; } = DateTimeOffset.UtcNow;
+}

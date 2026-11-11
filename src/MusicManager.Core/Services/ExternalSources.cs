@@ -85,6 +85,25 @@ public sealed class SpotifyClient(HttpClient http, IOptions<MusicManagerOptions>
         return Map(doc.RootElement);
     }
 
+    /// <summary>Image URL of the artist with exactly this name (normalized), or null.</summary>
+    public async Task<string?> FindArtistImageAsync(string name, CancellationToken ct)
+    {
+        if (!IsConfigured) return null;
+        using var request = new HttpRequestMessage(HttpMethod.Get, $"https://api.spotify.com/v1/search?type=artist&limit=5&q={Uri.EscapeDataString(name)}");
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", await TokenAsync(ct));
+        using var response = await http.SendAsync(request, ct);
+        if (!response.IsSuccessStatusCode) return null;
+        using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync(ct));
+        foreach (var a in doc.RootElement.GetProperty("artists").GetProperty("items").EnumerateArray())
+        {
+            if (TextUtil.Normalize(a.GetProperty("name").GetString()) != TextUtil.Normalize(name)) continue;
+            if (a.TryGetProperty("images", out var images) && images.GetArrayLength() > 0)
+                return images[0].GetProperty("url").GetString();
+        }
+
+        return null;
+    }
+
     private static ExternalMatch Map(JsonElement t)
     {
         var album = t.GetProperty("album");
@@ -134,6 +153,22 @@ public sealed class DeezerClient(HttpClient http, ILogger<DeezerClient> logger)
             Isrc = t.TryGetProperty("isrc", out var i) ? i.GetString() : null,
             CoverUrl = t.GetProperty("album").TryGetProperty("cover_xl", out var c) ? c.GetString() : null,
         }).ToList();
+    }
+
+    /// <summary>Image URL of the artist with exactly this name (normalized), or null. Deezer's empty placeholder is ignored.</summary>
+    public async Task<string?> FindArtistImageAsync(string name, CancellationToken ct)
+    {
+        using var doc = JsonDocument.Parse(await http.GetStringAsync($"https://api.deezer.com/search/artist?limit=5&q={Uri.EscapeDataString(name)}", ct));
+        if (!doc.RootElement.TryGetProperty("data", out var data)) return null;
+        foreach (var a in data.EnumerateArray())
+        {
+            if (TextUtil.Normalize(a.GetProperty("name").GetString()) != TextUtil.Normalize(name)) continue;
+            var url = a.TryGetProperty("picture_xl", out var p) ? p.GetString() : null;
+            // Artists without picture get a generic image whose path has an empty hash ("/artist//").
+            return url == null || url.Contains("/artist//") ? null : url;
+        }
+
+        return null;
     }
 
     /// <summary>Completes a search hit with track position, contributors and album data.</summary>

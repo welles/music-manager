@@ -159,7 +159,7 @@ public sealed class AudioTools(IOptions<MusicManagerOptions> options, ILogger<Au
 
         var info = new FileInfo(path);
         var key = Convert.ToHexString(System.Security.Cryptography.SHA1.HashData(System.Text.Encoding.UTF8.GetBytes($"{path}|{info.Length}|{info.LastWriteTimeUtc.Ticks}")));
-        var dir = Path.Combine(_o.WorkPath, "preview");
+        var dir = Path.GetFullPath(Path.Combine(_o.WorkPath, "preview"));
         Directory.CreateDirectory(dir);
         var cached = Path.Combine(dir, key + ".m4a");
         if (File.Exists(cached)) return cached;

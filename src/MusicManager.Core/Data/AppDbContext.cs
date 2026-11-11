@@ -15,6 +15,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
     public DbSet<SourceProfile> SourceProfiles => Set<SourceProfile>();
     public DbSet<SettingsEntry> Settings => Set<SettingsEntry>();
     public DbSet<LibraryEntry> Library => Set<LibraryEntry>();
+    public DbSet<ArtistImage> ArtistImages => Set<ArtistImage>();
     public DbSet<DismissedDuplicateGroup> DismissedDuplicates => Set<DismissedDuplicateGroup>();
 
     protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
@@ -52,6 +53,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
         });
 
         b.Entity<DismissedDuplicateGroup>(e => e.HasIndex(x => x.Key).IsUnique());
+        b.Entity<ArtistImage>(e => e.HasIndex(x => x.Key).IsUnique());
 
         b.Entity<LibraryEntry>(e =>
         {

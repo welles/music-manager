@@ -52,7 +52,12 @@ public static class AudioEndpoints
         });
 
         // Artist image (filled by the artist image service; placeholder until then).
-        app.MapGet("/api/artists/image", () => Results.Content(Placeholder, "image/svg+xml"));
+        app.MapGet("/api/artists/image", async (string name, string? mbid, ArtistImageService images, HttpContext http, CancellationToken ct) =>
+        {
+            var path = await images.GetImagePathAsync(name, mbid, ct);
+            http.Response.Headers.CacheControl = path == null ? "no-store" : "private, max-age=3600";
+            return path == null ? Results.Content(Placeholder, "image/svg+xml") : Results.File(path, "image/jpeg");
+        });
 
         // Loudness of both versions (LUFS) for the volume match.
         app.MapGet("/api/audio/loudness", async (int file, int entry, IDbContextFactory<AppDbContext> dbFactory, Storage storage, AudioTools audio,

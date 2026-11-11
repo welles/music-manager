@@ -100,6 +100,13 @@ public sealed class AppSettings
     /// <summary>Fingerprint similarity (0..1) from which two files count as the same recording.</summary>
     public double DuplicateFingerprintThreshold { get; set; } = 0.85;
 
+    // --- Artist images ----------------------------------------------------------------
+    /// <summary>Load artist images (Wikidata via MusicBrainz, then Deezer, then Spotify).</summary>
+    public bool ArtistImagesEnabled { get; set; } = true;
+
+    /// <summary>Also write the image as artist.jpg into the artist folder (Navidrome shows it).</summary>
+    public bool WriteArtistJpg { get; set; } = true;
+
     // --- Trash --------------------------------------------------------------------------
     public int TrashRetentionDays { get; set; } = 30;
 

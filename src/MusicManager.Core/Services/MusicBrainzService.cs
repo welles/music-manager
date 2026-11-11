@@ -281,6 +281,15 @@ public sealed class MusicBrainzService : IDisposable
             return new ArtistInfo { ArtistId = artistId, Name = a.Name ?? "", LocaleAliases = aliases, Genres = genres };
         }, ct);
 
+    /// <summary>Wikidata item (Q…) linked to a MusicBrainz artist, used for the artist image.</summary>
+    public Task<string> GetWikidataIdAsync(string artistId, CancellationToken ct) =>
+        Run($"wikidata:{artistId}", async () =>
+        {
+            var a = await _query.LookupArtistAsync(Guid.Parse(artistId), Include.UrlRelationships, cancellationToken: ct);
+            var url = (a.Relationships ?? []).FirstOrDefault(r => r.Type == "wikidata")?.Url?.Resource?.ToString();
+            return url == null ? "" : url.TrimEnd('/').Split('/')[^1];
+        }, ct);
+
     // --- Helpers -------------------------------------------------------------------------
 
     private static List<CreditPart> MapCredits(IEnumerable<INameCredit>? credits) =>
