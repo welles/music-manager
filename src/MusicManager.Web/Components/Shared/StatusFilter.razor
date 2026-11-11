@@ -1,0 +1,24 @@
+@* Status chips for list pages. No chip selected = no filter. *@
+<MudChipSet T="FileStatus" SelectionMode="SelectionMode.MultiSelection" SelectedValues="Selected" SelectedValuesChanged="OnChanged"
+            CheckMark="true" Size="Size.Small" Variant="Variant.Outlined">
+    @foreach (var s in Statuses)
+    {
+        <MudChip Value="s" Text="@StatusChip.LabelFor(s)" />
+    }
+</MudChipSet>
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<FileStatus> Statuses { get; set; } = [];
+    [Parameter] public IReadOnlyCollection<FileStatus> Selected { get; set; } = [];
+    [Parameter] public EventCallback<IReadOnlyCollection<FileStatus>> SelectedChanged { get; set; }
+
+    private Task OnChanged(IReadOnlyCollection<FileStatus>? values) => SelectedChanged.InvokeAsync(values ?? []);
+
+    /// <summary>"NeedsReview,Error" → statuses; unknown names are ignored.</summary>
+    public static HashSet<FileStatus> Parse(string? value) =>
+        (value ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(v => Enum.TryParse<FileStatus>(v, true, out var s) ? s : (FileStatus?)null)
+            .OfType<FileStatus>().ToHashSet();
+
+    public static string Format(IEnumerable<FileStatus> statuses) => string.Join(",", statuses);
+}

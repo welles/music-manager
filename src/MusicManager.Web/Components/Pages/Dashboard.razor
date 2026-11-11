@@ -70,13 +70,13 @@
 
     private static readonly (string, FileStatus[], Color, string)[] Tiles =
     [
-        ("Im Eingang", [FileStatus.Waiting, FileStatus.Queued], Color.Default, "dateien"),
-        ("In Bearbeitung", [FileStatus.Processing, FileStatus.Approved], Color.Info, "dateien"),
-        ("Zu prüfen", [FileStatus.NeedsReview], Color.Warning, "pruefung"),
-        ("Nicht in MusicBrainz", [FileStatus.NotInMusicBrainz], Color.Warning, "pruefung"),
+        ("Im Eingang", [FileStatus.Waiting, FileStatus.Queued], Color.Default, "dateien?status=Waiting,Queued"),
+        ("In Bearbeitung", [FileStatus.Processing, FileStatus.Approved], Color.Info, "dateien?status=Processing,Approved"),
+        ("Zu prüfen", [FileStatus.NeedsReview], Color.Warning, "pruefung?status=NeedsReview"),
+        ("Nicht in MusicBrainz", [FileStatus.NotInMusicBrainz], Color.Warning, "pruefung?status=NotInMusicBrainz"),
         ("Duplikate", [FileStatus.Duplicate], Color.Warning, "duplikate"),
-        ("Fehler", [FileStatus.Error], Color.Error, "pruefung"),
-        ("Einsortiert", [FileStatus.Done], Color.Success, "dateien"),
+        ("Fehler", [FileStatus.Error], Color.Error, "pruefung?status=Error"),
+        ("Einsortiert", [FileStatus.Done], Color.Success, "dateien?status=Done"),
     ];
 
     private int Count(FileStatus[] statuses) => statuses.Sum(s => _counts.GetValueOrDefault(s));
