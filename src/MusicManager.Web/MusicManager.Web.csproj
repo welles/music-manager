@@ -14,6 +14,9 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <BlazorDisableThrowNavigationException>true</BlazorDisableThrowNavigationException>
     <UserSecretsId>8e4a15de-4e59-4398-b413-b36141e526f2</UserSecretsId>
+    <!-- The SDK only restores the package with blazor.web.js when it sees .razor files, but the Dockerfile
+         restores with the project files alone (layer caching). Without it the image has no interactivity. -->
+    <RequiresAspNetWebAssets>true</RequiresAspNetWebAssets>
   </PropertyGroup>
 
 </Project>
