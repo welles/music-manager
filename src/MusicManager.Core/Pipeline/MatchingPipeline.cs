@@ -27,6 +27,7 @@ public sealed partial class MatchingPipeline(
     ExternalSourceService external,
     DuplicateDetector duplicates,
     LibraryIndexer libraryIndexer,
+    AlbumCoverService albumCovers,
     PipelineNotifier notifier,
     WorkQueue queue,
     ILogger<MatchingPipeline> logger)
@@ -748,7 +749,7 @@ public sealed partial class MatchingPipeline(
 
             await StepAsync(file, "Cover wird geladen, Tags werden geschrieben", ct);
             var cover = await GetCoverAsync(file, source, settings, ct);
-            TagIo.WriteM4a(tmp, file.FinalTags, cover, SourceFor(file), await settingsService.GetRulesVersionAsync(ct));
+            TagIo.WriteM4a(tmp, file.FinalTags, cover.Embedded, SourceFor(file), await settingsService.GetRulesVersionAsync(ct));
 
             // Replaced library file goes to the trash (decision can be undone from there).
             if (file.DuplicateDecision == DuplicateDecision.KeepNew && file.ReplaceLibraryPath != null)
@@ -770,6 +771,9 @@ public sealed partial class MatchingPipeline(
             // A replaced file hands its index entry (song ID, added date) over to the new one.
             await libraryIndexer.UpsertAsync(file.TargetPath, fingerprint, ct,
                 replaces: file.DuplicateDecision == DuplicateDecision.KeepNew ? file.ReplaceLibraryPath : null);
+            // The same cover in full size as a file in the album folder (once per album).
+            await albumCovers.EnsureForSongAsync(file.TargetPath, cover.Original, cover.FromArchive ? file.FinalTags.MbReleaseId : null,
+                file.FinalTags.MbReleaseGroupId, ct);
 
             file.TrashPath = storage.MoveToTrash(source, file.RelativePath);
             SetStatus(file, FileStatus.Done, null);
@@ -791,12 +795,19 @@ public sealed partial class MatchingPipeline(
         }
     }
 
-    private async Task<byte[]?> GetCoverAsync(TrackFile file, string source, AppSettings settings, CancellationToken ct)
+    /// <summary>
+    /// Cover of a file: the picture to embed, and for the album folder either the picture in its original
+    /// size or the note that it came from the Cover Art Archive (which has a larger one).
+    /// </summary>
+    private sealed record FileCover(byte[]? Embedded, byte[]? Original = null, bool FromArchive = false);
+
+    private async Task<FileCover> GetCoverAsync(TrackFile file, string source, AppSettings settings, CancellationToken ct)
     {
         if (file.ManualCoverFile != null && File.Exists(file.ManualCoverFile))
         {
             file.CoverSource = "Upload";
-            return await audio.ResizeImageAsync(await File.ReadAllBytesAsync(file.ManualCoverFile, ct), settings.CoverSize, ct);
+            var upload = await File.ReadAllBytesAsync(file.ManualCoverFile, ct);
+            return new FileCover(await audio.ResizeImageAsync(upload, settings.CoverSize, ct), upload);
         }
 
         if (!file.ManuallyTagged && file.FinalTags?.MbReleaseId != null)
@@ -805,7 +816,7 @@ public sealed partial class MatchingPipeline(
             if (caa != null)
             {
                 file.CoverSource = caa.Source;
-                return caa.Data;
+                return new FileCover(caa.Data, FromArchive: true);
             }
         }
 
@@ -815,18 +826,19 @@ public sealed partial class MatchingPipeline(
         if (local != null)
         {
             file.CoverSource = $"Lokale Datei {Path.GetFileName(local)}";
-            return await audio.ResizeImageAsync(await File.ReadAllBytesAsync(local, ct), settings.CoverSize, ct);
+            var image = await File.ReadAllBytesAsync(local, ct);
+            return new FileCover(await audio.ResizeImageAsync(image, settings.CoverSize, ct), image);
         }
 
         var embedded = TagIo.ReadEmbeddedCover(source);
         if (embedded != null)
         {
             file.CoverSource = "Aus Originaldatei";
-            return await audio.ResizeImageAsync(embedded, settings.CoverSize, ct);
+            return new FileCover(await audio.ResizeImageAsync(embedded, settings.CoverSize, ct), embedded);
         }
 
         file.CoverSource = null;
-        return null;
+        return new FileCover(null);
     }
 
     /// <summary>
@@ -854,7 +866,13 @@ public sealed partial class MatchingPipeline(
             {
                 try
                 {
-                    if (targetDir != null)
+                    // The album folder got its cover while filing; a second cover file would only sit beside it.
+                    if (targetDir != null && AlbumCoverService.IsCoverFile(Path.GetFileName(extra))
+                                          && AlbumCoverService.Find(storage.LibraryPath(targetDir)) != null)
+                    {
+                        storage.MoveToTrash(extra, storage.RelativeToInbox(extra));
+                    }
+                    else if (targetDir != null)
                     {
                         var dest = Storage.UniquePath(Path.Combine(storage.LibraryPath(targetDir), Path.GetFileName(extra)));
                         Storage.MovePreservingTime(extra, dest);

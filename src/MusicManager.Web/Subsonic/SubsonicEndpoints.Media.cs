@@ -8,7 +8,7 @@ using MusicManager.Core.Services;
 
 namespace MusicManager.Web.Subsonic;
 
-// Media: stream, download and cover art.
+// Media: stream, download and cover art (album folder cover, embedded cover, artist image).
 public static partial class SubsonicEndpoints
 {
     private static void MapMedia()
@@ -50,9 +50,19 @@ public static partial class SubsonicEndpoints
         }
         else
         {
-            var song = id.StartsWith(CatalogIds.SongPrefix, StringComparison.Ordinal) ? catalog.Song(id) : catalog.Album(id)?.CoverSong;
+            var song = id.StartsWith(CatalogIds.SongPrefix, StringComparison.Ordinal) ? catalog.Song(id) : null;
+            var album = song?.Album ?? catalog.Album(id);
+            song ??= album?.CoverSong;
             if (song is { HasCover: false }) song = song.Album.CoverSong;
-            if (song != null)
+
+            // A cover file in the album's own folder (usually larger) goes before the embedded cover.
+            if (album?.Folder is { } folder && AlbumCoverService.Find(storage.LibraryPath(folder)) is { } coverFile)
+            {
+                var info = new FileInfo(coverFile);
+                stamp = $"{coverFile}|{info.Length}|{info.LastWriteTimeUtc.Ticks}";
+                load = async () => File.Exists(coverFile) ? await File.ReadAllBytesAsync(coverFile, r.Aborted) : null;
+            }
+            else if (song != null)
             {
                 var path = storage.LibraryPath(song.RelativePath);
                 stamp = $"{song.RelativePath}|{song.Size}|{song.FileModifiedUtc.Ticks}";

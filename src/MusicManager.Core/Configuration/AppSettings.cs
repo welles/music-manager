@@ -99,7 +99,14 @@ public sealed class AppSettings
     /// <summary>Playlists are kept as M3U8 files in the library's "Playlists" folder; edits made there are taken over.</summary>
     public bool PlaylistFiles { get; set; } = true;
 
+    /// <summary>Size of the cover embedded into the files.</summary>
     public int CoverSize { get; set; } = 500;
+
+    /// <summary>
+    /// Also keep the cover in full size (up to 1200 px) as cover.jpg in the album folder. The Subsonic API
+    /// serves it instead of the embedded one, and other players pick it up.
+    /// </summary>
+    public bool WriteCoverJpg { get; set; } = true;
 
     /// <summary>Additional files moved along with the audio files.</summary>
     public List<string> AdditionalFilePatterns { get; set; } = ["*.jpg", "*.png"];
