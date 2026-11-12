@@ -55,11 +55,11 @@
         <MudTh>Ziel (Vorschau)</MudTh>
     </HeaderContent>
     <RowTemplate>
-        <MudTd><MudNumericField @bind-Value="context.Track" HideSpinButtons="true" Variant="Variant.Text" /></MudTd>
-        <MudTd><MudTextField @bind-Value="context.Artist" Variant="Variant.Text" /></MudTd>
-        <MudTd><MudTextField @bind-Value="context.Title" Variant="Variant.Text" /></MudTd>
-        <MudTd><MudText Typo="Typo.caption">@context.File.FileName</MudText></MudTd>
-        <MudTd><MudText Typo="Typo.caption" Class="mono">@PreviewPath(context)</MudText></MudTd>
+        <MudTd DataLabel="Nr."><MudNumericField @bind-Value="context.Track" HideSpinButtons="true" Variant="Variant.Text" /></MudTd>
+        <MudTd DataLabel="Künstler"><MudTextField @bind-Value="context.Artist" Variant="Variant.Text" /></MudTd>
+        <MudTd DataLabel="Titel"><MudTextField @bind-Value="context.Title" Variant="Variant.Text" /></MudTd>
+        <MudTd DataLabel="Datei"><MudText Typo="Typo.caption">@context.File.FileName</MudText></MudTd>
+        <MudTd DataLabel="Ziel (Vorschau)"><MudText Typo="Typo.caption" Class="mono">@PreviewPath(context)</MudText></MudTd>
     </RowTemplate>
 </MudTable>
 

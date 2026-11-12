@@ -72,11 +72,183 @@
     padding-right: 40px;
 }
 
-/* Actions of a match candidate: one row, right-aligned, with room between the buttons. */
+/* ---- SongCard: the one representation of a song (cover, title, artist, labelled fields). ---- */
+.song {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    min-width: 0;
+    text-align: left;
+    flex: 1 1 auto;
+}
+
+.song-cover {
+    flex-shrink: 0;
+    border-radius: 4px;
+    object-fit: cover;
+    background: #9e9e9e33;
+}
+
+.song-body {
+    min-width: 0;
+    flex: 1 1 auto;
+}
+
+.song-title {
+    font-weight: 600;
+    font-size: 0.95rem;
+    line-height: 1.3;
+    overflow-wrap: anywhere;
+}
+
+.song-artist {
+    font-size: 0.875rem;
+    line-height: 1.35;
+    overflow-wrap: anywhere;
+}
+
+.song-full .song-title {
+    font-size: 1.15rem;
+}
+
+.song-full .song-artist {
+    font-size: 1rem;
+}
+
+.song-fields {
+    display: flex;
+    flex-wrap: wrap;
+    margin: 4px 0 0;
+    font-size: 0.8125rem;
+    line-height: 1.35;
+}
+
+.song-field {
+    min-width: 0;
+}
+
+.song-field dt {
+    font-size: 0.6875rem;
+    font-weight: 500;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    opacity: 0.6;
+    white-space: nowrap;
+}
+
+.song-field dd {
+    margin: 0;
+    overflow-wrap: anywhere;
+}
+
+/* Dense: "LABEL value" pairs in a row that wraps. */
+.song-dense .song-fields {
+    gap: 0 14px;
+}
+
+.song-dense .song-field {
+    display: flex;
+    align-items: baseline;
+    gap: 5px;
+}
+
+/* Full: label above value, in columns that wrap. */
+.song-full .song-fields {
+    gap: 8px 24px;
+    margin-top: 10px;
+    font-size: 0.875rem;
+}
+
+.song-path {
+    margin-top: 2px;
+    font-size: 0.75rem;
+    opacity: 0.55;
+    overflow-wrap: anywhere;
+}
+
+/* Tables that collapse to stacked rows on a phone: a song takes the whole row instead of sitting
+   right-aligned next to its column label. */
+@media (max-width: 599.98px) {
+    .mud-table-cell:has(> .song) {
+        display: block !important;
+        text-align: left !important;
+    }
+
+    .mud-table-cell:has(> .song)::before {
+        display: block;
+        margin-bottom: 4px;
+        text-align: left !important;
+    }
+
+    .song-full .song-cover {
+        width: 72px !important;
+        height: 72px !important;
+    }
+}
+
+/* ---- A match candidate: source and points on top, the song, then the actions. ---- */
+.candidate {
+    border: 1px solid var(--mud-palette-lines-default);
+    border-radius: 6px;
+    padding: 12px;
+    margin-bottom: 12px;
+}
+
+.candidate-selected {
+    border-color: var(--mud-palette-primary);
+    box-shadow: inset 3px 0 0 var(--mud-palette-primary);
+}
+
+.candidate-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 12px;
+    margin-bottom: 10px;
+}
+
+.candidate-score {
+    font-size: 0.875rem;
+    white-space: nowrap;
+}
+
+.candidate-score .song-label {
+    margin-right: 5px;
+}
+
+.song-label {
+    font-size: 0.6875rem;
+    font-weight: 500;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    opacity: 0.6;
+}
+
 .candidate-actions {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     justify-content: flex-end;
     gap: 8px;
-    white-space: nowrap;
+    margin-top: 10px;
+}
+
+/* Library track table: the toolbar (search, sorting, actions, filters) grows with its content instead of
+   overflowing its fixed height on a phone; the hint chips wrap instead of widening the table. */
+.track-grid .mud-table-toolbar {
+    height: auto;
+    padding-top: 8px;
+    padding-bottom: 8px;
+}
+
+.chip-wrap {
+    display: flex;
+    flex-wrap: wrap;
+    min-width: 0;
+}
+
+@media (max-width: 599.98px) {
+    .chip-wrap {
+        justify-content: flex-end;
+    }
 }

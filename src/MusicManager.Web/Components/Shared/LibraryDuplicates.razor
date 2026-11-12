@@ -36,19 +36,12 @@
         <MudText Typo="Typo.caption" Class="d-block mb-2" Style="opacity:.75">@string.Join(" · ", group.Reasons)</MudText>
 
         <MudSimpleTable Dense="true" Hover="true">
-            <thead><tr><th></th><th>Album</th><th>Format</th><th>Bitrate</th><th>Dauer</th><th>Größe</th><th>Quelle</th><th>A/B</th><th></th></tr></thead>
+            <thead><tr><th>Datei</th><th>Größe</th><th>Quelle</th><th>A/B</th><th></th></tr></thead>
             <tbody>
                 @foreach (var e in group.Entries)
                 {
                     <tr>
-                        <td><MudImage Src="@($"api/library/{e.Id}/cover")" Width="48" Height="48" ObjectFit="ObjectFit.Cover" Class="rounded" /></td>
-                        <td>
-                            @e.Album @(e.Date != null ? $"({e.Date})" : "")
-                            <MudText Typo="Typo.caption" Class="mono d-block" Style="opacity:.6">@e.RelativePath</MudText>
-                        </td>
-                        <td>@e.Codec</td>
-                        <td>@(e.BitrateKbps != null ? $"{e.BitrateKbps} kbps" : "")</td>
-                        <td>@Length(e.DurationSeconds)</td>
+                        <td style="min-width:260px"><SongCard Song="SongInfo.From(e)" /></td>
                         <td>@($"{e.FileSize / 1024.0 / 1024.0:0.0} MB")</td>
                         <td>@(e.TagSource ?? "–")</td>
                         <td style="white-space:nowrap">

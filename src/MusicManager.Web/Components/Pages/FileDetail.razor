@@ -57,125 +57,69 @@
                 „Vorschau“ zeigt die Tags eines Kandidaten im Tab „Tags“, ohne etwas zu ändern; „Wählen“ übernimmt ihn.
                 Bei Spotify/Deezer werden Tags und Cover der Quelle mit den eigenen Regeln verwendet, die Datei gilt danach als manuell getaggt.
             </MudText>
-            <MudTable Items="CandidateRows" Dense="true" Hover="true" T="CandidateRow">
-                <HeaderContent>
-                    <MudTh>Quelle</MudTh>
-                    <MudTh>Punkte</MudTh>
-                    <MudTh>Release</MudTh>
-                    <MudTh>Datum / Land</MudTh>
-                    <MudTh>Typ</MudTh>
-                    <MudTh>Track</MudTh>
-                    <MudTh>Aufnahme</MudTh>
-                    <MudTh></MudTh>
-                </HeaderContent>
-                <RowTemplate>
-                    @if (context.MusicBrainz is { } c)
-                    {
-                        <MudTd><MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="Color.Primary">MusicBrainz</MudChip></MudTd>
-                        <MudTd>
-                            <MudTooltip Text="Erreichte Punkte von den für diese Datei maximal möglichen. Das ist keine Erkennungssicherheit – die steht bei der Aufnahme.">
-                                <MudText Typo="Typo.body2" Color="@(c.Key == _file.SelectedCandidateKey ? Color.Primary : Color.Default)" Style="white-space:nowrap">
-                                    <b>@c.Score.ToString("0.#")</b>@(c.MaxScore > 0 ? $" / {c.MaxScore:0.#}" : "")
-                                </MudText>
+            @foreach (var row in CandidateRows)
+            {
+                @if (row.MusicBrainz is { } c)
+                {
+                    var selected = c.Key == _file.SelectedCandidateKey;
+                    <div class="candidate @(selected ? "candidate-selected" : "")">
+                        <div class="candidate-head">
+                            <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="Color.Primary" Class="ma-0">MusicBrainz</MudChip>
+                            <MudTooltip Text="Erreichte Punkte von den für diese Datei maximal möglichen. Das ist keine Erkennungssicherheit – die steht im Feld „Erkennung“.">
+                                <span class="candidate-score">
+                                    <span class="song-label">Punkte</span><b>@c.Score.ToString("0.#")</b>@(c.MaxScore > 0 ? $" / {c.MaxScore:0.#}" : "")
+                                </span>
                             </MudTooltip>
-                        </MudTd>
-                        <MudTd>
-                            <MudLink Href="@($"https://musicbrainz.org/release/{c.Release.ReleaseId}")" Target="_blank">@c.Release.Title</MudLink>
-                            <MudText Typo="Typo.caption" Class="d-block">@c.Release.ArtistString</MudText>
-                        </MudTd>
-                        <MudTd>@c.Release.Date · @c.Release.Country</MudTd>
-                        <MudTd>
-                            @string.Join(" + ", new[] { c.Release.PrimaryType }.Concat(c.Release.SecondaryTypes).OfType<string>())
-                            <MudText Typo="Typo.caption" Class="d-block">@c.Release.Status · @string.Join(", ", c.Release.Formats)</MudText>
-                        </MudTd>
-                        <MudTd>@c.Release.TrackPosition/@c.Release.TrackCount</MudTd>
-                        <MudTd>
-                            @c.RecordingArtist – @c.RecordingTitle
-                            <MudText Typo="Typo.caption" Class="d-block">
-                                @c.MatchSource @c.MatchScore.ToString("P0") · @FormatLength(c.RecordingLengthSeconds) (Datei @FormatLength(_file.DurationSeconds))
-                            </MudText>
-                        </MudTd>
-                        <MudTd>
-                            <div class="candidate-actions">
-                                <MudIconButton Icon="@Icons.Material.Outlined.Info" Size="Size.Small" title="Punkte" OnClick="() => ToggleBreakdown(c.Key)" />
-                                <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Visibility" OnClick="() => Preview(c)">Vorschau</MudButton>
-                                @if (IsOpen)
+                            @if (selected)
+                            {
+                                <MudChip T="string" Size="Size.Small" Variant="Variant.Text" Color="Color.Primary" Class="ma-0">ausgewählt</MudChip>
+                            }
+                        </div>
+                        <SongCard Song="SongInfo.From(c, _file.DurationSeconds)" Dense="false" ShowEmpty="true" />
+                        <div class="candidate-actions">
+                            <MudButton Size="Size.Small" Variant="Variant.Text" StartIcon="@Icons.Material.Outlined.Info" OnClick="() => ToggleBreakdown(c.Key)">Punkte</MudButton>
+                            <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Visibility" OnClick="() => Preview(c)">Vorschau</MudButton>
+                            @if (IsOpen)
+                            {
+                                <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary" DropShadow="false" StartIcon="@Icons.Material.Filled.Check" OnClick="() => Choose(c)">Wählen</MudButton>
+                            }
+                        </div>
+                        @if (_expanded.Contains(c.Key))
+                        {
+                            <MudStack Row="true" Wrap="Wrap.Wrap" Spacing="1" Class="mt-2">
+                                @foreach (var (name, value, max) in BreakdownRows(c))
                                 {
-                                    <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary" DropShadow="false" StartIcon="@Icons.Material.Filled.Check" OnClick="() => Choose(c)">Wählen</MudButton>
+                                    <MudChip T="string" Size="Size.Small" Variant="Variant.Text"
+                                             Color="@(value < 0 ? Color.Error : max != null && value >= max - 0.05 ? Color.Success : Color.Warning)">
+                                        @name: @value.ToString("0.#")@(max != null ? $" / {max:0.#}" : "")
+                                    </MudChip>
                                 }
-                            </div>
-                        </MudTd>
-                    }
-                    else if (context.External is { } m)
-                    {
-                        <MudTd>
-                            <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="@(m.Source == "spotify" ? Color.Success : Color.Info)">
+                            </MudStack>
+                        }
+                    </div>
+                }
+                else if (row.External is { } m)
+                {
+                    <div class="candidate">
+                        <div class="candidate-head">
+                            <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="@(m.Source == "spotify" ? Color.Success : Color.Info)" Class="ma-0">
                                 @MatchingPipeline.SourceName(m.Source)
                             </MudChip>
-                        </MudTd>
-                        <MudTd>
-                            <MudText Typo="Typo.body2" Style="white-space:nowrap" Color="@(m.FromTagLink || m.Score >= 0.95 ? Color.Success : Color.Default)">
-                                @(m.FromTagLink ? "Link aus den Tags" : $"{m.Score:P0} Übereinstimmung")
-                            </MudText>
-                        </MudTd>
-                        <MudTd>
-                            <div class="d-flex align-center" style="gap:8px">
-                                @if (m.CoverUrl != null)
-                                {
-                                    <MudImage Src="@m.CoverUrl" Width="40" Height="40" ObjectFit="ObjectFit.Cover" Class="rounded flex-shrink-0" Alt="Cover" />
-                                }
-                                <div>
-                                    @if (m.Url != null)
-                                    {
-                                        <MudLink Href="@m.Url" Target="_blank">@m.Album</MudLink>
-                                    }
-                                    else
-                                    {
-                                        @m.Album
-                                    }
-                                    <MudText Typo="Typo.caption" Class="d-block">@(m.Label ?? "")</MudText>
-                                </div>
-                            </div>
-                        </MudTd>
-                        <MudTd>@m.ReleaseDate</MudTd>
-                        <MudTd>@m.AlbumType</MudTd>
-                        <MudTd>@(m.TrackNumber != null ? $"{m.TrackNumber}/{m.TrackCount}" : "")</MudTd>
-                        <MudTd>
-                            @string.Join(", ", m.Artists)@(m.FeaturedArtists.Count > 0 ? $" feat. {string.Join(", ", m.FeaturedArtists)}" : "") – @m.Title
-                            <MudText Typo="Typo.caption" Class="d-block">
-                                @FormatLength(m.DurationSeconds) (Datei @FormatLength(_file.DurationSeconds))@(m.Isrc != null ? $" · ISRC {m.Isrc}" : "")@(m.Genres.Count > 0 ? $" · {string.Join(", ", m.Genres)}" : "")
-                            </MudText>
-                        </MudTd>
-                        <MudTd>
-                            <div class="candidate-actions">
-                                <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Visibility" OnClick="() => PreviewExternal(m)">Vorschau</MudButton>
-                                @if (IsOpen)
-                                {
-                                    <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary" DropShadow="false" StartIcon="@Icons.Material.Filled.Check" OnClick="() => ApplyExternal(m)">Wählen</MudButton>
-                                }
-                            </div>
-                        </MudTd>
-                    }
-                </RowTemplate>
-                <ChildRowContent>
-                    @if (context.MusicBrainz is { } c && _expanded.Contains(c.Key))
-                    {
-                        <MudTr>
-                            <td colspan="8">
-                                <MudStack Row="true" Wrap="Wrap.Wrap" Spacing="1" Class="pa-2">
-                                    @foreach (var (name, value, max) in BreakdownRows(c))
-                                    {
-                                        <MudChip T="string" Size="Size.Small" Variant="Variant.Text"
-                                                 Color="@(value < 0 ? Color.Error : max != null && value >= max - 0.05 ? Color.Success : Color.Warning)">
-                                            @name: @value.ToString("0.#")@(max != null ? $" / {max:0.#}" : "")
-                                        </MudChip>
-                                    }
-                                </MudStack>
-                            </td>
-                        </MudTr>
-                    }
-                </ChildRowContent>
-            </MudTable>
+                            <span class="candidate-score">
+                                <span class="song-label">Übereinstimmung</span><MudText Typo="Typo.inherit" Inline="true" Color="@(m.FromTagLink || m.Score >= 0.95 ? Color.Success : Color.Default)"><b>@(m.FromTagLink ? "Link aus den Tags" : m.Score.ToString("P0"))</b></MudText>
+                            </span>
+                        </div>
+                        <SongCard Song="SongInfo.From(m, _file.DurationSeconds)" Dense="false" ShowEmpty="true" />
+                        <div class="candidate-actions">
+                            <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Visibility" OnClick="() => PreviewExternal(m)">Vorschau</MudButton>
+                            @if (IsOpen)
+                            {
+                                <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary" DropShadow="false" StartIcon="@Icons.Material.Filled.Check" OnClick="() => ApplyExternal(m)">Wählen</MudButton>
+                            }
+                        </div>
+                    </div>
+                }
+            }
         }
     </MudTabPanel>
 
