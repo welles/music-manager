@@ -96,18 +96,41 @@ public sealed class AlbumCoverService(
         var target = storage.LibraryPath(to);
         if (!Directory.Exists(source) || !Directory.Exists(target)) return;
 
-        var left = Directory.GetFileSystemEntries(source);
-        if (left.Length == 0 || left.Any(f => Directory.Exists(f) || !IsCoverFile(Path.GetFileName(f)))) return;
+        if (CoversLeftIn(source) is not { } left) return;
 
         var keep = Find(target) == null;
         foreach (var file in left)
         {
             if (keep) Storage.MovePreservingTime(file, Path.Combine(target, Path.GetFileName(file)));
-            else storage.MoveToTrash(file, Path.Combine("cover", Path.GetRelativePath(storage.LibraryRoot, file)));
+            else TrashCover(file);
         }
 
         logger.LogInformation("Cover of {From} {Action}", from, keep ? $"moved to {to}" : "moved to the trash");
     }
+
+    /// <summary>
+    /// Call after a song was removed from its folder. When nothing but cover files is left there, those go to
+    /// the trash, so the folder can be removed and no cover is left behind for an album filed there later.
+    /// </summary>
+    public void TrashLeftovers(string relativeFolder)
+    {
+        if (string.IsNullOrEmpty(relativeFolder)) return;
+        var folder = storage.LibraryPath(relativeFolder);
+        if (!Directory.Exists(folder) || CoversLeftIn(folder) is not { } left) return;
+
+        foreach (var file in left) TrashCover(file);
+        logger.LogInformation("Cover of {Folder} moved to the trash", relativeFolder);
+    }
+
+    /// <summary>The entries of a folder when they are all cover files; null when it is empty or holds anything else.</summary>
+    private static string[]? CoversLeftIn(string folder)
+    {
+        var left = Directory.GetFileSystemEntries(folder);
+        return left.Length == 0 || left.Any(f => Directory.Exists(f) || !IsCoverFile(Path.GetFileName(f))) ? null : left;
+    }
+
+    private void TrashCover(string file) =>
+        storage.MoveToTrash(file, Path.Combine("cover", Path.GetRelativePath(storage.LibraryRoot, file)));
 
     /// <summary>
     /// Loads the cover of every album that has its own folder without a cover file: from the Cover Art Archive,
