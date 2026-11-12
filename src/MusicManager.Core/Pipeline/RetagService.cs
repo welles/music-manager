@@ -61,6 +61,7 @@ public sealed class RetagService(
     SettingsService settingsService,
     MatchingPipeline pipeline,
     LibraryIndexer libraryIndexer,
+    AlbumCoverService albumCovers,
     Storage storage,
     PipelineNotifier notifier,
     ILogger<RetagService> logger)
@@ -246,6 +247,8 @@ public sealed class RetagService(
             if (File.Exists(target))
                 throw new InvalidOperationException($"Tags geschrieben, aber nicht verschoben: {p.NewRelativePath} existiert bereits");
             Storage.MovePreservingTime(path, target);
+            // The folder cover goes along with the last song.
+            albumCovers.FollowSong(p.RelativePath, p.NewRelativePath!);
             Storage.DeleteEmptyDirectories(Path.GetDirectoryName(path)!, storage.LibraryRoot);
             finalPath = p.NewRelativePath!;
         }

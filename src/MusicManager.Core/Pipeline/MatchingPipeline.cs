@@ -771,9 +771,10 @@ public sealed partial class MatchingPipeline(
             // A replaced file hands its index entry (song ID, added date) over to the new one.
             await libraryIndexer.UpsertAsync(file.TargetPath, fingerprint, ct,
                 replaces: file.DuplicateDecision == DuplicateDecision.KeepNew ? file.ReplaceLibraryPath : null);
-            // The same cover in full size as a file in the album folder (once per album).
+            // The same cover in full size as a file in the album folder (once per album). Not cancelled with the
+            // pipeline: the song is in the library already and has to reach its final state.
             await albumCovers.EnsureForSongAsync(file.TargetPath, cover.Original, cover.FromArchive ? file.FinalTags.MbReleaseId : null,
-                file.FinalTags.MbReleaseGroupId, ct);
+                file.FinalTags.MbReleaseGroupId, CancellationToken.None);
 
             file.TrashPath = storage.MoveToTrash(source, file.RelativePath);
             SetStatus(file, FileStatus.Done, null);

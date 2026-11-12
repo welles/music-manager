@@ -156,6 +156,40 @@ public class AlbumCoverTests
         Assert.Equal(Jpeg, File.ReadAllBytes(Path.Combine(app.LibraryRoot, "A", "One", "cover.jpg")));
     }
 
+    [Fact]
+    public void TheFolderCoverFollowsTheLastSong()
+    {
+        using var app = new SubsonicTestHost();
+        var service = app.Get<AlbumCoverService>();
+        string Lib(params string[] parts) => Path.Combine([app.LibraryRoot, .. parts]);
+        void Move(string from, string to)
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(Lib(to))!);
+            File.Move(Lib(from), Lib(to));
+            service.FollowSong(from, to);
+        }
+
+        foreach (var song in new[] { "A/Old/1.m4a", "A/Old/2.m4a", "A/Other/1.m4a" }) WriteCover(app, song, [1]);
+        WriteCover(app, "A/Old/cover.jpg", Jpeg);
+        WriteCover(app, "A/Other/folder.png", [2]);
+
+        // Songs are left: the cover stays.
+        Move("A/Old/1.m4a", "A/New/1.m4a");
+        Assert.True(File.Exists(Lib("A", "Old", "cover.jpg")));
+        Assert.False(File.Exists(Lib("A", "New", "cover.jpg")));
+
+        // The last song takes it along.
+        Move("A/Old/2.m4a", "A/New/2.m4a");
+        Assert.Empty(Directory.GetFileSystemEntries(Lib("A", "Old")));
+        Assert.Equal(Jpeg, File.ReadAllBytes(Lib("A", "New", "cover.jpg")));
+
+        // The new folder has a cover: the old one goes to the trash, the existing one stays.
+        Move("A/Other/1.m4a", "A/New/3.m4a");
+        Assert.Empty(Directory.GetFileSystemEntries(Lib("A", "Other")));
+        Assert.Equal(["1.m4a", "2.m4a", "3.m4a", "cover.jpg"], Directory.GetFiles(Lib("A", "New")).Select(Path.GetFileName).Order());
+        Assert.Single(Directory.GetFiles(Path.Combine(app.Root, "trash"), "folder.png", SearchOption.AllDirectories));
+    }
+
     private static HttpResponseMessage Image(byte[] data) => new(HttpStatusCode.OK) { Content = new ByteArrayContent(data) };
 
     private sealed class StubHandler(Func<HttpRequestMessage, HttpResponseMessage> respond) : HttpMessageHandler
