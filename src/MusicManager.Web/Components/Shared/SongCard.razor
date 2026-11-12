@@ -4,7 +4,7 @@
    Dense (default) is for lists and table cells; Dense="false" stacks label over value and shows every field. *@
 
 <div class="song @(Dense ? "song-dense" : "song-full") @Class">
-    <img class="song-cover" src="@(Song.CoverUrl ?? Placeholder)" alt="Cover" loading="lazy" width="@CoverSize" height="@CoverSize"
+    <img @key="Song.CoverUrl" class="song-cover" src="@(Song.CoverUrl ?? Placeholder)" alt="Cover" loading="lazy" width="@CoverSize" height="@CoverSize"
          style="width:@(CoverSize)px;height:@(CoverSize)px"
          data-fallbacks="@string.Join("|", Song.CoverFallbacks.Append(Placeholder))" onerror="mmCoverFallback(this)" />
     <div class="song-body">
