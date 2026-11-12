@@ -2,6 +2,9 @@
 @inject SettingsService SettingsService
 @inject ISnackbar Snackbar
 @inject Microsoft.Extensions.Options.IOptions<MusicManagerOptions> Options
+@inject AlbumCoverService AlbumCovers
+@inject PipelineNotifier Notifier
+@implements IDisposable
 
 <PageTitle>Einstellungen – Music Manager</PageTitle>
 
@@ -68,8 +71,33 @@
             <MudItem xs="12" md="4"><MudSwitch @bind-Value="_s.WriteArtistJpg" Color="Color.Primary" Label="artist.jpg in den Künstlerordner schreiben" /></MudItem>
             <MudItem xs="12" md="4"><MudSwitch @bind-Value="_s.WriteMarkersToFiles" Color="Color.Primary" Label="Song-ID, Hinzugefügt-Datum, Favorit und Bewertung in die Dateien schreiben" /></MudItem>
             <MudItem xs="12" md="4"><MudSwitch @bind-Value="_s.PlaylistFiles" Color="Color.Primary" Label="Playlists als M3U8-Dateien im Ordner „Playlists“ führen" /></MudItem>
-            <MudItem xs="6" md="2"><MudNumericField @bind-Value="_s.CoverSize" Label="Cover-Größe (px)" Variant="Variant.Outlined" Min="100" /></MudItem>
+            <MudItem xs="12" md="4"><MudSwitch @bind-Value="_s.WriteCoverJpg" Color="Color.Primary" Label="Cover groß (bis 1200 px) als cover.jpg in den Albumordner schreiben" /></MudItem>
+            <MudItem xs="6" md="2"><MudNumericField @bind-Value="_s.CoverSize" Label="Cover-Größe in der Datei (px)" Variant="Variant.Outlined" Min="100" /></MudItem>
             <MudItem xs="6" md="2"><MudNumericField @bind-Value="_s.AacBitrateKbps" Label="AAC-Bitrate (kbps)" Variant="Variant.Outlined" Min="64" Max="512" /></MudItem>
+            <MudItem xs="12">
+                <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Spacing="3">
+                    <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Image" OnClick="LoadAlbumCovers" Disabled="_covers.Running">
+                        Fehlende Album-Cover nachladen
+                    </MudButton>
+                    @if (_covers.Running)
+                    {
+                        <MudProgressLinear Value="_covers.Progress" Max="Math.Max(_covers.Total, 1)" Color="Color.Primary" Style="max-width:240px" />
+                        <MudText Typo="Typo.body2">@_covers.Progress von @_covers.Total Alben</MudText>
+                    }
+                    else if (_coversStarted)
+                    {
+                        <MudText Typo="Typo.body2">
+                            @_covers.Written geschrieben, @_covers.NotFound ohne Cover im Cover Art Archive, @_covers.WithoutRelease ohne MusicBrainz-Release
+                        </MudText>
+                    }
+                    else
+                    {
+                        <MudText Typo="Typo.body2" Color="Color.Secondary">
+                            Lädt für jedes Album ohne Bild im Ordner das Cover aus dem Cover Art Archive. Vorhandene Bilder bleiben unberührt.
+                        </MudText>
+                    }
+                </MudStack>
+            </MudItem>
         </MudGrid>
     </MudExpansionPanel>
 
@@ -207,7 +235,33 @@
         ("Format", w => w.Format, (w, v) => w.Format = v),
     ];
 
-    protected override async Task OnInitializedAsync() => _s = await SettingsService.GetCopyAsync();
+    private AlbumCoverState _covers = new(false, 0, 0, 0, 0, 0);
+    private bool _coversStarted;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _covers = AlbumCovers.State;
+        _coversStarted = _covers.Running;
+        Notifier.Changed += OnChanged;
+        _s = await SettingsService.GetCopyAsync();
+    }
+
+    private void OnChanged()
+    {
+        var state = AlbumCovers.State;
+        if (state == _covers) return;
+        _covers = state;
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    private void LoadAlbumCovers()
+    {
+        if (AlbumCovers.StartBackfill()) _coversStarted = true;
+        else Snackbar.Add("Die Album-Cover werden bereits geladen", Severity.Info);
+        _covers = AlbumCovers.State;
+    }
+
+    public void Dispose() => Notifier.Changed -= OnChanged;
 
     private async Task Save()
     {

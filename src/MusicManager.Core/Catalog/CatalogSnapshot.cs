@@ -46,7 +46,7 @@ public sealed class CatalogSong
     /// <summary>File extension without the dot, lower case.</summary>
     public string Suffix => Path.GetExtension(RelativePath).TrimStart('.').ToLowerInvariant();
 
-    /// <summary>Own embedded cover, otherwise the album cover.</summary>
+    /// <summary>Own embedded cover, otherwise the album cover (embedded in another song, or a file in the album folder).</summary>
     public string? CoverArt => HasCover ? Id : Album.CoverArt;
 
     internal string SearchText { get; init; } = "";
@@ -73,7 +73,14 @@ public sealed class CatalogAlbum
     /// <summary>Song whose embedded cover is the album cover (null = no cover).</summary>
     public CatalogSong? CoverSong { get; internal set; }
 
-    public string? CoverArt => CoverSong == null ? null : Id;
+    /// <summary>
+    /// Library folder that holds this album and nothing else (null: the album is spread over several folders,
+    /// shares its folder with another album or lies in the library root). A cover file in it is the album cover.
+    /// </summary>
+    public string? Folder { get; internal set; }
+
+    /// <summary>Set when a cover can exist: an embedded one, or a cover file in the album folder.</summary>
+    public string? CoverArt => CoverSong == null && Folder == null ? null : Id;
     public string? ArtistId => Artists.FirstOrDefault()?.Id;
 
     internal string SortKey { get; set; } = "";
@@ -222,6 +229,15 @@ public sealed class CatalogSnapshot
             album.SearchText = CatalogIds.NormalizeName($"{album.Name} {album.DisplayArtist}");
         }
 
+        // Folders with songs of one album only: a cover file there belongs to that album.
+        var albumsInFolder = songs.GroupBy(FolderOf, StringComparer.Ordinal)
+            .ToDictionary(g => g.Key, g => g.Select(s => s.Album.Id).Distinct(StringComparer.Ordinal).Count(), StringComparer.Ordinal);
+        foreach (var album in albums.Values)
+        {
+            var folders = album.Songs.Select(FolderOf).Distinct(StringComparer.Ordinal).ToList();
+            album.Folder = folders is [{ Length: > 0 } folder] && albumsInFolder[folder] == 1 ? folder : null;
+        }
+
         var albumList = albums.Values.OrderBy(a => a.SortKey, StringComparer.Ordinal).ThenBy(a => a.Id, StringComparer.Ordinal).ToList();
         var songList = albumList.SelectMany(a => a.Songs).ToList();
 
@@ -256,6 +272,8 @@ public sealed class CatalogSnapshot
             _artists = artistMap,
         };
     }
+
+    private static string FolderOf(CatalogSong song) => Path.GetDirectoryName(song.RelativePath) ?? "";
 
     /// <summary>
     /// Maps artist names (with or without MusicBrainz ID) to one artist each. A name without an ID

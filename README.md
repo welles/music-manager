@@ -92,6 +92,14 @@ the app (Symfonium) and moved songs rewrite the file within seconds; a file edit
 folder is taken over within a minute (the newer change wins). A lost database gets all playlists back, with
 their old IDs. A deleted file is written again; delete playlists in the app.
 
+Album covers are embedded into the files at 500 px (setting "Cover-Größe in der Datei") and also kept in
+full size, up to 1200 px, as `cover.jpg` in the album folder. The Subsonic API serves that file instead of
+the embedded cover, and other players such as Navidrome read it too. Any `cover`, `folder`, `front` or
+`albumart` image (JPEG or PNG) in the folder counts, and an existing one is never overwritten, so an own
+image can simply be put there. This only applies to a folder that holds exactly one album. For albums that
+were filed earlier, Settings → Metadaten → "Fehlende Album-Cover nachladen" loads the covers from the Cover
+Art Archive; albums without a MusicBrainz release or without a cover there keep their embedded one.
+
 ### App and notifications
 
 The web app can be installed as a PWA (HTTPS required, e.g. through the tunnel). Under
@@ -133,6 +141,8 @@ Limits:
   stream URL itself and does not send the custom headers.
 
 Resized covers are cached under `<data>/cache/covers`; the folder can be deleted at any time.
+Players keep covers in a cache of their own: after covers were loaded for existing albums, clear the image
+cache in Symfonium to see them.
 
 ## Development
 
