@@ -24,6 +24,7 @@ public sealed class LibraryDuplicateScanner(
     SettingsService settingsService,
     Storage storage,
     LibraryIndexer libraryIndexer,
+    AlbumCoverService albumCovers,
     PipelineNotifier notifier,
     ILogger<LibraryDuplicateScanner> logger)
 {
@@ -152,6 +153,8 @@ public sealed class LibraryDuplicateScanner(
             if (File.Exists(path))
             {
                 storage.MoveToTrash(path, Path.Combine("bibliothek-duplikate", e.RelativePath));
+                // A cover left alone would stay with the folder and go to the next album filed there.
+                albumCovers.TrashLeftovers(Path.GetDirectoryName(e.RelativePath)!);
                 Storage.DeleteEmptyDirectories(Path.GetDirectoryName(path)!, storage.LibraryRoot);
             }
             await libraryIndexer.RemoveAsync(e.RelativePath, ct);

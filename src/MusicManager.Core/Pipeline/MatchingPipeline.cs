@@ -758,6 +758,7 @@ public sealed partial class MatchingPipeline(
                 if (File.Exists(replaced))
                 {
                     var trashed = storage.MoveToTrash(replaced, Path.Combine("ersetzt", file.ReplaceLibraryPath));
+                    // A cover left in the folder stays: the new file takes the same path (see above).
                     Storage.DeleteEmptyDirectories(Path.GetDirectoryName(replaced)!, storage.LibraryRoot);
                     AddEvent(file, $"Vorhandene Datei {file.ReplaceLibraryPath} ersetzt (in den Papierkorb: {trashed})");
                 }

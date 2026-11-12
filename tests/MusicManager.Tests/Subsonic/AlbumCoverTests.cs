@@ -190,6 +190,38 @@ public class AlbumCoverTests
         Assert.Single(Directory.GetFiles(Path.Combine(app.Root, "trash"), "folder.png", SearchOption.AllDirectories));
     }
 
+    [Fact]
+    public async Task TheFolderCoverGoesWithTheLastDuplicate()
+    {
+        using var app = new SubsonicTestHost();
+        string Lib(params string[] parts) => Path.Combine([app.LibraryRoot, .. parts]);
+        app.AddFile("A/Keep/A - S.m4a", new() { Title = "S", Artist = "A", AlbumArtist = "A", Album = "Keep" });
+        app.AddFile("A/Dup/A - S.m4a", new() { Title = "S", Artist = "A", AlbumArtist = "A", Album = "Dup" });
+        app.AddFile("A/Dup2/A - S.m4a", new() { Title = "S", Artist = "A", AlbumArtist = "A", Album = "Dup2" });
+        app.AddFile("A/Dup2/A - T.m4a", new() { Title = "T", Artist = "A", AlbumArtist = "A", Album = "Dup2" });
+        WriteCover(app, "A/Keep/cover.jpg", Jpeg);
+        WriteCover(app, "A/Dup/cover.jpg", [1]);
+        WriteCover(app, "A/Dup/folder.png", [2]);
+        WriteCover(app, "A/Dup2/cover.jpg", [3]);
+        await app.ScanAsync();
+
+        var keep = (await app.EntryAsync(Path.Combine("A", "Keep", "A - S.m4a")))!;
+        var dup = (await app.EntryAsync(Path.Combine("A", "Dup", "A - S.m4a")))!;
+        var dup2 = (await app.EntryAsync(Path.Combine("A", "Dup2", "A - S.m4a")))!;
+        var group = new LibraryDuplicateGroup { Key = "k", Entries = [keep, dup, dup2], Reasons = [] };
+
+        await app.Get<LibraryDuplicateScanner>().KeepAsync(group, keep.Id, CancellationToken.None);
+
+        // The last song of its folder: the covers go to the trash and the folder is removed.
+        Assert.False(Directory.Exists(Lib("A", "Dup")));
+        var trash = Path.Combine(app.Root, "trash");
+        Assert.Equal([1], File.ReadAllBytes(Assert.Single(Directory.GetFiles(trash, "cover.jpg", SearchOption.AllDirectories))));
+        Assert.Single(Directory.GetFiles(trash, "folder.png", SearchOption.AllDirectories));
+        // Another song is left: the cover stays. The kept file's folder is untouched.
+        Assert.Equal(["A - T.m4a", "cover.jpg"], Directory.GetFiles(Lib("A", "Dup2")).Select(Path.GetFileName).Order());
+        Assert.Equal(["A - S.m4a", "cover.jpg"], Directory.GetFiles(Lib("A", "Keep")).Select(Path.GetFileName).Order());
+    }
+
     private static HttpResponseMessage Image(byte[] data) => new(HttpStatusCode.OK) { Content = new ByteArrayContent(data) };
 
     private sealed class StubHandler(Func<HttpRequestMessage, HttpResponseMessage> respond) : HttpMessageHandler
