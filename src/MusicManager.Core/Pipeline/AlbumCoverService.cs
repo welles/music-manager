@@ -83,6 +83,33 @@ public sealed class AlbumCoverService(
     }
 
     /// <summary>
+    /// Call after a song was moved to another folder. When it was the last file of its old folder apart from
+    /// cover files, those go along to the new folder, or to the trash if that folder has a cover already, so
+    /// no cover is left behind for an album filed there later.
+    /// </summary>
+    public void FollowSong(string fromRelativePath, string toRelativePath)
+    {
+        var from = Path.GetDirectoryName(fromRelativePath);
+        var to = Path.GetDirectoryName(toRelativePath);
+        if (string.IsNullOrEmpty(from) || string.IsNullOrEmpty(to) || from == to) return;
+        var source = storage.LibraryPath(from);
+        var target = storage.LibraryPath(to);
+        if (!Directory.Exists(source) || !Directory.Exists(target)) return;
+
+        var left = Directory.GetFileSystemEntries(source);
+        if (left.Length == 0 || left.Any(f => Directory.Exists(f) || !IsCoverFile(Path.GetFileName(f)))) return;
+
+        var keep = Find(target) == null;
+        foreach (var file in left)
+        {
+            if (keep) Storage.MovePreservingTime(file, Path.Combine(target, Path.GetFileName(file)));
+            else storage.MoveToTrash(file, Path.Combine("cover", Path.GetRelativePath(storage.LibraryRoot, file)));
+        }
+
+        logger.LogInformation("Cover of {From} {Action}", from, keep ? $"moved to {to}" : "moved to the trash");
+    }
+
+    /// <summary>
     /// Loads the cover of every album that has its own folder without a cover file: from the Cover Art Archive,
     /// otherwise (no MusicBrainz release, or no cover there) from Deezer or Spotify.
     /// Runs in the background, one run at a time; false when one is already running.
