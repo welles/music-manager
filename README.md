@@ -98,7 +98,8 @@ the embedded cover, and other players such as Navidrome read it too. Any `cover`
 `albumart` image (JPEG or PNG) in the folder counts, and an existing one is never overwritten, so an own
 image can simply be put there. This only applies to a folder that holds exactly one album. For albums that
 were filed earlier, Settings → Metadaten → "Fehlende Album-Cover nachladen" loads the covers from the Cover
-Art Archive; albums without a MusicBrainz release or without a cover there keep their embedded one.
+Art Archive; for albums without a MusicBrainz release or without a cover there, Deezer (1000 px) and Spotify
+(640 px) are searched. Albums found nowhere keep their embedded cover.
 
 ### App and notifications
 

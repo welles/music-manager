@@ -87,13 +87,13 @@
                     else if (_coversStarted)
                     {
                         <MudText Typo="Typo.body2">
-                            @_covers.Written geschrieben, @_covers.NotFound ohne Cover im Cover Art Archive, @_covers.WithoutRelease ohne MusicBrainz-Release
+                            @_covers.Written geschrieben, für @_covers.NotFound Alben kein Cover gefunden
                         </MudText>
                     }
                     else
                     {
                         <MudText Typo="Typo.body2" Color="Color.Secondary">
-                            Lädt für jedes Album ohne Bild im Ordner das Cover aus dem Cover Art Archive. Vorhandene Bilder bleiben unberührt.
+                            Lädt für jedes Album ohne Bild im Ordner das Cover aus dem Cover Art Archive (MusicBrainz), sonst von Deezer oder Spotify. Vorhandene Bilder bleiben unberührt.
                         </MudText>
                     }
                 </MudStack>
@@ -235,7 +235,7 @@
         ("Format", w => w.Format, (w, v) => w.Format = v),
     ];
 
-    private AlbumCoverState _covers = new(false, 0, 0, 0, 0, 0);
+    private AlbumCoverState _covers = new(false, 0, 0, 0, 0);
     private bool _coversStarted;
 
     protected override async Task OnInitializedAsync()

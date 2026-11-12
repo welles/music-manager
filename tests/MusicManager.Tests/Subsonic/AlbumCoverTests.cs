@@ -109,39 +109,54 @@ public class AlbumCoverTests
         var own = WriteCover(app, "A/Two/folder.png", [0x89, 0x50, 0x4E, 0x47, 9]);
         await app.ScanAsync();
 
-        // Only the release group of the first album has a cover.
+        // The archive only has a cover for the release group of the first album. Deezer knows the song of
+        // every album, but on the album "Three" (and "Other", which is no album of the library).
+        byte[] deezerJpeg = [0xFF, 0xD8, 5];
         var requests = new List<string>();
         var handler = new StubHandler(request =>
         {
-            requests.Add(request.RequestUri!.AbsolutePath);
-            return request.RequestUri.AbsolutePath == $"/release-group/{group1}/front-1200"
-                ? new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent(Jpeg) }
+            var uri = request.RequestUri!;
+            requests.Add(uri.AbsolutePath);
+            if (uri.Host == "api.deezer.com")
+            {
+                const string hit = """{"id":%ID%,"title":"S","artist":{"name":"A"},"album":{"title":"%ALBUM%","cover_xl":"https://cdn.example/%ALBUM%.jpg"},"duration":1}""";
+                var data = string.Join(",", new[] { "Other", "Three" }.Select((a, i) => hit.Replace("%ID%", $"{i + 1}").Replace("%ALBUM%", a)));
+                return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent($$"""{"data":[{{data}}]}""") };
+            }
+
+            return uri.AbsolutePath == $"/release-group/{group1}/front-1200" ? Image(Jpeg)
+                : uri.AbsolutePath == "/Three.jpg" ? Image(deezerJpeg)
                 : new HttpResponseMessage(HttpStatusCode.NotFound);
         });
-        var service = new AlbumCoverService(app.Get<MediaCatalog>(), new CoverArtService(new HttpClient(handler), NullLogger<CoverArtService>.Instance),
+        var http = new HttpClient(handler);
+        var service = new AlbumCoverService(app.Get<MediaCatalog>(), new CoverArtService(http, NullLogger<CoverArtService>.Instance),
+            new DeezerClient(http, NullLogger<DeezerClient>.Instance), app.Get<SpotifyClient>(),
             app.Get<AudioTools>(), app.Get<Storage>(), app.Get<SettingsService>(), app.Get<PipelineNotifier>(), NullLogger<AlbumCoverService>.Instance);
 
         await service.BackfillAsync(TimeSpan.Zero, CancellationToken.None);
 
-        Assert.Equal(new AlbumCoverState(false, 3, 3, 1, 1, 1), service.State);
+        Assert.Equal(new AlbumCoverState(false, 3, 3, 2, 1), service.State);
         Assert.Equal(Jpeg, File.ReadAllBytes(Path.Combine(app.LibraryRoot, "A", "One", "cover.jpg")));
+        // No MusicBrainz release: the cover of the album with the same name from Deezer.
+        Assert.Equal(deezerJpeg, File.ReadAllBytes(Path.Combine(app.LibraryRoot, "A", "Three", "cover.jpg")));
         Assert.Equal(["A - S.m4a", Path.GetFileName(own)], Directory.GetFiles(Path.Combine(app.LibraryRoot, "A", "Two")).Select(Path.GetFileName).Order());
-        Assert.False(File.Exists(Path.Combine(app.LibraryRoot, "A", "Three", "cover.jpg")));
         Assert.False(File.Exists(Path.Combine(app.LibraryRoot, "A", "Four", "cover.jpg")));
         Assert.DoesNotContain(requests, r => r.Contains(release2));
 
         // A second run only asks for the albums that still have none.
         requests.Clear();
         await service.BackfillAsync(TimeSpan.Zero, CancellationToken.None);
-        Assert.Equal([$"/release/{release4}/front-1200"], requests);
+        Assert.Equal([$"/release/{release4}/front-1200", "/search"], requests);
 
         // A newly filed song gets the cover of its release, an existing file is kept.
-        handler.Respond = _ => new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent([0xFF, 0xD8, 7]) };
+        handler.Respond = _ => Image([0xFF, 0xD8, 7]);
         await service.EnsureForSongAsync(Path.Combine("A", "Four", "A - S.m4a"), null, release4, null, CancellationToken.None);
         await service.EnsureForSongAsync(Path.Combine("A", "One", "A - S.m4a"), null, release1, group1, CancellationToken.None);
         Assert.Equal([0xFF, 0xD8, 7], File.ReadAllBytes(Path.Combine(app.LibraryRoot, "A", "Four", "cover.jpg")));
         Assert.Equal(Jpeg, File.ReadAllBytes(Path.Combine(app.LibraryRoot, "A", "One", "cover.jpg")));
     }
+
+    private static HttpResponseMessage Image(byte[] data) => new(HttpStatusCode.OK) { Content = new ByteArrayContent(data) };
 
     private sealed class StubHandler(Func<HttpRequestMessage, HttpResponseMessage> respond) : HttpMessageHandler
     {

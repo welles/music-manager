@@ -1,11 +1,13 @@
 using Microsoft.Extensions.Logging;
 using MusicManager.Core.Catalog;
+using MusicManager.Core.Model;
+using MusicManager.Core.Rules;
 using MusicManager.Core.Services;
 
 namespace MusicManager.Core.Pipeline;
 
 /// <summary>State of the run that loads missing album folder covers.</summary>
-public sealed record AlbumCoverState(bool Running, int Progress, int Total, int Written, int NotFound, int WithoutRelease);
+public sealed record AlbumCoverState(bool Running, int Progress, int Total, int Written, int NotFound);
 
 /// <summary>
 /// Album covers as files in the album folder (cover.jpg), in a larger size than the cover embedded into the
@@ -15,6 +17,8 @@ public sealed record AlbumCoverState(bool Running, int Progress, int Total, int 
 public sealed class AlbumCoverService(
     MediaCatalog catalog,
     CoverArtService coverArt,
+    DeezerClient deezer,
+    SpotifyClient spotify,
     AudioTools audio,
     Storage storage,
     SettingsService settingsService,
@@ -31,9 +35,9 @@ public sealed class AlbumCoverService(
     private static readonly string[] Extensions = [".jpg", ".jpeg", ".png"];
 
     private readonly SemaphoreSlim _lock = new(1, 1);
-    private int _progress, _total, _written, _notFound, _withoutRelease;
+    private int _progress, _total, _written, _notFound;
 
-    public AlbumCoverState State => new(_lock.CurrentCount == 0, _progress, _total, _written, _notFound, _withoutRelease);
+    public AlbumCoverState State => new(_lock.CurrentCount == 0, _progress, _total, _written, _notFound);
 
     /// <summary>True for file names that count as the cover of their folder (cover, folder, front, albumart; JPEG or PNG).</summary>
     public static bool IsCoverFile(string fileName) =>
@@ -79,7 +83,8 @@ public sealed class AlbumCoverService(
     }
 
     /// <summary>
-    /// Loads the cover of every album that has its own folder without a cover file, from the Cover Art Archive.
+    /// Loads the cover of every album that has its own folder without a cover file: from the Cover Art Archive,
+    /// otherwise (no MusicBrainz release, or no cover there) from Deezer or Spotify.
     /// Runs in the background, one run at a time; false when one is already running.
     /// </summary>
     public bool StartBackfill()
@@ -106,7 +111,7 @@ public sealed class AlbumCoverService(
 
     internal async Task BackfillAsync(TimeSpan pause, CancellationToken ct)
     {
-        _progress = _written = _notFound = _withoutRelease = 0;
+        _progress = _written = _notFound = 0;
         var albums = (await catalog.GetAsync(ct)).Albums
             .Where(a => a.Folder != null && Find(storage.LibraryPath(a.Folder)) == null).ToList();
         _total = albums.Count;
@@ -115,32 +120,63 @@ public sealed class AlbumCoverService(
         foreach (var album in albums)
         {
             ct.ThrowIfCancellationRequested();
-            if (album.MbReleaseId == null)
+            try
             {
-                _withoutRelease++;
+                var written = album.MbReleaseId != null && await FetchAsync(album.Folder!, album.MbReleaseId, ReleaseGroupOf(album), ct);
+                if (written || await FetchExternalAsync(album, ct)) _written++;
+                else _notFound++;
             }
-            else
+            catch (Exception ex) when (!ct.IsCancellationRequested)
             {
-                try
-                {
-                    if (await FetchAsync(album.Folder!, album.MbReleaseId, ReleaseGroupOf(album), ct)) _written++;
-                    else _notFound++;
-                }
-                catch (Exception ex) when (!ct.IsCancellationRequested)
-                {
-                    logger.LogWarning(ex, "Folder cover for {Folder} failed", album.Folder);
-                    _notFound++;
-                }
-
-                await Task.Delay(pause, ct);
+                logger.LogWarning(ex, "Folder cover for {Folder} failed", album.Folder);
+                _notFound++;
             }
 
             _progress++;
             notifier.Notify();
+            await Task.Delay(pause, ct);
         }
 
-        logger.LogInformation("Album covers: {Written} written, {NotFound} not in the Cover Art Archive, {WithoutRelease} without a MusicBrainz release",
-            _written, _notFound, _withoutRelease);
+        logger.LogInformation("Album covers: {Written} written, {NotFound} not found", _written, _notFound);
+    }
+
+    /// <summary>
+    /// Cover from Deezer (1000 px), then Spotify (640 px): the album of a hit for the album's first song, when
+    /// the hit fits the song and its album has the same name.
+    /// </summary>
+    private async Task<bool> FetchExternalAsync(CatalogAlbum album, CancellationToken ct)
+    {
+        if (album.Name == CatalogSnapshot.UnknownAlbum || album.Songs.Count == 0) return false;
+        var settings = await settingsService.GetAsync(ct);
+        var song = album.Songs[0];
+        var (title, _) = TaggingRules.ExtractFeatures(song.Title);
+        var artist = song.Artists.FirstOrDefault()?.Name;
+        double? duration = song.Duration > 0 ? song.Duration : null;
+
+        var searches = new List<(string Name, Func<Task<List<ExternalMatch>>> Run)>();
+        if (settings.DeezerEnabled) searches.Add(("Deezer", () => deezer.SearchAsync(artist, title, ct)));
+        if (settings.SpotifyEnabled && spotify.IsConfigured) searches.Add(("Spotify", () => spotify.SearchAsync(artist, title, ct)));
+
+        foreach (var (name, run) in searches)
+        {
+            try
+            {
+                var match = (await run())
+                    .Where(m => m.CoverUrl != null && TextUtil.Similarity(m.Album, album.Name) >= 0.85)
+                    .Select(m => (Match: m, Score: ExternalSourceService.Rate(m, title, artist, duration)))
+                    .Where(x => x.Score >= settings.ExternalMinScore)
+                    .OrderByDescending(x => x.Score).Select(x => x.Match).FirstOrDefault();
+                if (match != null && await coverArt.DownloadAsync(match.CoverUrl!, name, ct) is { } cover
+                                  && await WriteAsync(album.Folder!, cover.Data, resize: !IsJpeg(cover.Data), ct))
+                    return true;
+            }
+            catch (Exception ex) when (!ct.IsCancellationRequested)
+            {
+                logger.LogWarning(ex, "{Source} cover search for {Folder} failed", name, album.Folder);
+            }
+        }
+
+        return false;
     }
 
     /// <summary>The release group is not in the index; it is read from the tags of an album's song.</summary>
@@ -165,7 +201,7 @@ public sealed class AlbumCoverService(
     private async Task<bool> FetchAsync(string relativeFolder, string mbReleaseId, string? mbReleaseGroupId, CancellationToken ct)
     {
         var cover = await coverArt.GetFrontAsync(mbReleaseId, mbReleaseGroupId, Size, ct);
-        // The archive's thumbnails are JPEGs of the right size already; anything else is converted.
+        // The thumbnails of the sources are JPEGs of at most this size already; anything else is converted.
         return cover != null && await WriteAsync(relativeFolder, cover.Data, resize: !IsJpeg(cover.Data), ct);
     }
 
