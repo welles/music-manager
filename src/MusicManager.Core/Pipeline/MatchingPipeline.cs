@@ -866,13 +866,7 @@ public sealed partial class MatchingPipeline(
             {
                 try
                 {
-                    // The album folder got its cover while filing; a second cover file would only sit beside it.
-                    if (targetDir != null && AlbumCoverService.IsCoverFile(Path.GetFileName(extra))
-                                          && AlbumCoverService.Find(storage.LibraryPath(targetDir)) != null)
-                    {
-                        storage.MoveToTrash(extra, storage.RelativeToInbox(extra));
-                    }
-                    else if (targetDir != null)
+                    if (targetDir != null)
                     {
                         var dest = Storage.UniquePath(Path.Combine(storage.LibraryPath(targetDir), Path.GetFileName(extra)));
                         Storage.MovePreservingTime(extra, dest);
