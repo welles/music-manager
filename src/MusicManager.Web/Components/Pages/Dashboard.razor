@@ -54,10 +54,10 @@
         <MudTh>Zeit</MudTh>
     </HeaderContent>
     <RowTemplate>
-        <MudTd><TrackSummary File="context" Variant="TrackSummary.SummaryVariant.Original" /></MudTd>
-        <MudTd><StatusChip Status="context.Status" Reason="@context.StatusReason" /> <DecisionChip Decision="context.Decision" /></MudTd>
-        <MudTd><TrackSummary File="context" Variant="TrackSummary.SummaryVariant.Result" /></MudTd>
-        <MudTd>@context.UpdatedAt.ToLocalTime().ToString("g")</MudTd>
+        <MudTd DataLabel="Original"><TrackSummary File="context" Variant="TrackSummary.SummaryVariant.Original" /></MudTd>
+        <MudTd DataLabel="Status"><StatusChip Status="context.Status" Reason="@context.StatusReason" /> <DecisionChip Decision="context.Decision" /></MudTd>
+        <MudTd DataLabel="Ergebnis"><TrackSummary File="context" Variant="TrackSummary.SummaryVariant.Result" /></MudTd>
+        <MudTd DataLabel="Zeit">@context.UpdatedAt.ToLocalTime().ToString("g")</MudTd>
     </RowTemplate>
 </MudTable>
 

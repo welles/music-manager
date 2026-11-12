@@ -2,13 +2,19 @@
 @inject NavigationManager Nav
 @* Track table of the library: search, problem filters, multi-selection, playback. *@
 
-<MudDataGrid T="LibraryTrack" Items="Filtered" Dense="true" Hover="true" MultiSelection="true" @bind-SelectedItems="_selected"
+<MudDataGrid T="LibraryTrack" Items="Filtered" Class="track-grid" Dense="true" Hover="true" MultiSelection="true" @bind-SelectedItems="_selected"
              RowsPerPage="50" SortMode="SortMode.Multiple">
     <ToolBarContent>
         <MudStack Spacing="1" Style="width:100%">
             <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap">
                 <MudTextField @bind-Value="_search" Placeholder="Titel, Künstler, Album suchen" Adornment="Adornment.Start" Immediate="true"
                               AdornmentIcon="@Icons.Material.Filled.Search" Clearable="true" Class="mt-0" Style="max-width:360px" />
+                <MudSelect T="TrackSort" @bind-Value="_sort" Label="Sortierung" Dense="true" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-0" Style="max-width:180px">
+                    @foreach (var (value, label) in SortLabels)
+                    {
+                        <MudSelectItem T="TrackSort" Value="value">@label</MudSelectItem>
+                    }
+                </MudSelect>
                 <MudSpacer />
                 <MudText Typo="Typo.body2">@Filtered.Count() Titel@(_selected.Count > 0 ? $" · {_selected.Count} ausgewählt" : "")</MudText>
                 <MudButtonGroup Variant="Variant.Outlined" Size="Size.Small">
@@ -31,34 +37,9 @@
                 <MudIconButton Icon="@Icons.Material.Filled.PlayArrow" Size="Size.Small" OnClick="() => Player.Play(context.Item)" aria-label="Abspielen" />
             </CellTemplate>
         </TemplateColumn>
-        <TemplateColumn Title="Titel" SortBy="x => x.Title ?? x.RelativePath">
-            <CellTemplate>
-                <div class="d-flex align-center" style="gap:10px">
-                    <MudImage Src="@($"api/library/{context.Item.Id}/cover")" Width="40" Height="40" ObjectFit="ObjectFit.Cover" Class="rounded flex-shrink-0" />
-                    <div style="min-width:0">
-                        <MudText Typo="Typo.body2"><b>@(context.Item.Title ?? Path.GetFileName(context.Item.RelativePath))</b></MudText>
-                        <MudText Typo="Typo.caption" Class="mono" Style="opacity:.55">@context.Item.RelativePath</MudText>
-                    </div>
-                </div>
-            </CellTemplate>
+        <TemplateColumn Title="Titel" Sortable="false">
+            <CellTemplate><SongCard Song="SongInfo.From(context.Item) with { Genres = [], Format = null }" /></CellTemplate>
         </TemplateColumn>
-        <TemplateColumn Title="Künstler" SortBy="x => x.ArtistNames.FirstOrDefault()">
-            <CellTemplate>
-                @foreach (var (name, i) in context.Item.ArtistNames.Select((n, i) => (n, i)))
-                {
-                    @(i > 0 ? ", " : "")<MudLink Href="@ArtistHref(name)" Typo="Typo.body2">@name</MudLink>
-                }
-            </CellTemplate>
-        </TemplateColumn>
-        <TemplateColumn Title="Album" SortBy="x => x.Album">
-            <CellTemplate>
-                @if (context.Item.Album != null)
-                {
-                    <MudLink Href="@AlbumHref(context.Item)" Typo="Typo.body2">@context.Item.Album</MudLink>
-                }
-            </CellTemplate>
-        </TemplateColumn>
-        <PropertyColumn Property="x => x.Year" Title="Jahr" />
         <TemplateColumn Title="Genre" SortBy="x => x.Genres.FirstOrDefault()">
             <CellTemplate>@string.Join(", ", context.Item.Genres)</CellTemplate>
         </TemplateColumn>
@@ -67,10 +48,12 @@
         </TemplateColumn>
         <TemplateColumn Title="Hinweise" Sortable="false">
             <CellTemplate>
-                @foreach (var p in context.Item.Problems(RulesVersion))
-                {
-                    <MudChip T="string" Size="Size.Small" Variant="Variant.Text" Color="@(p == LibraryProblem.OldRules ? Color.Info : Color.Warning)">@ProblemLabel(p)</MudChip>
-                }
+                <div class="chip-wrap">
+                    @foreach (var p in context.Item.Problems(RulesVersion))
+                    {
+                        <MudChip T="string" Size="Size.Small" Variant="Variant.Text" Color="@(p == LibraryProblem.OldRules ? Color.Info : Color.Warning)">@ProblemLabel(p)</MudChip>
+                    }
+                </div>
             </CellTemplate>
         </TemplateColumn>
     </Columns>
@@ -98,7 +81,28 @@
         _search = InitialSearch;
     }
 
-    private IEnumerable<LibraryTrack> Filtered => Tracks.Where(t =>
+    /// <summary>Title, artist, album and year share one column (the SongCard), so their order is chosen here.</summary>
+    private enum TrackSort { Given, Title, Artist, Album, YearNewest, YearOldest }
+
+    private TrackSort _sort;
+
+    private static readonly (TrackSort, string)[] SortLabels =
+    [
+        (TrackSort.Given, "Standard"), (TrackSort.Title, "Titel"), (TrackSort.Artist, "Künstler"), (TrackSort.Album, "Album"),
+        (TrackSort.YearNewest, "Jahr (neu zuerst)"), (TrackSort.YearOldest, "Jahr (alt zuerst)"),
+    ];
+
+    private IEnumerable<LibraryTrack> Filtered => _sort switch
+    {
+        TrackSort.Title => Matching.OrderBy(t => t.Title ?? t.RelativePath, StringComparer.CurrentCultureIgnoreCase),
+        TrackSort.Artist => Matching.OrderBy(t => t.ArtistNames.FirstOrDefault(), StringComparer.CurrentCultureIgnoreCase),
+        TrackSort.Album => Matching.OrderBy(t => t.Album, StringComparer.CurrentCultureIgnoreCase).ThenBy(t => t.DiscNumber).ThenBy(t => t.TrackNumber),
+        TrackSort.YearNewest => Matching.OrderByDescending(t => t.Year),
+        TrackSort.YearOldest => Matching.OrderBy(t => t.Year ?? int.MaxValue),
+        _ => Matching,
+    };
+
+    private IEnumerable<LibraryTrack> Matching => Tracks.Where(t =>
         (string.IsNullOrWhiteSpace(_search)
          || (t.Title?.Contains(_search, StringComparison.OrdinalIgnoreCase) ?? false)
          || (t.Album?.Contains(_search, StringComparison.OrdinalIgnoreCase) ?? false)

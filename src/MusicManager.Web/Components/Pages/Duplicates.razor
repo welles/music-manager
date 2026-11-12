@@ -107,7 +107,7 @@
                             <MudText Typo="Typo.subtitle2" Class="mt-4">Mögliche andere Versionen (kein Duplikat)</MudText>
                             @foreach (var o in _file.Duplicates.Where(d => d.Kind == DuplicateKind.OtherVersion))
                             {
-                                <MudText Typo="Typo.body2">@o.Artist – @o.Title (@o.Album) <span class="mono" style="opacity:.6">@o.RelativePath</span></MudText>
+                                <SongCard Song="SongInfo.From(o)" Class="mt-2" />
                             }
                         }
                     }

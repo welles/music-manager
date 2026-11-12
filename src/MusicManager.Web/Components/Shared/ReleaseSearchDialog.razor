@@ -27,14 +27,14 @@
                 <MudTh></MudTh>
             </HeaderContent>
             <RowTemplate>
-                <MudTd>
+                <MudTd DataLabel="Release">
                     <MudLink Href="@($"https://musicbrainz.org/release/{context.ReleaseId}")" Target="_blank">@context.Title</MudLink>
                 </MudTd>
-                <MudTd>@context.ArtistString</MudTd>
-                <MudTd>@context.Date</MudTd>
-                <MudTd>@context.Country</MudTd>
-                <MudTd>@string.Join(" + ", new[] { context.PrimaryType }.Concat(context.SecondaryTypes).OfType<string>())</MudTd>
-                <MudTd>@context.TrackCount</MudTd>
+                <MudTd DataLabel="Künstler">@context.ArtistString</MudTd>
+                <MudTd DataLabel="Datum">@context.Date</MudTd>
+                <MudTd DataLabel="Land">@context.Country</MudTd>
+                <MudTd DataLabel="Typ">@string.Join(" + ", new[] { context.PrimaryType }.Concat(context.SecondaryTypes).OfType<string>())</MudTd>
+                <MudTd DataLabel="Tracks">@context.TrackCount</MudTd>
                 <MudTd>
                     <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Primary" Disabled="_busy"
                                OnClick="() => Assign(context.ReleaseId)">Zuweisen</MudButton>

@@ -1,0 +1,133 @@
+@* The one representation of a song in the app: cover, title, artist, then labelled fields in a fixed order
+   (album, date, country, type, track, length …). Every list, table cell and detail view uses it, so a value
+   always sits under the same label in the same place.
+   Dense (default) is for lists and table cells; Dense="false" stacks label over value and shows every field. *@
+
+<div class="song @(Dense ? "song-dense" : "song-full") @Class">
+    <img class="song-cover" src="@(Song.CoverUrl ?? Placeholder)" alt="Cover" loading="lazy" width="@CoverSize" height="@CoverSize"
+         style="width:@(CoverSize)px;height:@(CoverSize)px"
+         data-fallbacks="@string.Join("|", Song.CoverFallbacks.Append(Placeholder))" onerror="mmCoverFallback(this)" />
+    <div class="song-body">
+        @if (ShowTitle)
+        {
+            <div class="song-title">
+                @if (Href != null)
+                {
+                    <MudLink Href="@Href" Typo="Typo.inherit" Color="Color.Inherit" Underline="Underline.Hover">@Title</MudLink>
+                }
+                else
+                {
+                    @Title
+                }
+            </div>
+        }
+        <div class="song-artist">
+            @if (Song.LinkArtists && Song.Artists.Count > 0)
+            {
+                @foreach (var (name, i) in Song.Artists.Select((n, i) => (n, i)))
+                {
+                    @(i > 0 ? ", " : "")<MudLink Href="@TrackGrid.ArtistHref(name)" Typo="Typo.inherit" Color="Color.Inherit" Underline="Underline.Hover">@name</MudLink>
+                }
+            }
+            else
+            {
+                @(Song.ArtistLine ?? "Unbekannter Künstler")
+            }
+        </div>
+        @if (ShowFields)
+        {
+            <dl class="song-fields">
+                @foreach (var f in Fields)
+                {
+                    <div class="song-field">
+                        <dt>@f.Label</dt>
+                        <dd>
+                            @if (f.Href != null)
+                            {
+                                <MudLink Href="@f.Href" Target="@(f.External ? "_blank" : null)" Typo="Typo.inherit">@f.Value</MudLink>
+                            }
+                            else
+                            {
+                                @f.Value
+                            }
+                        </dd>
+                    </div>
+                }
+            </dl>
+            @if (ShowPath && !string.IsNullOrWhiteSpace(Song.Path))
+            {
+                <div class="song-path mono">@Song.Path</div>
+            }
+        }
+        @ChildContent
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public SongInfo Song { get; set; } = null!;
+
+    /// <summary>Compact form for lists and table cells; false for detail views and candidates.</summary>
+    [Parameter] public bool Dense { get; set; } = true;
+
+    /// <summary>Link of the title (e.g. the file's detail page).</summary>
+    [Parameter] public string? Href { get; set; }
+
+    /// <summary>False where the title already stands right above (page header).</summary>
+    [Parameter] public bool ShowTitle { get; set; } = true;
+
+    /// <summary>False where there is only room for cover, title and artist (player bar).</summary>
+    [Parameter] public bool ShowFields { get; set; } = true;
+
+    [Parameter] public bool ShowPath { get; set; } = true;
+
+    /// <summary>Show album, date, country, type, track and length even when empty ("–"), so candidates line up.</summary>
+    [Parameter] public bool ShowEmpty { get; set; }
+
+    [Parameter] public int? CoverSizeOverride { get; set; }
+    [Parameter] public string? Class { get; set; }
+
+    /// <summary>Rendered below the fields (e.g. a hint that belongs to this song).</summary>
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    public const string Placeholder = "icons/cover-placeholder.svg";
+
+    private sealed record Field(string Label, string Value, string? Href = null, bool External = false);
+
+    private int CoverSize => CoverSizeOverride ?? (Dense ? 48 : 96);
+
+    private string Title => string.IsNullOrWhiteSpace(Song.Title) ? "Ohne Titel" : Song.Title;
+
+    private IEnumerable<Field> Fields
+    {
+        get
+        {
+            // Core fields: always in this order.
+            if (Core("Album", Song.Album, Song.AlbumHref, Song.AlbumHrefExternal) is { } album) yield return album;
+            if (Core("Datum", Song.Date) is { } date) yield return date;
+            if (Core("Land", Song.Country) is { } country) yield return country;
+            if (Core("Typ", Song.Type) is { } type) yield return type;
+            if (Core("Track", Song.Track) is { } track) yield return track;
+            if (Core("Dauer", Song.Duration) is { } duration) yield return duration;
+
+            if (!string.IsNullOrWhiteSpace(Song.AlbumArtist) && !string.Equals(Song.AlbumArtist, Song.ArtistLine, StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(Song.AlbumArtist, Song.Artist, StringComparison.OrdinalIgnoreCase))
+                yield return new Field("Album-Künstler", Song.AlbumArtist);
+
+            foreach (var (label, value) in Song.Extra)
+                if (!string.IsNullOrWhiteSpace(value)) yield return new Field(label, value);
+
+            if (!string.IsNullOrWhiteSpace(Song.Format)) yield return new Field("Format", Song.Format);
+
+            // The rest only where there is room.
+            if (Dense) yield break;
+            if (!string.IsNullOrWhiteSpace(Song.Label)) yield return new Field("Label", Song.Label);
+            if (Song.Genres.Count > 0) yield return new Field("Genre", string.Join(", ", Song.Genres));
+            if (!string.IsNullOrWhiteSpace(Song.Isrc)) yield return new Field("ISRC", Song.Isrc);
+        }
+    }
+
+    private Field? Core(string label, string? value, string? href = null, bool external = false) =>
+        !string.IsNullOrWhiteSpace(value) ? new Field(label, value, href, external)
+        : ShowEmpty ? new Field(label, "–")
+        : null;
+}

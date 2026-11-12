@@ -1,4 +1,4 @@
-@* Metadata first: cover, title, artist, album – the path only as a small secondary line.
+@* A file of the inbox as a SongCard: cover, title, artist, labelled fields – the path only as a small secondary line.
    Variant "Original" shows the incoming file, "Result" what is (or will be) written. *@
 
 @if (Variant == SummaryVariant.Result && Tags == null)
@@ -8,25 +8,7 @@
 }
 else
 {
-    <div class="d-flex align-center" style="gap:12px;min-width:0">
-        <MudImage Src="@CoverUrl" Width="@Size" Height="@Size" ObjectFit="ObjectFit.Cover" Class="rounded flex-shrink-0" Alt="Cover" />
-        <div style="min-width:0">
-            @if (ShowTitle && Href != null)
-            {
-                <MudLink Href="@Href" Typo="@(Large ? Typo.h5 : Typo.subtitle2)" Style="overflow-wrap:anywhere">@Title</MudLink>
-            }
-            else if (ShowTitle)
-            {
-                <MudText Typo="@(Large ? Typo.h5 : Typo.subtitle2)" Style="overflow-wrap:anywhere">@Title</MudText>
-            }
-            <MudText Typo="@(Large ? Typo.subtitle1 : Typo.body2)">@(Tags is { Artists.Count: > 0 } ? string.Join(", ", Tags.Artists) : Tags?.Artist)</MudText>
-            @if (!string.IsNullOrWhiteSpace(AlbumLine))
-            {
-                <MudText Typo="Typo.body2" Style="opacity:.75">@AlbumLine</MudText>
-            }
-            <MudText Typo="Typo.caption" Class="mono" Style="opacity:.55;overflow-wrap:anywhere">@PathLine</MudText>
-        </div>
-    </div>
+    <SongCard Song="Info" Dense="!Large" Href="@Href" ShowTitle="ShowTitle" CoverSizeOverride="@(Large ? 140 : null)" />
 }
 
 @code {
@@ -49,11 +31,16 @@ else
 
     private string Title => Tags?.Title ?? File.FileName;
 
-    private string? AlbumLine => string.Join(" · ", new[] { Tags?.Album, Tags?.Year?.ToString() }.Where(x => !string.IsNullOrWhiteSpace(x)));
-
     private string? PathLine => Variant == SummaryVariant.Result ? File.TargetPath : File.RelativePath;
 
-    private int Size => Large ? 140 : 48;
+    private SongInfo Info => SongInfo.From(Tags) with
+    {
+        Title = Title,
+        Duration = SongInfo.FormatLength(File.DurationSeconds),
+        Format = Large ? SongInfo.FormatAudio(File.Codec, File.BitrateKbps) : null,
+        Path = PathLine,
+        CoverUrl = CoverUrl,
+    };
 
     private string CoverUrl => $"api/files/{File.Id}/cover?v={File.UpdatedAt.UtcTicks}" + Variant switch
     {

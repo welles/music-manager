@@ -70,11 +70,7 @@
                     <div class="d-flex align-center" style="gap:8px">
                         <MudCheckBox T="bool" Value="!_deselected.Contains(p.EntryId)" ValueChanged="@(v => Toggle(p, v))" Size="Size.Small"
                                      @onclick:stopPropagation="true" />
-                        <MudImage Src="@($"api/library/{p.EntryId}/cover")" Width="36" Height="36" ObjectFit="ObjectFit.Cover" Class="rounded" />
-                        <div style="min-width:0">
-                            <MudText Typo="Typo.body2"><b>@p.NewTags?.Title</b> · @string.Join(", ", p.NewTags?.Artists ?? [])</MudText>
-                            <MudText Typo="Typo.caption" Class="mono" Style="opacity:.6">@p.RelativePath@(p.PathChanged ? $"  →  {p.NewRelativePath}" : "")</MudText>
-                        </div>
+                        <SongCard Song="@(SongInfo.From(p.NewTags) with { CoverUrl = $"api/library/{p.EntryId}/cover", Path = p.RelativePath + (p.PathChanged ? $"  →  {p.NewRelativePath}" : "") })" />
                         <MudSpacer />
                         @if (p.EditedOutside)
                         {
