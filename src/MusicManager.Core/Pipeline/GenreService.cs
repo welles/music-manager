@@ -112,9 +112,9 @@ public sealed class GenreService(MusicBrainzService musicBrainz, LastFmClient la
         }
 
         // 6. Trial: Claude's own knowledge, only genres MusicBrainz knows.
-        if (settings.AiGenreSuggestions && ai.IsConfigured && !string.IsNullOrWhiteSpace(r.Artist))
+        if (settings.AiGenreSuggestions && ai.IsConfigured && !string.IsNullOrWhiteSpace(r.Artist)
+            && await TryAiAsync(() => ai.SuggestGenresAsync(song, settings, ct), "KI-Genrevorschlag") is (true, var suggestion))
         {
-            var suggestion = await ai.SuggestGenresAsync(song, settings, ct);
             known ??= await musicBrainz.GetGenreNamesAsync(ct);
             var genres = suggestion?.Genres.Select(GenreRules.Key).Where(known.Contains).Distinct().Take(settings.MaxGenres).ToList() ?? [];
             if (genres.Count > 0)
@@ -137,12 +137,27 @@ public sealed class GenreService(MusicBrainzService musicBrainz, LastFmClient la
             return notes.Count > 0 ? string.Join(" · ", notes) : null;
         }
 
+        // Claude only refines the genres: when it is unreachable (overloaded, outage), the file carries on
+        // without its verdict instead of failing, and the history says why.
+        async Task<(bool Ok, AiService.GenreVerdict? Verdict)> TryAiAsync(Func<Task<AiService.GenreVerdict?>> call, string what)
+        {
+            try
+            {
+                return (true, await call());
+            }
+            catch (Exception ex) when (!ct.IsCancellationRequested)
+            {
+                notes.Add($"{what} fehlgeschlagen: {ex.Message}");
+                return (false, null);
+            }
+        }
+
         // Claude keeps the genres that fit; null = all dropped. Without the AI the genres stay unconfirmed.
         async Task<(List<string> Genres, bool Confirmed)?> CheckAsync(List<string> genres, string source)
         {
             if (!settings.AiGenreCheck || !ai.IsConfigured) return (genres, false);
-            var verdict = await ai.CheckGenresAsync(song, genres, GenreOrigin.SourceLabel(source), settings, ct);
-            if (verdict == null) return (genres, false);
+            var (ok, verdict) = await TryAiAsync(() => ai.CheckGenresAsync(song, genres, GenreOrigin.SourceLabel(source), settings, ct), "KI-Genreprüfung");
+            if (!ok || verdict == null) return (genres, false);
 
             var dropped = genres.Except(verdict.Genres).ToList();
             if (dropped.Count > 0)
