@@ -39,7 +39,7 @@ public static class PathBuilder
     /// <summary>
     /// Keeps the name exactly as in the tags (Unicode, NFC) – Linux only forbids "/" and NUL in a name.
     /// The few unavoidable changes use look-alike characters instead of "_": "/" → "∕" (U+2215, "AC∕DC"),
-    /// a leading dot → "․" (U+2024, otherwise the folder would be hidden and skipped by Navidrome).
+    /// a leading dot → "․" (U+2024, otherwise the folder would be hidden and skipped by the library index).
     /// Control characters are dropped and long names are cut to fit the 255-byte limit of the file system.
     /// </summary>
     public static string SanitizeComponent(string value)

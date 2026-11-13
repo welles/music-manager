@@ -98,8 +98,8 @@
                             </MudButton>
                         </MudStack>
                         <MudText Typo="Typo.caption" Style="opacity:.7">
-                            Ersetzte oder verworfene Dateien landen im Papierkorb. „Neue behalten“ übernimmt den Pfad der vorhandenen Datei,
-                            damit Navidrome Wiedergabezähler, Favoriten und Playlists möglichst behält.
+                            Ersetzte oder verworfene Dateien landen im Papierkorb. „Neue behalten“ übernimmt die Song-ID der vorhandenen Datei,
+                            Wiedergabezähler, Favoriten und Playlist-Einträge bleiben also erhalten.
                         </MudText>
 
                         @if (_file.Duplicates.Any(d => d.Kind == DuplicateKind.OtherVersion))

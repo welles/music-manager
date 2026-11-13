@@ -11,7 +11,7 @@ public sealed class MusicManagerOptions
     /// <summary>Folder that receives new files. Mounted as a volume in Docker.</summary>
     public string InboxPath { get; set; } = "/inbox";
 
-    /// <summary>Navidrome library root. Mounted as a volume in Docker.</summary>
+    /// <summary>Music library root. Mounted as a volume in Docker.</summary>
     public string LibraryPath { get; set; } = "/music";
 
     /// <summary>Folder for replaced or discarded files (instead of deleting them).</summary>

@@ -135,9 +135,6 @@ public sealed class AppSettings
     /// <summary>Load artist images (Wikidata via MusicBrainz, then Deezer, then Spotify).</summary>
     public bool ArtistImagesEnabled { get; set; } = true;
 
-    /// <summary>Also write the image as artist.jpg into the artist folder (Navidrome shows it).</summary>
-    public bool WriteArtistJpg { get; set; } = true;
-
     // --- Trash --------------------------------------------------------------------------
     public int TrashRetentionDays { get; set; } = 30;
 

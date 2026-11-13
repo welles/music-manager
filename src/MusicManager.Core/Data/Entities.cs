@@ -118,7 +118,7 @@ public sealed class TrackFile
     /// <summary>Decision in the duplicate view; null = not decided (check before writing).</summary>
     public DuplicateDecision? DuplicateDecision { get; set; }
 
-    /// <summary>For "keep new": library file (relative) that is replaced; the new file takes its path.</summary>
+    /// <summary>For "keep new": library file (relative) that is replaced; the new file takes over its song ID.</summary>
     public string? ReplaceLibraryPath { get; set; }
 
     /// <summary>Tags that will be (or were) written.</summary>

@@ -4,8 +4,8 @@ Self-hosted replacement for MusicBrainz Picard. New audio files dropped into an 
 are identified (Chromaprint/AcoustID, MusicBrainz), tagged with your own rules,
 converted to M4A/AAC and filed into the music library. Uncertain cases go to
 a review queue in the web frontend, optionally after Claude had a look first. The
-library is also served through a minimal OpenSubsonic API, so a player such as
-Symfonium can use it instead of Navidrome.
+library is served through its own OpenSubsonic API, so a player such as Symfonium
+streams straight from Music Manager.
 
 ## Pipeline
 
@@ -47,7 +47,7 @@ docker compose up -d
 | Volume   | Purpose                                                    |
 |----------|------------------------------------------------------------|
 | `/inbox` | New files                                                  |
-| `/music` | Music library (the same folder Navidrome reads, if used)   |
+| `/music` | Music library                                              |
 | `/trash` | Replaced/discarded files, deleted after the retention time |
 | `/data`  | SQLite database, work files, Data Protection keys, cover cache |
 
@@ -94,7 +94,7 @@ their old IDs. A deleted file is written again; delete playlists in the app.
 
 Album covers are embedded into the files at 500 px (setting "Cover-Größe in der Datei") and also kept in
 full size, up to 1200 px, as `cover.jpg` in the album folder. The Subsonic API serves that file instead of
-the embedded cover, and other players such as Navidrome read it too. Any `cover`, `folder`, `front` or
+the embedded cover. Any `cover`, `folder`, `front` or
 `albumart` image (JPEG or PNG) in the folder counts, and an existing one is never overwritten, so an own
 image can simply be put there. This only applies to a folder that holds exactly one album. For albums that
 were filed earlier, Settings → Metadaten → "Fehlende Album-Cover nachladen" loads the covers from the Cover
@@ -112,8 +112,8 @@ otherwise all devices have to subscribe again.
 ### Subsonic API (Symfonium)
 
 Under `/rest` the library is served as a minimal [OpenSubsonic](https://opensubsonic.netlify.app)
-API, enough for [Symfonium](https://symfonium.app/) to use Music Manager as its media source
-instead of Navidrome: browsing by tags, search (Symfonium's full sync), streaming with seeking,
+API, enough for [Symfonium](https://symfonium.app/) to use Music Manager as its media source:
+browsing by tags, search (Symfonium's full sync), streaming with seeking,
 covers, favourites, ratings, play counts and playlists. Songs keep their ID when a file is
 retagged, moved or replaced (duplicate "keep new"), so favourites, play counts and playlist
 entries stay with the song. Album and artist IDs come from the MusicBrainz IDs (otherwise from

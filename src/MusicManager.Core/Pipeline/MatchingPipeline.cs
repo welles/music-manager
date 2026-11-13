@@ -723,10 +723,9 @@ public sealed partial class MatchingPipeline(
                     AddEvent(file, $"Mögliche andere Version in der Bibliothek: {other.RelativePath} ({other.Reason.TrimStart(' ', '–')})");
             }
 
-            // "Keep new": the new file takes the path of the replaced one (as far as the extension allows).
-            if (file.DuplicateDecision == DuplicateDecision.KeepNew && file.ReplaceLibraryPath != null)
-                file.TargetPath = Path.ChangeExtension(file.ReplaceLibraryPath, ".m4a");
-            else if (file.DuplicateDecision == DuplicateDecision.KeepBoth)
+            // "Keep new" files the new version at its own rule-based path; it takes over the song ID of the replaced
+            // file (see the index update below), so plays, favorites and playlists stay with it.
+            if (file.DuplicateDecision == DuplicateDecision.KeepBoth)
                 file.TargetPath = Path.GetRelativePath(storage.LibraryRoot, Storage.UniquePath(storage.LibraryPath(file.TargetPath)));
 
             var target = storage.LibraryPath(file.TargetPath);
@@ -758,8 +757,6 @@ public sealed partial class MatchingPipeline(
                 if (File.Exists(replaced))
                 {
                     var trashed = storage.MoveToTrash(replaced, Path.Combine("ersetzt", file.ReplaceLibraryPath));
-                    // A cover left in the folder stays: the new file takes the same path (see above).
-                    Storage.DeleteEmptyDirectories(Path.GetDirectoryName(replaced)!, storage.LibraryRoot);
                     AddEvent(file, $"Vorhandene Datei {file.ReplaceLibraryPath} ersetzt (in den Papierkorb: {trashed})");
                 }
             }
@@ -769,6 +766,14 @@ public sealed partial class MatchingPipeline(
             File.SetLastWriteTimeUtc(tmp, File.GetLastWriteTimeUtc(source));
             Storage.MovePreservingTime(tmp, target);
             tmp = null;
+            if (file.DuplicateDecision == DuplicateDecision.KeepNew && file.ReplaceLibraryPath != null
+                && file.ReplaceLibraryPath != file.TargetPath)
+            {
+                // The folder cover of the replaced file goes along when it was the last song there.
+                albumCovers.FollowSong(file.ReplaceLibraryPath, file.TargetPath);
+                Storage.DeleteEmptyDirectories(Path.GetDirectoryName(storage.LibraryPath(file.ReplaceLibraryPath))!, storage.LibraryRoot);
+            }
+
             // A replaced file hands its index entry (song ID, added date) over to the new one.
             await libraryIndexer.UpsertAsync(file.TargetPath, fingerprint, ct,
                 replaces: file.DuplicateDecision == DuplicateDecision.KeepNew ? file.ReplaceLibraryPath : null);

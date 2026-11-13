@@ -57,8 +57,8 @@
     @if (changed.Any(p => p.PathChanged))
     {
         <MudAlert Severity="Severity.Info" Dense="true" Class="mb-3">
-            @changed.Count(p => p.PathChanged) Datei(en) hätten nach den aktuellen Regeln einen anderen Pfad. Beim Verschieben verliert
-            Navidrome für diese Titel Wiedergabezähler, Favoriten und Playlist-Einträge.
+            @changed.Count(p => p.PathChanged) Datei(en) hätten nach den aktuellen Regeln einen anderen Pfad. Verschobene Titel behalten
+            ihre Song-ID und damit Wiedergabezähler, Favoriten und Playlist-Einträge.
         </MudAlert>
     }
 
@@ -105,7 +105,7 @@
     [SupplyParameterFromQuery] public bool Show { get; set; }
 
     private readonly HashSet<int> _deselected = [];
-    private bool _movePaths, _started, _discardOutsideEdits;
+    private bool _movePaths = true, _started, _discardOutsideEdits;
     private List<int> _ids = [];
 
     private RetagState State => Retag.State;
