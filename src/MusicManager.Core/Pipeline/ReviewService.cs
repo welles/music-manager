@@ -212,7 +212,7 @@ public sealed class ReviewService(
 
     /// <summary>
     /// Decision in the duplicate view. Keep new: the library file goes to the trash and the new one
-    /// takes its path. Keep existing: the new file goes to the trash. Keep both: filed next to it.
+    /// takes over its song ID (plays, favorites, playlists). Keep existing: the new file goes to the trash. Keep both: filed next to it.
     /// </summary>
     public async Task ResolveDuplicateAsync(int fileId, DuplicateDecision decision, int? libraryEntryId = null, CancellationToken ct = default)
     {

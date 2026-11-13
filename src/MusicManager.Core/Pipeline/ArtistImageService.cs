@@ -13,8 +13,8 @@ namespace MusicManager.Core.Pipeline;
 
 /// <summary>
 /// Artist images: Wikidata (exact, via the MusicBrainz artist), then Deezer, then Spotify (exact name
-/// match only). Images are fetched in the background, cached in the data folder and – if enabled –
-/// written as artist.jpg into the artist folder of the library, where Navidrome picks them up.
+/// match only). Images are fetched in the background and cached in the data folder, from where the web app
+/// and the Subsonic API serve them.
 /// </summary>
 public sealed class ArtistImageService(
     IDbContextFactory<AppDbContext> dbFactory,
@@ -104,7 +104,6 @@ public sealed class ArtistImageService(
             Directory.CreateDirectory(ImageDir);
             relative = Path.Combine("artists", $"{Convert.ToHexString(System.Security.Cryptography.SHA1.HashData(System.Text.Encoding.UTF8.GetBytes(KeyOf(name))))[..16]}.jpg");
             await File.WriteAllBytesAsync(Path.Combine(DataRoot, relative), jpeg, ct);
-            await WriteArtistJpgAsync(name, jpeg, ct);
         }
 
         await using var db = await dbFactory.CreateDbContextAsync(ct);
@@ -134,16 +133,5 @@ public sealed class ArtistImageService(
             return null;
         var file = p18[0].GetProperty("mainsnak").GetProperty("datavalue").GetProperty("value").GetString();
         return file == null ? null : $"https://commons.wikimedia.org/wiki/Special:FilePath/{Uri.EscapeDataString(file)}?width=800";
-    }
-
-    /// <summary>Writes artist.jpg into the artist folder (never overwrites an existing image).</summary>
-    private async Task WriteArtistJpgAsync(string name, byte[] jpeg, CancellationToken ct)
-    {
-        if (!(await settingsService.GetAsync(ct)).WriteArtistJpg) return;
-        var folder = storage.LibraryPath(PathBuilder.SanitizeComponent(name));
-        if (!Directory.Exists(folder)) return;
-        if (Directory.EnumerateFiles(folder, "artist.*").Any()) return;
-        await File.WriteAllBytesAsync(Path.Combine(folder, "artist.jpg"), jpeg, ct);
-        logger.LogInformation("Wrote {Path}", Path.Combine(folder, "artist.jpg"));
     }
 }

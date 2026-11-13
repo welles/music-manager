@@ -25,7 +25,7 @@ services:
     volumes:
       # Inbox for new files (subfolders = groups, e.g. musicfab/<album>)
       - ${INBOX_DIR:-./inbox}:/inbox
-      # Navidrome library (same folder Navidrome mounts as /music)
+      # Music library (served through the Subsonic API)
       - ${MUSIC_DIR:-/srv/music}:/music
       # Replaced and discarded files, deleted after the configured retention period
       - ${TRASH_DIR:-./trash}:/trash
