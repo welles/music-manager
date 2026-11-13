@@ -750,33 +750,11 @@ public sealed partial class MatchingPipeline(
             var cover = await GetCoverAsync(file, source, settings, ct);
             TagIo.WriteM4a(tmp, file.FinalTags, cover.Embedded, SourceFor(file), await settingsService.GetRulesVersionAsync(ct));
 
-            // Replaced library file goes to the trash (decision can be undone from there).
-            if (file.DuplicateDecision == DuplicateDecision.KeepNew && file.ReplaceLibraryPath != null)
-            {
-                var replaced = storage.LibraryPath(file.ReplaceLibraryPath);
-                if (File.Exists(replaced))
-                {
-                    var trashed = storage.MoveToTrash(replaced, Path.Combine("ersetzt", file.ReplaceLibraryPath));
-                    AddEvent(file, $"Vorhandene Datei {file.ReplaceLibraryPath} ersetzt (in den Papierkorb: {trashed})");
-                }
-            }
-
             await StepAsync(file, "Wird in die Bibliothek einsortiert", ct);
             // Keep the timestamp of the original file.
             File.SetLastWriteTimeUtc(tmp, File.GetLastWriteTimeUtc(source));
-            Storage.MovePreservingTime(tmp, target);
+            await PlaceInLibraryAsync(file, tmp, fingerprint, ct);
             tmp = null;
-            if (file.DuplicateDecision == DuplicateDecision.KeepNew && file.ReplaceLibraryPath != null
-                && file.ReplaceLibraryPath != file.TargetPath)
-            {
-                // The folder cover of the replaced file goes along when it was the last song there.
-                albumCovers.FollowSong(file.ReplaceLibraryPath, file.TargetPath);
-                Storage.DeleteEmptyDirectories(Path.GetDirectoryName(storage.LibraryPath(file.ReplaceLibraryPath))!, storage.LibraryRoot);
-            }
-
-            // A replaced file hands its index entry (song ID, added date) over to the new one.
-            await libraryIndexer.UpsertAsync(file.TargetPath, fingerprint, ct,
-                replaces: file.DuplicateDecision == DuplicateDecision.KeepNew ? file.ReplaceLibraryPath : null);
             // The same cover in full size as a file in the album folder (once per album). Not cancelled with the
             // pipeline: the song is in the library already and has to reach its final state.
             await albumCovers.EnsureForSongAsync(file.TargetPath, cover.Original, cover.FromArchive ? file.FinalTags.MbReleaseId : null,
@@ -807,6 +785,30 @@ public sealed partial class MatchingPipeline(
     /// size or the note that it came from the Cover Art Archive (which has a larger one).
     /// </summary>
     private sealed record FileCover(byte[]? Embedded, byte[]? Original = null, bool FromArchive = false);
+
+    /// <summary>
+    /// Moves the written file to <see cref="TrackFile.TargetPath"/> and indexes it. "Keep new": the replaced library
+    /// file goes to the trash first (the decision can be undone from there) and hands its song ID and added date over,
+    /// so plays, favorites and playlists stay with the song; its folder cover follows when it was the last song there.
+    /// </summary>
+    internal async Task PlaceInLibraryAsync(TrackFile file, string written, uint[]? fingerprint, CancellationToken ct)
+    {
+        var replaces = file.DuplicateDecision == DuplicateDecision.KeepNew ? file.ReplaceLibraryPath : null;
+        if (replaces != null && storage.LibraryPath(replaces) is var replaced && File.Exists(replaced))
+        {
+            var trashed = storage.MoveToTrash(replaced, Path.Combine("ersetzt", replaces));
+            AddEvent(file, $"Vorhandene Datei {replaces} ersetzt (in den Papierkorb: {trashed})");
+        }
+
+        Storage.MovePreservingTime(written, storage.LibraryPath(file.TargetPath!));
+        if (replaces != null && replaces != file.TargetPath)
+        {
+            albumCovers.FollowSong(replaces, file.TargetPath!);
+            Storage.DeleteEmptyDirectories(Path.GetDirectoryName(storage.LibraryPath(replaces))!, storage.LibraryRoot);
+        }
+
+        await libraryIndexer.UpsertAsync(file.TargetPath!, fingerprint, ct, replaces: replaces);
+    }
 
     private async Task<FileCover> GetCoverAsync(TrackFile file, string source, AppSettings settings, CancellationToken ct)
     {
