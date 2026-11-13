@@ -31,7 +31,11 @@ public sealed class AiService(IOptions<MusicManagerOptions> options, ILogger<AiS
 
     public bool IsConfigured => !string.IsNullOrWhiteSpace(options.Value.AnthropicApiKey);
 
-    private AnthropicClient Client => _client ??= new AnthropicClient { ApiKey = options.Value.AnthropicApiKey };
+    internal AnthropicClient Client
+    {
+        get => _client ??= new AnthropicClient { ApiKey = options.Value.AnthropicApiKey };
+        set => _client = value; // tests
+    }
 
     // --- Tag cleanup -----------------------------------------------------------------------
 
