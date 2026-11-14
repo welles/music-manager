@@ -737,7 +737,7 @@ public sealed partial class MatchingPipeline(
             tmp = Path.Combine(storage.WorkRoot, $"{file.Id}-{Guid.NewGuid():N}.m4a");
             await StepAsync(file, "Audio wird nach M4A umgewandelt", ct);
             var info = await audio.ProbeAsync(source, ct);
-            var remuxed = await audio.ConvertToM4aAsync(source, tmp, info.Codec, settings.AacBitrateKbps, ct);
+            var remuxed = await audio.ConvertToM4aAsync(source, tmp, info.Codec, settings.AacBitrateKbps, info.DurationSeconds, ct);
             var alreadyM4a = Path.GetExtension(source).ToLowerInvariant() is ".m4a" or ".mp4";
             AddEvent(file, (remuxed, alreadyM4a) switch
             {

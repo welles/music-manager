@@ -38,21 +38,23 @@ public static partial class TextUtil
     public static string ToAscii(string s)
     {
         var sb = new StringBuilder(s.Length);
-        foreach (var ch in s.Normalize(NormalizationForm.FormKC))
+        // By rune, not by char: a character outside the BMP (an emoji in a MusicBrainz title) is a surrogate pair,
+        // and normalizing one half of it throws.
+        foreach (var rune in WithoutLoneSurrogates(s).Normalize(NormalizationForm.FormKC).EnumerateRunes())
         {
-            if (ch < 128)
+            if (rune.IsAscii)
             {
-                sb.Append(ch);
+                sb.Append((char)rune.Value);
                 continue;
             }
 
-            if (Transliterations.TryGetValue(ch, out var t))
+            if (rune.IsBmp && Transliterations.TryGetValue((char)rune.Value, out var t))
             {
                 sb.Append(t);
                 continue;
             }
 
-            var decomposed = ch.ToString().Normalize(NormalizationForm.FormD);
+            var decomposed = rune.ToString().Normalize(NormalizationForm.FormD);
             var stripped = new StringBuilder();
             foreach (var d in decomposed)
             {
@@ -61,6 +63,22 @@ public static partial class TextUtil
             }
 
             sb.Append(stripped.Length > 0 ? stripped.ToString() : "_");
+        }
+
+        return sb.ToString();
+    }
+
+    /// <summary>Broken UTF-16 (a surrogate without its partner, e.g. from damaged tags) becomes U+FFFD, so it can be normalized.</summary>
+    private static string WithoutLoneSurrogates(string s)
+    {
+        if (!s.Any(char.IsSurrogate)) return s;
+        var sb = new StringBuilder(s.Length);
+        for (var i = 0; i < s.Length; i++)
+        {
+            if (char.IsHighSurrogate(s[i]) && i + 1 < s.Length && char.IsLowSurrogate(s[i + 1]))
+                sb.Append(s[i]).Append(s[++i]);
+            else
+                sb.Append(char.IsSurrogate(s[i]) ? '�' : s[i]);
         }
 
         return sb.ToString();
