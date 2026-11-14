@@ -125,7 +125,8 @@ public sealed class AudioTools(IOptions<MusicManagerOptions> options, ILogger<Au
     /// everything else is encoded with the native AAC encoder. The moov atom is moved to
     /// the front for streaming. Metadata and pictures are dropped, tags are written afterwards.
     /// </summary>
-    public async Task<bool> ConvertToM4aAsync(string input, string output, string? codec, int bitrateKbps, CancellationToken ct)
+    public async Task<bool> ConvertToM4aAsync(string input, string output, string? codec, int bitrateKbps, double? sourceSeconds,
+        CancellationToken ct)
     {
         var copy = string.Equals(codec, "aac", StringComparison.OrdinalIgnoreCase);
         var args = new List<string>
@@ -143,8 +144,24 @@ public sealed class AudioTools(IOptions<MusicManagerOptions> options, ILogger<Au
         var r = await ProcessRunner.RunAsync(_o.FfmpegPath, args, ct);
         if (r.ExitCode != 0)
             throw new InvalidOperationException($"ffmpeg failed: {r.StdErr.Trim()}");
+
+        // ffmpeg stops at a damaged spot in the source and still exits with 0; the result would be filed cut short
+        // and the original moved to the trash.
+        var converted = (await ProbeAsync(output, ct)).DurationSeconds;
+        if (IsTruncated(sourceSeconds, converted))
+        {
+            var detail = r.StdErr.Trim();
+            throw new InvalidOperationException(
+                $"Umwandlung unvollständig: {converted:0} s statt {sourceSeconds:0} s – die Quelldatei ist vermutlich beschädigt"
+                + (detail.Length > 0 ? $" ({(detail.Length > 300 ? detail[..300] : detail)})" : ""));
+        }
+
         return copy;
     }
+
+    /// <summary>The converted file is clearly shorter than the source claims to be (more than 1 s and 1 %).</summary>
+    internal static bool IsTruncated(double? sourceSeconds, double? convertedSeconds) =>
+        sourceSeconds is > 0 && convertedSeconds is { } c && sourceSeconds.Value - c > Math.Max(1.0, sourceSeconds.Value * 0.01);
 
     private static readonly HashSet<string> BrowserFormats = [".mp3", ".m4a", ".mp4", ".aac", ".flac", ".ogg", ".oga", ".opus", ".wav", ".webm"];
     private readonly System.Collections.Concurrent.ConcurrentDictionary<string, double?> _loudness = new();
