@@ -192,11 +192,23 @@ public sealed class SpotifyPlaylistSync(
             return await db.SpotifyPlaylists.AsNoTracking().FirstAsync(p => p.Id == id, ct);
     }
 
+    /// <summary>Removes a playlist with its tracks and covers; waits for a sync that is running, so none writes to it afterwards.</summary>
     public async Task RemoveAsync(int id, CancellationToken ct = default)
     {
-        await using var db = await dbFactory.CreateDbContextAsync(ct);
-        await db.SpotifyPlaylists.Where(p => p.Id == id).ExecuteDeleteAsync(ct);
-        File.Delete(CoverPath(id));
+        await _running.WaitAsync(ct);
+        try
+        {
+            await using var db = await dbFactory.CreateDbContextAsync(ct);
+            await db.SpotifyPlaylists.Where(p => p.Id == id).ExecuteDeleteAsync(ct);
+            // The picture and the one with the badge made from it (SpotifyCovers in the web app).
+            File.Delete(CoverPath(id));
+            File.Delete($"{CoverPath(id)}.badge.jpg");
+        }
+        finally
+        {
+            _running.Release();
+        }
+
         Changed?.Invoke();
         notifier.Notify();
     }
