@@ -16,19 +16,6 @@ public sealed class TruncatedConversionTests : IDisposable
 
     public void Dispose() => Directory.Delete(_dir, recursive: true);
 
-    private static async Task<bool> HasFfmpegAsync()
-    {
-        try
-        {
-            return (await ProcessRunner.RunAsync("ffmpeg", ["-version"], CancellationToken.None)).ExitCode == 0
-                   && (await ProcessRunner.RunAsync("ffprobe", ["-version"], CancellationToken.None)).ExitCode == 0;
-        }
-        catch (System.ComponentModel.Win32Exception)
-        {
-            return false;
-        }
-    }
-
     /// <summary>20 s of noise as FLAC (noise does not compress, so cutting the file removes most of the audio).</summary>
     private async Task<string> IntactFlacAsync()
     {
@@ -42,7 +29,7 @@ public sealed class TruncatedConversionTests : IDisposable
     [Fact]
     public async Task DamagedFlacIsNotConvertedCutShort()
     {
-        if (!await HasFfmpegAsync()) return;
+        if (!await FfmpegTestTools.AvailableAsync()) return;
 
         // Keep the header (which still claims 20 s) and the first 30 % of the frames, like a broken download.
         var intact = await File.ReadAllBytesAsync(await IntactFlacAsync());
@@ -60,7 +47,7 @@ public sealed class TruncatedConversionTests : IDisposable
     [Fact]
     public async Task VbrMp3WithEstimatedLengthIsConverted()
     {
-        if (!await HasFfmpegAsync()) return;
+        if (!await FfmpegTestTools.AvailableAsync()) return;
 
         // 10 s of a quiet tone, then 10 s of noise, VBR without Xing header: ffprobe estimates the length from the
         // bitrate at the start and claims far more than 20 s.
@@ -84,7 +71,7 @@ public sealed class TruncatedConversionTests : IDisposable
     [Fact]
     public async Task IntactFlacIsConverted()
     {
-        if (!await HasFfmpegAsync()) return;
+        if (!await FfmpegTestTools.AvailableAsync()) return;
 
         var flac = await IntactFlacAsync();
         var info = await _audio.ProbeAsync(flac, CancellationToken.None);

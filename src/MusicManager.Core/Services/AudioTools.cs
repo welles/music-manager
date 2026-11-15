@@ -210,22 +210,111 @@ public sealed class AudioTools(IOptions<MusicManagerOptions> options, ILogger<Au
         return lufs;
     }
 
-    /// <summary>Scales an image down to the given size and re-encodes it as JPEG.</summary>
-    public async Task<byte[]?> ResizeImageAsync(byte[] image, int maxSize, CancellationToken ct)
+    /// <summary>
+    /// Cuts an image to a centered square, scales it down to the given size and re-encodes it as JPEG. Every
+    /// album and artist image goes through here or <see cref="SquareImageAsync"/>, so they are all square.
+    /// </summary>
+    public Task<byte[]?> ResizeImageAsync(byte[] image, int maxSize, CancellationToken ct) =>
+        ConvertImageAsync(image, SquareFilter(maxSize), "jpg", ct);
+
+    /// <summary>
+    /// The image as a square (album and artist images always are): cut to the middle of its longer side, then
+    /// scaled down to <paramref name="maxSize"/> if given. A square image within the size comes back unchanged,
+    /// without encoding it again. Null when it cannot be decoded.
+    /// </summary>
+    public async Task<byte[]?> SquareImageAsync(byte[] image, int? maxSize, CancellationToken ct, string format = "jpg")
     {
-        var dir = Path.Combine(_o.WorkPath, "img");
-        Directory.CreateDirectory(dir);
-        var input = Path.Combine(dir, Guid.NewGuid().ToString("N"));
-        var output = input + ".jpg";
+        var size = await ImageSizeAsync(image, ct);
+        if (size == null) return null;
+        var (width, height) = size.Value;
+        if (width == height && (maxSize == null || width <= maxSize)) return image;
+        return await ConvertImageAsync(image, SquareFilter(maxSize), format, ct);
+    }
+
+    /// <summary>
+    /// Makes an image file square in place (same format, by its extension). Returns true when it was changed;
+    /// false when it was square already or could not be read.
+    /// </summary>
+    public async Task<bool> SquareImageFileAsync(string path, CancellationToken ct)
+    {
+        var image = await File.ReadAllBytesAsync(path, ct);
+        var format = Path.GetExtension(path).Equals(".png", StringComparison.OrdinalIgnoreCase) ? "png" : "jpg";
+        var square = await SquareImageAsync(image, null, ct, format);
+        if (square == null || ReferenceEquals(square, image)) return false;
+
+        // Written next to it and moved over it, so a reader never sees half a file; the timestamp stays.
+        var time = File.GetLastWriteTimeUtc(path);
+        var tmp = $"{path}.{Guid.NewGuid():N}.tmp";
+        try
+        {
+            await File.WriteAllBytesAsync(tmp, square, ct);
+            File.SetLastWriteTimeUtc(tmp, time);
+            File.Move(tmp, path, overwrite: true);
+        }
+        finally
+        {
+            File.Delete(tmp);
+        }
+
+        return true;
+    }
+
+    /// <summary>Width and height of an image, or null when ffprobe cannot read it.</summary>
+    public async Task<(int Width, int Height)?> ImageSizeAsync(byte[] image, CancellationToken ct)
+    {
+        var input = Path.Combine(ImageWorkDir(), Guid.NewGuid().ToString("N"));
         try
         {
             await File.WriteAllBytesAsync(input, image, ct);
-            var r = await ProcessRunner.RunAsync(_o.FfmpegPath,
-            [
-                "-nostdin", "-hide_banner", "-loglevel", "error", "-y", "-i", input,
-                "-vf", $"scale='min({maxSize},iw)':'min({maxSize},ih)':force_original_aspect_ratio=decrease",
-                "-frames:v", "1", "-q:v", "3", output,
-            ], ct);
+            var r = await ProcessRunner.RunAsync(_o.FfprobePath,
+                ["-v", "error", "-select_streams", "v:0", "-show_entries", "stream=width,height", "-of", "csv=p=0:s=x", input], ct);
+            return r.ExitCode == 0 ? ParseSize(r.StdOut) : null;
+        }
+        catch (System.ComponentModel.Win32Exception)
+        {
+            // No ffprobe at all (only outside the Docker image): the size is unknown, the image stays as it is.
+            return null;
+        }
+        finally
+        {
+            File.Delete(input);
+        }
+    }
+
+    /// <summary>ffprobe's "WIDTHxHEIGHT" (first line).</summary>
+    internal static (int Width, int Height)? ParseSize(string output)
+    {
+        var parts = output.Trim().Split('\n')[0].Trim().Split('x');
+        return parts.Length == 2 && int.TryParse(parts[0], out var w) && int.TryParse(parts[1], out var h) && w > 0 && h > 0
+            ? (w, h)
+            : null;
+    }
+
+    /// <summary>
+    /// ffmpeg filter: the largest centered square (crop defaults to the middle), then scaled down to at most
+    /// <paramref name="maxSize"/>; never scaled up.
+    /// </summary>
+    internal static string SquareFilter(int? maxSize) =>
+        "crop='min(iw,ih)':'min(iw,ih)'" + (maxSize is { } m ? $",scale='min({m},iw)':'min({m},ih)'" : "");
+
+    private string ImageWorkDir()
+    {
+        var dir = Path.Combine(_o.WorkPath, "img");
+        Directory.CreateDirectory(dir);
+        return dir;
+    }
+
+    private async Task<byte[]?> ConvertImageAsync(byte[] image, string filter, string format, CancellationToken ct)
+    {
+        var input = Path.Combine(ImageWorkDir(), Guid.NewGuid().ToString("N"));
+        var output = $"{input}.{format}";
+        try
+        {
+            await File.WriteAllBytesAsync(input, image, ct);
+            List<string> args = ["-nostdin", "-hide_banner", "-loglevel", "error", "-y", "-i", input, "-vf", filter, "-frames:v", "1"];
+            if (format == "jpg") args.AddRange(["-q:v", "3"]);
+            args.Add(output);
+            var r = await ProcessRunner.RunAsync(_o.FfmpegPath, args, ct);
             return r.ExitCode == 0 ? await File.ReadAllBytesAsync(output, ct) : null;
         }
         finally

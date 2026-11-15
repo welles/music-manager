@@ -279,6 +279,30 @@ public static class TagIo
         return hashes;
     }
 
+    /// <summary>
+    /// Replaces the embedded front cover of an M4A file (the first picture if none is marked as front cover);
+    /// all other tags stay. The stored hashes are renewed only when they matched before, so an edit made outside
+    /// the tool stays visible as such. Returns the new hashes, if stored.
+    /// </summary>
+    public static TagHashes? ReplaceCover(string path, byte[] jpeg)
+    {
+        using var file = File.Create(path, "audio/mp4", ReadStyle.Average);
+        var apple = (AppleTag)file.GetTag(TagTypes.Apple, true);
+        var before = new TagHashCheck(TagHashes.Stored(apple), TagHashes.Compute(apple));
+
+        var pictures = apple.Pictures.ToList();
+        var index = pictures.FindIndex(p => p.Type == PictureType.FrontCover);
+        if (index < 0) index = 0;
+        var cover = new Picture(new ByteVector(jpeg)) { Type = PictureType.FrontCover, MimeType = "image/jpeg" };
+        if (pictures.Count == 0) pictures.Add(cover);
+        else pictures[index] = cover;
+        apple.Pictures = pictures.ToArray();
+
+        var hashes = before is { Stored: not null, Edited: false } ? TagHashes.Store(apple) : null;
+        file.Save();
+        return hashes;
+    }
+
     /// <summary>Compares the hashes stored in an M4A file with its current tags. Null for other formats and unreadable files.</summary>
     public static TagHashCheck? CheckHashes(string path)
     {

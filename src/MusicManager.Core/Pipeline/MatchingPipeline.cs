@@ -825,7 +825,8 @@ public sealed partial class MatchingPipeline(
             if (caa != null)
             {
                 file.CoverSource = caa.Source;
-                return new FileCover(caa.Data, FromArchive: true);
+                // Some covers in the archive are not square; album images always are.
+                return new FileCover(await audio.SquareImageAsync(caa.Data, settings.CoverSize, ct) ?? caa.Data, FromArchive: true);
             }
         }
 
@@ -879,6 +880,8 @@ public sealed partial class MatchingPipeline(
                     {
                         var dest = Storage.UniquePath(Path.Combine(storage.LibraryPath(targetDir), Path.GetFileName(extra)));
                         Storage.MovePreservingTime(extra, dest);
+                        // An own cover image that came along becomes the folder cover: album images are square.
+                        if (AlbumCoverService.IsCoverFile(Path.GetFileName(dest))) await audio.SquareImageFileAsync(dest, ct);
                     }
                     else
                     {

@@ -12,7 +12,8 @@ public sealed record AlbumCoverState(bool Running, int Progress, int Total, int 
 /// <summary>
 /// Album covers as files in the album folder (cover.jpg), in a larger size than the cover embedded into the
 /// audio files. The Subsonic API prefers them, and other players read them too. A file is only written into a
-/// folder that holds exactly one album, and an existing cover file is never overwritten, so own images stay.
+/// folder that holds exactly one album, and an existing cover file is never overwritten, so own images stay
+/// (only <see cref="ImageSquareService"/> cuts them to a square). Written covers are always square.
 /// </summary>
 public sealed class AlbumCoverService(
     MediaCatalog catalog,
@@ -259,7 +260,8 @@ public sealed class AlbumCoverService(
     {
         var folder = storage.LibraryPath(relativeFolder);
         if (!Directory.Exists(folder) || Find(folder) != null) return false;
-        var jpeg = resize ? await audio.ResizeImageAsync(image, Size, ct) : image;
+        // A JPEG of the right size is only re-encoded when it is not square; one ffprobe cannot read stays as it is.
+        var jpeg = resize ? await audio.ResizeImageAsync(image, Size, ct) : await audio.SquareImageAsync(image, Size, ct) ?? image;
         if (jpeg == null) return false;
 
         var target = Path.Combine(folder, FileName);
