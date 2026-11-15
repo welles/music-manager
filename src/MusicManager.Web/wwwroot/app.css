@@ -283,13 +283,17 @@
     font-size: 0.875rem;
     white-space: nowrap;
     opacity: 0;
+    /* Hidden also for screen readers (role="status" would otherwise announce it); visibility switches after the fade. */
+    visibility: hidden;
     pointer-events: none;
     transform: translate(-50%, 12px);
-    transition: opacity 0.2s, transform 0.2s;
+    transition: opacity 0.2s, transform 0.2s, visibility 0s 0.2s;
 }
 
 .reconnect-notice.reconnect-visible {
     opacity: 1;
+    visibility: visible;
+    transition: opacity 0.2s, transform 0.2s, visibility 0s;
     pointer-events: auto;
     transform: translate(-50%, 0);
 }
