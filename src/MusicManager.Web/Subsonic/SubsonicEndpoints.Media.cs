@@ -44,7 +44,8 @@ public static partial class SubsonicEndpoints
             var file = await r.Service<ArtistImageService>().GetImagePathAsync(artist.Name, artist.MbArtistId, r.Aborted);
             if (file != null)
             {
-                stamp = $"{file}|{File.GetLastWriteTimeUtc(file).Ticks}";
+                var info = new FileInfo(file);
+                stamp = $"{file}|{info.Length}|{info.LastWriteTimeUtc.Ticks}";
                 load = async () => await File.ReadAllBytesAsync(file, r.Aborted);
             }
         }

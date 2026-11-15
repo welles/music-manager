@@ -232,7 +232,7 @@ public sealed class AudioTools(IOptions<MusicManagerOptions> options, ILogger<Au
     }
 
     /// <summary>
-    /// Makes an image file square in place (same format, by its extension). Returns true when it was changed;
+    /// Makes an image file square in place (same format, by its extension, new timestamp). Returns true when it was changed;
     /// false when it was square already or could not be read. <paramref name="keepOriginal"/> is called with the
     /// path right before it is replaced, e.g. to move the original to the trash.
     /// </summary>
@@ -243,13 +243,12 @@ public sealed class AudioTools(IOptions<MusicManagerOptions> options, ILogger<Au
         var square = await SquareImageAsync(image, null, ct, format);
         if (square == null || ReferenceEquals(square, image)) return false;
 
-        // Written next to it and moved over it, so a reader never sees half a file; the timestamp stays.
-        var time = File.GetLastWriteTimeUtc(path);
+        // Written next to it and moved over it, so a reader never sees half a file. It gets a new timestamp, so
+        // every cache keyed on it (Subsonic covers, browser) notices the change.
         var tmp = $"{path}.{Guid.NewGuid():N}.tmp";
         try
         {
             await File.WriteAllBytesAsync(tmp, square, ct);
-            File.SetLastWriteTimeUtc(tmp, time);
             keepOriginal?.Invoke(path);
             File.Move(tmp, path, overwrite: true);
         }

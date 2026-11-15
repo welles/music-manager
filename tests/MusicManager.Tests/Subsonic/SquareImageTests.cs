@@ -103,15 +103,15 @@ public class SquareImageTests
     }
 
     [Fact]
-    public async Task AnImageFileKeepsItsFormatAndTime()
+    public async Task AnImageFileKeepsItsFormatAndGetsANewTime()
     {
         if (!await FfmpegTestTools.AvailableAsync()) return;
         using var app = new SubsonicTestHost();
         var audio = app.Get<AudioTools>();
         var path = Path.Combine(app.Root, "cover.png");
         await FfmpegTestTools.ImageAsync(path, 200, 320);
-        var time = new DateTime(2020, 1, 2, 3, 4, 5, DateTimeKind.Utc);
-        System.IO.File.SetLastWriteTimeUtc(path, time);
+        var old = new DateTime(2020, 1, 2, 3, 4, 5, DateTimeKind.Utc);
+        System.IO.File.SetLastWriteTimeUtc(path, old);
 
         Assert.True(await audio.SquareImageFileAsync(path, null, default));
         Assert.False(await audio.SquareImageFileAsync(path, null, default));
@@ -119,7 +119,46 @@ public class SquareImageTests
         var data = await System.IO.File.ReadAllBytesAsync(path);
         Assert.Equal([0x89, 0x50, 0x4E, 0x47], data[..4]); // still a PNG
         Assert.Equal((200, 200), await audio.ImageSizeAsync(data, default));
-        Assert.Equal(time, System.IO.File.GetLastWriteTimeUtc(path));
+        Assert.NotEqual(old, System.IO.File.GetLastWriteTimeUtc(path)); // caches keyed on the time notice the change
+    }
+
+    [Fact]
+    public async Task SizedArtistImageIsServedSquareAfterCutting()
+    {
+        if (!await FfmpegTestTools.AvailableAsync()) return;
+        using var app = new SubsonicTestHost();
+        var audio = app.Get<AudioTools>();
+        await app.SeedAsync([new LibraryEntry
+        {
+            RelativePath = "A/B/1.m4a", SongId = "tr-1", Title = "One", Artist = "A", Artists = ["A"], AlbumArtist = "A",
+            AlbumArtists = ["A"], Album = "B", DurationSeconds = 60, FileSize = 1000,
+        }]);
+        Directory.CreateDirectory(Path.Combine(app.DataRoot, "artists"));
+        var image = Path.Combine(app.DataRoot, "artists", "a.jpg");
+        await FfmpegTestTools.ImageAsync(image, 400, 300);
+        await using (var db = await app.Get<IDbContextFactory<AppDbContext>>().CreateDbContextAsync())
+        {
+            db.ArtistImages.Add(new ArtistImage { Key = ArtistImageService.KeyOf("A"), Name = "A", Source = "deezer", FilePath = Path.Combine("artists", "a.jpg") });
+            await db.SaveChangesAsync();
+        }
+
+        var artistId = (await app.CallAsync("getArtists")).GetProperty("artists").GetProperty("index")[0].GetProperty("artist")[0].GetProperty("id").GetString();
+        async Task<(int, int)?> ServedSizeAsync()
+        {
+            var response = await app.CreateClient().GetAsync($"/rest/getCoverArt?apiKey={SubsonicTestHost.Key}&f=json&id={artistId}&size=100");
+            return await audio.ImageSizeAsync(await response.Content.ReadAsByteArrayAsync(), default);
+        }
+
+        // Cached before cutting, like an older version did it: scaled down, not square.
+        Assert.NotNull(await ServedSizeAsync());
+        var cached = Assert.Single(Directory.GetFiles(Path.Combine(app.DataRoot, "cache", "covers")));
+        await FfmpegTestTools.ImageAsync(cached + ".jpg", 100, 75);
+        System.IO.File.Move(cached + ".jpg", cached, overwrite: true);
+        Assert.Equal((100, 75), await ServedSizeAsync());
+
+        await app.Get<ImageSquareService>().RunAsync(default);
+
+        Assert.Equal((100, 100), await ServedSizeAsync());
     }
 
     [Fact]
