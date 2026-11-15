@@ -203,8 +203,10 @@ public static class TagIo
 
     /// <summary>
     /// Writes the final tags into an M4A file. The field list comes from
-    /// <see cref="TagFields.ForFinalTags"/>, so the before/after view shows exactly what is written.
+    /// <see cref="TagFields.ForFinalTags"/>, so the before/after view shows exactly which release tags are written.
     /// Multi-value fields (ARTISTS, GENRE, artist IDs …) are written as one atom with several values.
+    /// Outside that list, the song markers and the ReplayGain values are kept (<paramref name="replayGain"/>
+    /// replaces the ones in the file); see docs/tagging-rules.md.
     /// </summary>
     public static void WriteM4a(string path, TagSet t, byte[]? cover, string source, string? rulesVersion = null, ReplayGain? replayGain = null)
     {
