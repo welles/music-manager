@@ -41,8 +41,13 @@ public static partial class SubsonicEndpoints
     private static IResult? Transcoded(SubsonicRequest r, string path, CatalogSong song, TranscodePlan plan)
     {
         // All parameters first: one that fails must not leave a started ffmpeg behind without a reader.
-        var offset = Math.Clamp(r.GetInt("timeOffset") ?? 0, 0, Math.Max(0, song.Duration - 1));
-        long? length = r.GetBool("estimateContentLength") == true ? Transcoding.EstimateBytes(plan, song.Duration, offset) : null;
+        // A duration of 0 means unknown (unreadable file): then the offset is not limited and no length is announced,
+        // since an estimate from nothing would cut the song after a second.
+        var offset = Math.Max(0, r.GetInt("timeOffset") ?? 0);
+        if (song.Duration > 0) offset = Math.Min(offset, song.Duration - 1);
+        long? length = r.GetBool("estimateContentLength") == true && song.Duration > 0
+            ? Transcoding.EstimateBytes(plan, song.Duration, offset)
+            : null;
 
         // HEAD only wants the headers: no need to encode the whole song for a body nobody receives.
         if (HttpMethods.IsHead(r.Http.Request.Method))
