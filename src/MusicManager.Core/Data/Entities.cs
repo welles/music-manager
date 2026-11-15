@@ -384,6 +384,15 @@ public sealed class DuplicateMatch
     public string? MbRecordingId { get; set; }
     public string? MbReleaseId { get; set; }
     public string? TagSource { get; set; }
+
+    /// <summary>
+    /// Whole-track audio comparison with the new file (only for <see cref="DuplicateKind.Duplicate"/>): true = the same
+    /// audio, just encoded differently; false = it sounds different somewhere; null = not compared (yet).
+    /// </summary>
+    public bool? SameAudio { get; set; }
+
+    /// <summary>What the audio comparison found, in words; set when it ran (also when it could not compare).</summary>
+    public string? AudioCheck { get; set; }
 }
 
 /// <summary>A group of library files marked as "not a duplicate" in the library check.</summary>
