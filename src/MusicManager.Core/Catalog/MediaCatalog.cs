@@ -38,6 +38,7 @@ public sealed class MediaCatalog(IDbContextFactory<AppDbContext> dbFactory, Libr
                 ReleaseTypes = e.ReleaseTypes, IsCompilation = e.IsCompilation, Isrc = e.Isrc, SongId = e.SongId, AddedAt = e.AddedAt,
                 Artists = e.Artists, AlbumArtists = e.AlbumArtists, Genres = e.Genres, TrackNumber = e.TrackNumber, DiscNumber = e.DiscNumber,
                 Year = e.Year, MbArtistIds = e.MbArtistIds, MbAlbumArtistIds = e.MbAlbumArtistIds, HasCover = e.HasCover,
+                ReplayGainTrackGain = e.ReplayGainTrackGain, ReplayGainTrackPeak = e.ReplayGainTrackPeak,
             }).ToListAsync(ct);
             current = CatalogSnapshot.Build(rows, version);
             _snapshot = current;

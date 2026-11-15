@@ -92,6 +92,12 @@ the app (Symfonium) and moved songs rewrite the file within seconds; a file edit
 folder is taken over within a minute (the newer change wins). A lost database gets all playlists back, with
 their old IDs. A deleted file is written again; delete playlists in the app.
 
+The loudness of every filed song is measured (EBU R128) and written as ReplayGain tags (`replaygain_track_gain`,
+`replaygain_track_peak`, reference −18 LUFS); the audio itself stays untouched. Players that honor ReplayGain, such
+as Symfonium, level the volume with them, the Subsonic API delivers the values as `replayGain`, and the player in
+the web app applies them too. A song that has the tags counts as normalized. Settings → Metadaten → "Lautstärke
+der Bibliothek messen" measures the library songs that have none yet.
+
 Album covers are embedded into the files at 500 px (setting "Cover-Größe in der Datei") and also kept in
 full size, up to 1200 px, as `cover.jpg` in the album folder. The Subsonic API serves that file instead of
 the embedded cover. Any `cover`, `folder`, `front` or

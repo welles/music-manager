@@ -211,6 +211,33 @@ public sealed class AudioTools(IOptions<MusicManagerOptions> options, ILogger<Au
     }
 
     /// <summary>
+    /// Measures the loudness of a file (EBU R128 integrated loudness and true peak) and returns it as ReplayGain
+    /// values. Null when ffmpeg cannot measure it (no audio, silence only).
+    /// </summary>
+    public async Task<Model.ReplayGain?> MeasureReplayGainAsync(string path, CancellationToken ct)
+    {
+        var r = await ProcessRunner.RunAsync(_o.FfmpegPath,
+            ["-nostdin", "-hide_banner", "-nostats", "-i", path, "-map", "0:a:0", "-af", "ebur128=peak=true:framelog=quiet", "-f", "null", "-"], ct);
+        return r.ExitCode == 0 ? ParseReplayGain(r.StdErr) : null;
+    }
+
+    /// <summary>The summary ffmpeg's ebur128 filter prints at the end ("I: -9.8 LUFS", "Peak: -0.3 dBFS").</summary>
+    internal static Model.ReplayGain? ParseReplayGain(string ffmpegOutput)
+    {
+        var summary = ffmpegOutput.LastIndexOf("Integrated loudness:", StringComparison.Ordinal);
+        if (summary < 0) return null;
+        var text = ffmpegOutput[summary..];
+        var loudness = System.Text.RegularExpressions.Regex.Match(text, @"\bI:\s*(-?[\d.]+) LUFS");
+        var peak = System.Text.RegularExpressions.Regex.Match(text, @"True peak:\s*Peak:\s*(-?[\d.]+) dBFS");
+        if (!loudness.Success || !peak.Success
+            || !double.TryParse(loudness.Groups[1].Value, CultureInfo.InvariantCulture, out var lufs)
+            || !double.TryParse(peak.Groups[1].Value, CultureInfo.InvariantCulture, out var db))
+            return null;
+        // -70 LUFS is the filter's floor: silence, nothing to normalize.
+        return lufs <= -70 ? null : Model.ReplayGain.FromMeasurement(lufs, db);
+    }
+
+    /// <summary>
     /// Cuts an image to a centered square, scales it down to the given size and re-encodes it as JPEG. Every
     /// album and artist image goes through here or <see cref="SquareImageAsync"/>, so they are all square.
     /// </summary>

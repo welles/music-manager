@@ -4,6 +4,7 @@
 @inject Microsoft.Extensions.Options.IOptions<MusicManagerOptions> Options
 @inject AlbumCoverService AlbumCovers
 @inject ImageSquareService SquareImages
+@inject ReplayGainService ReplayGains
 @inject IDialogService Dialogs
 @inject PipelineNotifier Notifier
 @implements IDisposable
@@ -119,6 +120,31 @@
                     {
                         <MudText Typo="Typo.body2" Color="Color.Secondary">
                             Neue Album- und Künstlerbilder werden immer mittig quadratisch zugeschnitten. Das holt es für vorhandene nach: Cover-Dateien in den Album-Ordnern (auch eigene), Künstlerbilder und die in die Lieder eingebetteten Cover.
+                        </MudText>
+                    }
+                </MudStack>
+            </MudItem>
+            <MudItem xs="12">
+                <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Spacing="3">
+                    <MudSwitch @bind-Value="_s.WriteReplayGain" Color="Color.Primary" Label="Lautstärke neuer Lieder messen (ReplayGain-Tags)" />
+                    <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.GraphicEq" OnClick="MeasureLibrary" Disabled="_gain.Running || _gainMissing == 0">
+                        Lautstärke der Bibliothek messen (@_gainMissing)
+                    </MudButton>
+                    @if (_gain.Running)
+                    {
+                        <MudProgressLinear Value="_gain.Progress" Max="Math.Max(_gain.Total, 1)" Color="Color.Primary" Style="max-width:240px" />
+                        <MudText Typo="Typo.body2">@_gain.Progress von @_gain.Total Liedern</MudText>
+                    }
+                    else if (_gainStarted)
+                    {
+                        <MudText Typo="Typo.body2">
+                            @_gain.Written Lieder gemessen@(_gain.Skipped > 0 ? $", {_gain.Skipped} geänderte Dateien übersprungen" : "")@(_gain.Failed > 0 ? $", {_gain.Failed} nicht messbar" : "")
+                        </MudText>
+                    }
+                    else
+                    {
+                        <MudText Typo="Typo.body2" Color="Color.Secondary">
+                            Die Lautstärke wird gemessen und als ReplayGain-Tag in die Datei geschrieben; der Ton selbst bleibt unverändert. Symfonium und der Player hier gleichen damit die Lautstärke an. Der Button holt es für Lieder ohne das Tag nach.
                         </MudText>
                     }
                 </MudStack>
@@ -264,6 +290,9 @@
     private bool _coversStarted;
     private ImageSquareState _square = new(false, null, 0, 0, 0, 0, 0);
     private bool _squareStarted;
+    private ReplayGainState _gain = new(false, 0, 0, 0, 0, 0);
+    private bool _gainStarted;
+    private int _gainMissing;
 
     protected override async Task OnInitializedAsync()
     {
@@ -271,6 +300,9 @@
         _coversStarted = _covers.Running;
         _square = SquareImages.State;
         _squareStarted = _square.Running;
+        _gain = ReplayGains.State;
+        _gainStarted = _gain.Running;
+        _gainMissing = await ReplayGains.CountMissingAsync();
         Notifier.Changed += OnChanged;
         _s = await SettingsService.GetCopyAsync();
     }
@@ -279,10 +311,17 @@
     {
         var state = AlbumCovers.State;
         var square = SquareImages.State;
-        if (state == _covers && square == _square) return;
+        var gain = ReplayGains.State;
+        if (state == _covers && square == _square && gain == _gain) return;
+        var gainFinished = _gain.Running && !gain.Running;
         _covers = state;
         _square = square;
-        _ = InvokeAsync(StateHasChanged);
+        _gain = gain;
+        _ = InvokeAsync(async () =>
+        {
+            if (gainFinished) _gainMissing = await ReplayGains.CountMissingAsync();
+            StateHasChanged();
+        });
     }
 
     private void LoadAlbumCovers()
@@ -301,6 +340,13 @@
         if (SquareImages.Start()) _squareStarted = true;
         else Snackbar.Add("Die Bilder werden bereits zugeschnitten", Severity.Info);
         _square = SquareImages.State;
+    }
+
+    private void MeasureLibrary()
+    {
+        if (ReplayGains.Start()) _gainStarted = true;
+        else Snackbar.Add("Die Lautstärke wird bereits gemessen", Severity.Info);
+        _gain = ReplayGains.State;
     }
 
     public void Dispose() => Notifier.Changed -= OnChanged;

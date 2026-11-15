@@ -316,6 +316,9 @@ public sealed class LibraryIndexer(
         entry.RulesVersion = TagFields.Get(fields, TagIo.RulesMarker).FirstOrDefault();
         entry.TagSource ??= TagFields.Get(fields, TagIo.SourceMarker).FirstOrDefault();
         entry.HasCover = fields.Any(x => x.Name == "COVER") || TagFields.Get(fields, "METADATA_BLOCK_PICTURE").Count > 0;
+        var replayGain = TagIo.ReadReplayGain(fields);
+        entry.ReplayGainTrackGain = replayGain?.TrackGain;
+        entry.ReplayGainTrackPeak = replayGain?.TrackPeak;
 
         // Tags changed outside the tool: only files it wrote carry a hash to compare with.
         var hashes = entry.TagSource != null ? TagIo.CheckHashes(path) : null;

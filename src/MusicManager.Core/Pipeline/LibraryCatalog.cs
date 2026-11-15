@@ -23,6 +23,12 @@ public sealed class LibraryTrack
     public int? BitrateKbps { get; init; }
     public long FileSize { get; init; }
     public bool HasCover { get; init; }
+
+    /// <summary>ReplayGain track gain in dB; null = not measured yet.</summary>
+    public double? ReplayGainTrackGain { get; init; }
+
+    /// <summary>ReplayGain track peak (linear, 1.0 = full scale).</summary>
+    public double? ReplayGainTrackPeak { get; init; }
     public string? MbRecordingId { get; init; }
     public string? MbReleaseId { get; init; }
     public string? TagSource { get; init; }
@@ -86,7 +92,7 @@ public sealed class LibraryCatalog(IDbContextFactory<AppDbContext> dbFactory)
             Id = e.Id, RelativePath = e.RelativePath, Title = e.Title, Artist = e.Artist, Artists = e.Artists, Album = e.Album,
             AlbumArtist = e.AlbumArtist, AlbumArtists = e.AlbumArtists, Genres = e.Genres, Year = e.Year, TrackNumber = e.TrackNumber,
             DiscNumber = e.DiscNumber, DurationSeconds = e.DurationSeconds, Codec = e.Codec, BitrateKbps = e.BitrateKbps,
-            FileSize = e.FileSize, HasCover = e.HasCover, MbRecordingId = e.MbRecordingId, MbReleaseId = e.MbReleaseId,
+            FileSize = e.FileSize, HasCover = e.HasCover, ReplayGainTrackGain = e.ReplayGainTrackGain, ReplayGainTrackPeak = e.ReplayGainTrackPeak, MbRecordingId = e.MbRecordingId, MbReleaseId = e.MbReleaseId,
             TagSource = e.TagSource, GenreOrigin = e.GenreOrigin, RulesVersion = e.RulesVersion, TagsEditedOutside = e.TagsEditedOutside, CoverEditedOutside = e.CoverEditedOutside,
             MbArtistIds = e.MbArtistIds, MbAlbumArtistIds = e.MbAlbumArtistIds,
         }).ToListAsync(ct);

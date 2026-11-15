@@ -131,6 +131,13 @@ public sealed class AppSettings
     /// <summary>Fingerprint similarity (0..1) from which two files count as the same recording.</summary>
     public double DuplicateFingerprintThreshold { get; set; } = 0.85;
 
+    // --- Loudness ----------------------------------------------------------------------
+    /// <summary>
+    /// Measure the loudness of every filed song and write it as ReplayGain tags (the audio stays untouched;
+    /// players such as Symfonium level the volume with them).
+    /// </summary>
+    public bool WriteReplayGain { get; set; } = true;
+
     // --- Artist images ----------------------------------------------------------------
     /// <summary>Load artist images (Wikidata via MusicBrainz, then Deezer, then Spotify).</summary>
     public bool ArtistImagesEnabled { get; set; } = true;
