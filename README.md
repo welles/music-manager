@@ -146,6 +146,12 @@ Seeking in a transcoded stream works through `timeOffset` (OpenSubsonic `transco
 `download` always serves the original. In Symfonium set it per network in the media provider's
 transcoding settings, e.g. Opus 128 kbit/s on mobile data.
 
+Every stream and download writes one log line (category `MusicManager.Web.Subsonic.Stream`):
+song, what was sent (original, range, transcoded format and bitrate), size, time, rate, when the
+first byte went out and whether the client skipped. The time is taken where the bytes leave for
+the Cloudflare tunnel, so for songs of several MB it shows how fast the way to the phone is, e.g.
+`docker logs music_manager 2>&1 | grep "Stream "`. URLs are not logged, they carry the API key.
+
 Limits:
 
 - JSON only (no XML), API key authentication only (no username/password or token auth).
