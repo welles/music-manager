@@ -21,6 +21,7 @@ namespace MusicManager.Core.Services;
 public sealed class TranscodeCache(IOptions<MusicManagerOptions> options, ILogger<TranscodeCache> logger)
 {
     private readonly MusicManagerOptions _o = options.Value;
+    private readonly ILogger _logger = logger;
     private readonly Lock _trimLock = new();
 
     public string Root => Path.Combine(Path.GetFullPath(_o.DataPath), "cache", "transcodes");
@@ -38,9 +39,9 @@ public sealed class TranscodeCache(IOptions<MusicManagerOptions> options, ILogge
             // The time of last use: what is used least goes first when the cache is trimmed.
             File.SetLastWriteTimeUtc(path, DateTime.UtcNow);
         }
-        catch (IOException)
+        catch (Exception ex) when (IsFileSystemError(ex))
         {
-            // Being replaced right now by a parallel request: still a valid file.
+            // Being replaced right now by a parallel request, or not ours to touch: still a valid file.
         }
 
         return path;
@@ -61,7 +62,7 @@ public sealed class TranscodeCache(IOptions<MusicManagerOptions> options, ILogge
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            logger.LogWarning(ex, "Transcode cache not writable");
+            _logger.LogWarning(ex, "Transcode cache not writable");
             return null;
         }
     }
@@ -87,20 +88,30 @@ public sealed class TranscodeCache(IOptions<MusicManagerOptions> options, ILogge
     /// </summary>
     public int Forget(string source) => RemoveEntries(SourcePrefix(source), keepVersion: null);
 
+    /// <remarks>Never throws: the cache is only a help, cleaning it must not stop a scan, filing or a stream.</remarks>
     private int RemoveEntries(string prefix, string? keepVersion)
     {
-        if (!Directory.Exists(Root)) return 0;
         var removed = 0;
-        foreach (var file in new DirectoryInfo(Root).EnumerateFiles($"{prefix}*"))
+        try
         {
-            // Unfinished transcodes are not touched here: their writer drops or commits them itself.
-            if (file.Name.EndsWith(".tmp", StringComparison.Ordinal)) continue;
-            if (keepVersion != null && file.Name.AsSpan(prefix.Length).StartsWith(keepVersion, StringComparison.Ordinal)) continue;
-            if (TryDelete(file)) removed++;
+            if (!Directory.Exists(Root)) return 0;
+            foreach (var file in new DirectoryInfo(Root).EnumerateFiles($"{prefix}*"))
+            {
+                // Unfinished transcodes are not touched here: their writer drops or commits them itself.
+                if (file.Name.EndsWith(".tmp", StringComparison.Ordinal)) continue;
+                if (keepVersion != null && file.Name.AsSpan(prefix.Length).StartsWith(keepVersion, StringComparison.Ordinal)) continue;
+                if (TryDelete(file)) removed++;
+            }
+        }
+        catch (Exception ex) when (IsFileSystemError(ex))
+        {
+            _logger.LogWarning(ex, "Could not clean up the transcode cache");
         }
 
         return removed;
     }
+
+    private static bool IsFileSystemError(Exception ex) => ex is IOException or UnauthorizedAccessException;
 
     /// <summary>After a new version of <paramref name="path"/> was written: older versions of the same original go.</summary>
     private void RemoveOlderVersions(string path)
@@ -114,21 +125,34 @@ public sealed class TranscodeCache(IOptions<MusicManagerOptions> options, ILogge
     /// Removes the entries used longest ago until the cache fits its limit again, and left-over temporary files of
     /// transcodes that never finished (older than an hour, so none that is being written).
     /// </summary>
+    /// <remarks>Never throws, like <see cref="Forget"/>.</remarks>
     public void Trim()
     {
-        if (!Directory.Exists(Root)) return;
         lock (_trimLock)
         {
-            var files = new DirectoryInfo(Root).GetFiles();
-            foreach (var tmp in files.Where(f => f.Name.EndsWith(".tmp", StringComparison.Ordinal) && f.LastWriteTimeUtc < DateTime.UtcNow.AddHours(-1)))
-                TryDelete(tmp);
-
-            long total = 0;
-            foreach (var file in files.Where(f => !f.Name.EndsWith(".tmp", StringComparison.Ordinal)).OrderByDescending(f => f.LastWriteTimeUtc))
+            try
             {
-                total += file.Length;
-                if (total > MaxBytes) TryDelete(file);
+                TrimLocked();
             }
+            catch (Exception ex) when (IsFileSystemError(ex))
+            {
+                _logger.LogWarning(ex, "Could not trim the transcode cache");
+            }
+        }
+    }
+
+    private void TrimLocked()
+    {
+        if (!Directory.Exists(Root)) return;
+        var files = new DirectoryInfo(Root).GetFiles();
+        foreach (var tmp in files.Where(f => f.Name.EndsWith(".tmp", StringComparison.Ordinal) && f.LastWriteTimeUtc < DateTime.UtcNow.AddHours(-1)))
+            TryDelete(tmp);
+
+        long total = 0;
+        foreach (var file in files.Where(f => !f.Name.EndsWith(".tmp", StringComparison.Ordinal)).OrderByDescending(f => f.LastWriteTimeUtc))
+        {
+            total += file.Length;
+            if (total > MaxBytes) TryDelete(file);
         }
     }
 
@@ -139,9 +163,10 @@ public sealed class TranscodeCache(IOptions<MusicManagerOptions> options, ILogge
             file.Delete();
             return true;
         }
-        catch (IOException ex)
+        catch (Exception ex) when (IsFileSystemError(ex))
         {
-            logger.LogDebug(ex, "Could not remove {File} from the transcode cache", file.Name);
+            // E.g. files of another user after a change of PUID/PGID: left for the admin, logged once per file.
+            _logger.LogWarning(ex, "Could not remove {File} from the transcode cache", file.Name);
             return false;
         }
     }
@@ -158,9 +183,32 @@ public sealed class TranscodeCache(IOptions<MusicManagerOptions> options, ILogge
             if (_done) return;
             _done = true;
             await stream.DisposeAsync();
-            File.Move(tmp, path, overwrite: true);
+            try
+            {
+                File.Move(tmp, path, overwrite: true);
+            }
+            catch (Exception ex) when (IsFileSystemError(ex))
+            {
+                // Not kept, but the song was sent: a cache problem never ends a stream.
+                cache._logger.LogWarning(ex, "Could not keep a transcode in the cache");
+                TryDeleteTmp();
+                return;
+            }
+
             cache.RemoveOlderVersions(path);
             cache.Trim();
+        }
+
+        private void TryDeleteTmp()
+        {
+            try
+            {
+                File.Delete(tmp);
+            }
+            catch (Exception ex) when (IsFileSystemError(ex))
+            {
+                // Trim removes it later.
+            }
         }
 
         /// <summary>Drops a transcode that failed or was broken off (client gone): never a partial file in the cache.</summary>
@@ -169,14 +217,7 @@ public sealed class TranscodeCache(IOptions<MusicManagerOptions> options, ILogge
             if (_done) return;
             _done = true;
             await stream.DisposeAsync();
-            try
-            {
-                File.Delete(tmp);
-            }
-            catch (IOException)
-            {
-                // Trim removes it later.
-            }
+            TryDeleteTmp();
         }
     }
 }

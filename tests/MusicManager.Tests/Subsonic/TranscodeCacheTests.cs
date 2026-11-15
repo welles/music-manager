@@ -299,4 +299,36 @@ public class TranscodeCacheTests
         var next = await client.GetAsync(Url(id, "format=opus&maxBitRate=128"), HttpCompletionOption.ResponseHeadersRead);
         Assert.Contains("bytes", next.Headers.AcceptRanges);
     }
+
+    [Fact]
+    public async Task ACacheFolderWeMayNotChangeStopsNothing()
+    {
+        if (Environment.UserName == "root") return; // root may delete anyway
+        var data = Path.Combine(Path.GetTempPath(), $"mm-tc-{Guid.NewGuid():N}");
+        var cache = new TranscodeCache(Options.Create(new MusicManagerOptions { DataPath = data, TranscodeCacheMb = 1 }),
+            NullLogger<TranscodeCache>.Instance);
+        var source = Path.Combine(data, "a.m4a");
+        try
+        {
+            Directory.CreateDirectory(data);
+            File.WriteAllBytes(source, [1]);
+            var plan = new TranscodePlan(Transcoding.Mp3, 128);
+            await using (var entry = cache.Begin(source, plan)!)
+            {
+                await entry.Stream.WriteAsync(new byte[2 * 1024 * 1024]); // over the limit: Trim wants to delete it
+                // Files of another user, e.g. after a change of PUID/PGID: nothing in the folder may be removed.
+                File.SetUnixFileMode(cache.Root, UnixFileMode.UserRead | UnixFileMode.UserExecute);
+                await entry.CommitAsync();
+            }
+
+            Assert.Equal(0, cache.Forget(source));
+            cache.Trim();
+            Assert.Null(cache.Begin(source, plan)); // cannot write: streaming simply goes on without the cache
+        }
+        finally
+        {
+            if (Directory.Exists(cache.Root)) File.SetUnixFileMode(cache.Root, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+            if (Directory.Exists(data)) Directory.Delete(data, true);
+        }
+    }
 }
