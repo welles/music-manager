@@ -3,6 +3,8 @@
 @inject ISnackbar Snackbar
 @inject Microsoft.Extensions.Options.IOptions<MusicManagerOptions> Options
 @inject AlbumCoverService AlbumCovers
+@inject ImageSquareService SquareImages
+@inject IDialogService Dialogs
 @inject PipelineNotifier Notifier
 @implements IDisposable
 
@@ -93,6 +95,30 @@
                     {
                         <MudText Typo="Typo.body2" Color="Color.Secondary">
                             Lädt für jedes Album ohne Bild im Ordner das Cover aus dem Cover Art Archive (MusicBrainz), sonst von Deezer oder Spotify. Vorhandene Bilder bleiben unberührt.
+                        </MudText>
+                    }
+                </MudStack>
+            </MudItem>
+            <MudItem xs="12">
+                <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Spacing="3">
+                    <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Crop" OnClick="CutImagesToSquares" Disabled="_square.Running">
+                        Bilder quadratisch zuschneiden
+                    </MudButton>
+                    @if (_square.Running)
+                    {
+                        <MudProgressLinear Value="_square.Progress" Max="Math.Max(_square.Total, 1)" Color="Color.Primary" Style="max-width:240px" />
+                        <MudText Typo="Typo.body2">@_square.Phase: @_square.Progress von @_square.Total Bildern geprüft, @_square.Squared zugeschnitten</MudText>
+                    }
+                    else if (_squareStarted)
+                    {
+                        <MudText Typo="Typo.body2">
+                            @_square.Total Bilder geprüft, @_square.Squared zugeschnitten@(_square.Skipped > 0 ? $", {_square.Skipped} geänderte Dateien übersprungen" : "")@(_square.Failed > 0 ? $", {_square.Failed} fehlgeschlagen" : "")
+                        </MudText>
+                    }
+                    else
+                    {
+                        <MudText Typo="Typo.body2" Color="Color.Secondary">
+                            Neue Album- und Künstlerbilder werden immer mittig quadratisch zugeschnitten. Das holt es für vorhandene nach: Cover-Dateien in den Album-Ordnern (auch eigene), Künstlerbilder und die in die Lieder eingebetteten Cover.
                         </MudText>
                     }
                 </MudStack>
@@ -236,11 +262,15 @@
 
     private AlbumCoverState _covers = new(false, 0, 0, 0, 0);
     private bool _coversStarted;
+    private ImageSquareState _square = new(false, null, 0, 0, 0, 0, 0);
+    private bool _squareStarted;
 
     protected override async Task OnInitializedAsync()
     {
         _covers = AlbumCovers.State;
         _coversStarted = _covers.Running;
+        _square = SquareImages.State;
+        _squareStarted = _square.Running;
         Notifier.Changed += OnChanged;
         _s = await SettingsService.GetCopyAsync();
     }
@@ -248,8 +278,10 @@
     private void OnChanged()
     {
         var state = AlbumCovers.State;
-        if (state == _covers) return;
+        var square = SquareImages.State;
+        if (state == _covers && square == _square) return;
         _covers = state;
+        _square = square;
         _ = InvokeAsync(StateHasChanged);
     }
 
@@ -258,6 +290,17 @@
         if (AlbumCovers.StartBackfill()) _coversStarted = true;
         else Snackbar.Add("Die Album-Cover werden bereits geladen", Severity.Info);
         _covers = AlbumCovers.State;
+    }
+
+    private async Task CutImagesToSquares()
+    {
+        var ok = await Dialogs.ShowMessageBoxAsync("Bilder quadratisch zuschneiden",
+            "Alle nicht quadratischen Album-Cover, Künstlerbilder und eingebetteten Cover mittig auf ein Quadrat zuschneiden? Die Bilder werden dabei überschrieben; die Lieddateien bekommen ein neues eingebettetes Cover.",
+            yesText: "Zuschneiden", cancelText: "Abbrechen");
+        if (ok != true) return;
+        if (SquareImages.Start()) _squareStarted = true;
+        else Snackbar.Add("Die Bilder werden bereits zugeschnitten", Severity.Info);
+        _square = SquareImages.State;
     }
 
     public void Dispose() => Notifier.Changed -= OnChanged;
