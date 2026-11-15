@@ -49,6 +49,12 @@ public sealed class SpotifyPlaylistTests : IDisposable
     {
         public int ItemRequests;
         public string Snapshot = "snap-1";
+        public string Scope = SpotifyUserClient.Scopes;
+
+        // The playlist of missing tracks as Spotify would hold it.
+        public int Created;
+        public int Writes;
+        public List<string>? Missing;
 
         private static object Track(string field, string id, string title, string artist, int ms, string? isrc) => new Dictionary<string, object>
         {
@@ -68,7 +74,7 @@ public sealed class SpotifyPlaylistTests : IDisposable
             var path = url.AbsolutePath;
             string? json = (url.Host, path) switch
             {
-                ("accounts.spotify.com", "/api/token") => """{"access_token":"access","token_type":"Bearer","expires_in":3600,"refresh_token":"refresh-1"}""",
+                ("accounts.spotify.com", "/api/token") => Json(new { access_token = "access", token_type = "Bearer", expires_in = 3600, refresh_token = "refresh-1", scope = Scope }),
                 (_, "/v1/me") => """{"id":"me","display_name":"Nico"}""",
                 (_, "/v1/me/playlists") =>
                     """{"items":[{"id":"mine","name":"Der Abspül-Blues","owner":{"id":"me","display_name":"Nico"},"collaborative":false,"images":[],"items":{"total":3}},{"id":"theirs","name":"Top Hits","owner":{"id":"spotify","display_name":"Spotify"},"collaborative":false,"images":[],"tracks":{"total":50}}],"next":null}""",
@@ -84,6 +90,30 @@ public sealed class SpotifyPlaylistTests : IDisposable
                 ("image.test", _) => null,
                 _ => null,
             };
+
+            if (path == "/v1/me/playlists" && request.Method == HttpMethod.Post)
+            {
+                Created++;
+                Missing = [];
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.Created) { Content = new StringContent("""{"id":"missing"}""") });
+            }
+
+            if (path == "/v1/playlists/missing" && Missing != null)
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+                    { Content = new StringContent("""{"id":"missing","name":"Fehlt im Music Manager","owner":{"id":"me"},"snapshot_id":"m"}""") });
+
+            if (path == "/v1/playlists/missing/items" && Missing != null)
+            {
+                if (request.Method == HttpMethod.Get)
+                    return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+                        { Content = new StringContent(Json(new { items = Missing.Select(id => Track("item", id, id, "x", 1000, null)).ToArray(), next = (string?)null })) });
+                var uris = JsonDocument.Parse(request.Content!.ReadAsStringAsync(ct).Result).RootElement.GetProperty("uris").EnumerateArray()
+                    .Select(u => u.GetString()!["spotify:track:".Length..]).ToList();
+                Writes++;
+                if (request.Method == HttpMethod.Put) Missing = uris;
+                else Missing.AddRange(uris);
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.Created) { Content = new StringContent("""{"snapshot_id":"m2"}""") });
+            }
 
             if (path == "/v1/playlists/theirs/items")
                 return Task.FromResult(new HttpResponseMessage(HttpStatusCode.Forbidden)
@@ -255,5 +285,66 @@ public sealed class SpotifyPlaylistTests : IDisposable
         Assert.Empty(await db.SpotifyPlaylistTracks.ToListAsync());
         var gone = await _base.CallAsync("getPlaylist", $"id=pl-spotify-{playlist.Id}");
         Assert.Equal(70, gone.GetProperty("error").GetProperty("code").GetInt32());
+    }
+
+    [Fact]
+    public async Task ThePlaylistOfMissingTracksFollowsTheLibrary()
+    {
+        await ConnectAsync();
+        await SeedLibraryAsync();
+        var client = Get<SpotifyUserClient>();
+        var sync = Get<SpotifyPlaylistSync>();
+        await sync.AddAsync((await client.MyPlaylistsAsync())[0]);
+        Assert.Equal(0, _spotify.Created); // off until turned on
+
+        await client.SetMissingPlaylistAsync(true);
+        await sync.RunAsync(default);
+
+        Assert.Equal(1, _spotify.Created);
+        Assert.Equal(["s2"], _spotify.Missing); // "Never Owned"; the other two are in the library
+        Assert.Equal("missing", (await client.AccountAsync())!.MissingPlaylistId);
+        Assert.Equal(1, sync.MissingState?.Count);
+
+        var writes = _spotify.Writes;
+        await sync.RunAsync(default);
+        Assert.Equal(writes, _spotify.Writes); // unchanged: nothing written
+        Assert.Equal(1, _spotify.Created); // and not created again
+
+        // The song arrives in the library: it leaves the playlist.
+        // Into this app's index (_base is another instance on the same database, its catalog would not hear of it).
+        await using (var db = await Get<IDbContextFactory<AppDbContext>>().CreateDbContextAsync())
+        {
+            db.Library.Add(new LibraryEntry { RelativePath = "Nobody/X/01.m4a", SongId = "tr-never", Title = "Never Owned", Artist = "Nobody",
+                Artists = ["Nobody"], Album = "X", AlbumArtist = "Nobody", AlbumArtists = ["Nobody"], DurationSeconds = 180, FileSize = 1 });
+            await db.SaveChangesAsync();
+        }
+
+        Get<LibraryIndexer>().OnChanged();
+        // The catalog is rebuilt in the background after an index change.
+        for (var i = 0; i < 100 && (await Get<MusicManager.Core.Catalog.MediaCatalog>().GetAsync()).Song("tr-never") == null; i++) await Task.Delay(20);
+        await sync.RunAsync(default);
+        Assert.Empty(_spotify.Missing!);
+        Assert.Equal(0, sync.MissingState?.Count);
+    }
+
+    [Fact]
+    public async Task WithoutTheRightToWriteNothingIsCreated()
+    {
+        _spotify.Scope = "playlist-read-private playlist-read-collaborative"; // a login from before
+        await ConnectAsync();
+        var client = Get<SpotifyUserClient>();
+        await client.SetMissingPlaylistAsync(true);
+
+        await Get<SpotifyPlaylistSync>().RunAsync(default);
+
+        Assert.Equal(0, _spotify.Created);
+        Assert.Contains("neu mit Spotify verbinden", Get<SpotifyPlaylistSync>().MissingState?.Error);
+
+        // Connecting again grants it and keeps the setting.
+        _spotify.Scope = SpotifyUserClient.Scopes;
+        await ConnectAsync();
+        var account = (await client.AccountAsync())!;
+        Assert.True(account.MissingPlaylistEnabled);
+        Assert.True(account.CanWritePlaylists);
     }
 }

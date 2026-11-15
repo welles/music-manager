@@ -191,6 +191,12 @@ method "replace tracks"); add the copy. Setup:
    (`MusicManager__SpotifyRedirectUri` overrides the address worked out from the request).
 2. *Playlists* → "Mit Spotify verbinden", then "Hinzufügen".
 
+Optionally Music Manager keeps a private Spotify playlist **"Fehlt im Music Manager"** with all
+tracks of the kept playlists that are not in the library (each once): switch on the *Playlists*
+page. It is updated with every sync – tracks that arrived in the library leave it, new missing ones
+join – and created again if it was deleted on Spotify. This needs the permission to write private
+playlists (`playlist-modify-private`); a login from before it was asked for has to connect again.
+
 Each has its own cover (`getCoverArt` with the playlist's ID; pictures in
 `src/MusicManager.Web/wwwroot/playlist-covers`, SVG sources in `docs/playlist-covers`). Each load of
 one of them writes a log line (`Smart playlist … loaded by …`). Playlists created in a client stay

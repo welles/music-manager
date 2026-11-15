@@ -34,7 +34,8 @@ public sealed class SpotifyException(HttpStatusCode? status, string message) : E
 public sealed class SpotifyUserClient(HttpClient http, IOptions<MusicManagerOptions> options, IDbContextFactory<AppDbContext> dbFactory,
     ILogger<SpotifyUserClient> logger)
 {
-    public const string Scopes = "playlist-read-private playlist-read-collaborative";
+    /// <summary>Reading own and collaborative playlists, writing private ones (the playlist of missing tracks).</summary>
+    public const string Scopes = "playlist-read-private playlist-read-collaborative playlist-modify-private";
 
     // Overridable in tests.
     internal string AccountsBase { get; set; } = "https://accounts.spotify.com";
@@ -80,8 +81,16 @@ public sealed class SpotifyUserClient(HttpClient http, IOptions<MusicManagerOpti
             UserId = me.RootElement.GetProperty("id").GetString()!,
             DisplayName = Str(me.RootElement, "display_name"),
             RefreshToken = refresh,
+            Scopes = Str(doc.RootElement, "scope"),
         };
         await using var db = await dbFactory.CreateDbContextAsync(ct);
+        // A new login of the same account (e.g. for more permissions) keeps its settings.
+        if (await db.SpotifyAccounts.AsNoTracking().FirstOrDefaultAsync(a => a.UserId == account.UserId, ct) is { } previous)
+        {
+            account.MissingPlaylistEnabled = previous.MissingPlaylistEnabled;
+            account.MissingPlaylistId = previous.MissingPlaylistId;
+        }
+
         db.SpotifyAccounts.RemoveRange(db.SpotifyAccounts);
         db.SpotifyAccounts.Add(account);
         await db.SaveChangesAsync(ct);
@@ -129,6 +138,50 @@ public sealed class SpotifyUserClient(HttpClient http, IOptions<MusicManagerOpti
         }
 
         return result;
+    }
+
+    /// <summary>Turns the playlist of missing tracks on or off (the playlist itself stays on Spotify).</summary>
+    public async Task SetMissingPlaylistAsync(bool enabled, CancellationToken ct = default)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        await db.SpotifyAccounts.ExecuteUpdateAsync(s => s.SetProperty(a => a.MissingPlaylistEnabled, enabled), ct);
+    }
+
+    public async Task SetMissingPlaylistIdAsync(string? id, CancellationToken ct = default)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        await db.SpotifyAccounts.ExecuteUpdateAsync(s => s.SetProperty(a => a.MissingPlaylistId, id), ct);
+    }
+
+    /// <summary>Creates a private playlist in the owner's account; returns its Spotify ID.</summary>
+    public async Task<string> CreatePlaylistAsync(string name, string description, CancellationToken ct = default)
+    {
+        using var doc = await SendAsync(HttpMethod.Post, $"{ApiBase}/me/playlists", new { name, description, @public = false }, ct);
+        return doc.RootElement.GetProperty("id").GetString()!;
+    }
+
+    /// <summary>Whether a playlist still exists (it may have been deleted on Spotify).</summary>
+    public async Task<bool> PlaylistExistsAsync(string id, CancellationToken ct = default)
+    {
+        try
+        {
+            await PlaylistAsync(id, ct);
+            return true;
+        }
+        catch (SpotifyException ex) when (ex.Status == HttpStatusCode.NotFound)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>Replaces all tracks of a playlist; Spotify takes at most 100 per request, the rest is added in blocks.</summary>
+    public async Task ReplaceTracksAsync(string id, IReadOnlyList<string> trackIds, CancellationToken ct = default)
+    {
+        var uris = trackIds.Select(t => $"spotify:track:{t}").ToList();
+        var url = $"{ApiBase}/playlists/{Uri.EscapeDataString(id)}/items";
+        (await SendAsync(HttpMethod.Put, url, new { uris = uris.Take(100).ToArray() }, ct)).Dispose();
+        foreach (var block in uris.Skip(100).Chunk(100))
+            (await SendAsync(HttpMethod.Post, url, new { uris = block }, ct)).Dispose();
     }
 
     // ---- Parsing (old and new field names: since February 2026 "items" replaces "tracks", "item" replaces "track") ----
@@ -196,11 +249,14 @@ public sealed class SpotifyUserClient(HttpClient http, IOptions<MusicManagerOpti
 
     // ---- HTTP ----
 
-    private async Task<JsonDocument> GetAsync(string url, CancellationToken ct)
+    private Task<JsonDocument> GetAsync(string url, CancellationToken ct) => SendAsync(HttpMethod.Get, url, null, ct);
+
+    private async Task<JsonDocument> SendAsync(HttpMethod method, string url, object? body, CancellationToken ct)
     {
         for (var attempt = 0; ; attempt++)
         {
-            using var request = new HttpRequestMessage(HttpMethod.Get, url);
+            using var request = new HttpRequestMessage(method, url);
+            if (body != null) request.Content = System.Net.Http.Json.JsonContent.Create(body);
             request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", await AccessTokenAsync(ct));
             using var response = await http.SendAsync(request, ct);
             if (response.StatusCode == HttpStatusCode.Unauthorized && attempt == 0)
@@ -216,10 +272,10 @@ public sealed class SpotifyUserClient(HttpClient http, IOptions<MusicManagerOpti
                 continue;
             }
 
-            var body = await response.Content.ReadAsStringAsync(ct);
+            var text = await response.Content.ReadAsStringAsync(ct);
             if (!response.IsSuccessStatusCode)
-                throw new SpotifyException(response.StatusCode, $"Spotify antwortete {(int)response.StatusCode}: {ErrorMessage(body)}");
-            return JsonDocument.Parse(body);
+                throw new SpotifyException(response.StatusCode, $"Spotify antwortete {(int)response.StatusCode}: {ErrorMessage(text)}");
+            return JsonDocument.Parse(string.IsNullOrWhiteSpace(text) ? "{}" : text);
         }
     }
 
