@@ -166,7 +166,18 @@ public static partial class SubsonicEndpoints
         // Source image and a stamp that changes whenever the image may have changed (cache key).
         Func<Task<byte[]?>>? load = null;
         string? stamp = null;
-        if (id.StartsWith(CatalogIds.ArtistPrefix, StringComparison.Ordinal) && catalog.Artist(id) is { } artist)
+        if (SmartPlaylists.Find(id) is { } smart)
+        {
+            // Fixed pictures shipped with the app (sources in docs/playlist-covers), not the cover of a changing first song.
+            var file = Path.Combine(r.Service<IWebHostEnvironment>().WebRootPath, "playlist-covers", $"{smart.Id[SmartPlaylists.Prefix.Length..]}.png");
+            if (File.Exists(file))
+            {
+                var info = new FileInfo(file);
+                stamp = $"{file}|{info.Length}|{info.LastWriteTimeUtc.Ticks}";
+                load = async () => await File.ReadAllBytesAsync(file, r.Aborted);
+            }
+        }
+        else if (id.StartsWith(CatalogIds.ArtistPrefix, StringComparison.Ordinal) && catalog.Artist(id) is { } artist)
         {
             var file = await r.Service<ArtistImageService>().GetImagePathAsync(artist.Name, artist.MbArtistId, r.Aborted);
             if (file != null)
