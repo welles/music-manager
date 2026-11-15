@@ -27,6 +27,11 @@ Additionally (new):
   and in particular no PERFORMER/instrument credits: the writer clears all tags first and only
   writes its own field list, so such tags from Picard-tagged files disappear on import or re-tag.
 - Every written file carries `MUSICMANAGER_RULES` (rules version) to find files tagged by older rules.
+- Kept across the clearing, outside the field list (they describe the file, not the release): the song markers
+  (`MUSICMANAGER_SONG_ID`, `MUSICMANAGER_ADDED`, `MUSICMANAGER_FAVORITE`, `RATING`) and the measured loudness
+  (`replaygain_track_gain`, `replaygain_track_peak`). ReplayGain values survive a re-tag because the audio does not
+  change with the tags; this also holds for values another tool (foobar2000, rsgain) wrote into a library file.
+  They are not part of the tag hash and do not show up in the before/after view.
 
 - Features in the title (`Song (feat. B)`) are moved into the artist field.
 - Typographic punctuation is converted to plain ASCII punctuation (Picard `convert_punctuation`).
