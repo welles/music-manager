@@ -10,7 +10,9 @@ using MusicManager.Web.Subsonic;
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddRazorComponents()
-    .AddInteractiveServerComponents();
+    // The PWA often sits in the background for a while (the browser drops the connection there). One user only,
+    // so the server keeps the disconnected session for 30 minutes instead of 3 and the app continues where it was.
+    .AddInteractiveServerComponents(o => o.DisconnectedCircuitRetentionPeriod = TimeSpan.FromMinutes(30));
 builder.Services.AddMudServices();
 builder.Services.AddScoped<PlayerService>();
 builder.Services.AddMusicManager(builder.Configuration);
