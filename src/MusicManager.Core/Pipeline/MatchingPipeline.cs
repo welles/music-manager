@@ -881,7 +881,9 @@ public sealed partial class MatchingPipeline(
                         var dest = Storage.UniquePath(Path.Combine(storage.LibraryPath(targetDir), Path.GetFileName(extra)));
                         Storage.MovePreservingTime(extra, dest);
                         // An own cover image that came along becomes the folder cover: album images are square.
-                        if (AlbumCoverService.IsCoverFile(Path.GetFileName(dest))) await audio.SquareImageFileAsync(dest, ct);
+                        // The original goes to the trash, as with every library file that is replaced.
+                        if (AlbumCoverService.IsCoverFile(Path.GetFileName(dest)))
+                            await audio.SquareImageFileAsync(dest, p => storage.KeepOriginalInTrash(p, ImageSquareService.TrashFolder), ct);
                     }
                     else
                     {

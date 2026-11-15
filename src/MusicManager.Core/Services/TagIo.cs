@@ -281,8 +281,8 @@ public static class TagIo
 
     /// <summary>
     /// Replaces the embedded front cover of an M4A file (the first picture if none is marked as front cover);
-    /// all other tags stay. The stored hashes are renewed only when they matched before, so an edit made outside
-    /// the tool stays visible as such. Returns the new hashes, if stored.
+    /// all other tags stay. Only the stored cover hash is renewed, and only when the cover was not edited outside
+    /// the tool: an outside edit of the tags or the cover stays visible as such. Returns the new hashes, if stored.
     /// </summary>
     public static TagHashes? ReplaceCover(string path, byte[] jpeg)
     {
@@ -298,7 +298,13 @@ public static class TagIo
         else pictures[index] = cover;
         apple.Pictures = pictures.ToArray();
 
-        var hashes = before is { Stored: not null, Edited: false } ? TagHashes.Store(apple) : null;
+        TagHashes? hashes = null;
+        if (before is { Stored: not null, CoverEdited: false })
+        {
+            hashes = before.Stored with { Cover = TagHashes.Compute(apple).Cover };
+            apple.SetDashBox(ITunesMean, TagHashes.CoverTag, hashes.Cover);
+        }
+
         file.Save();
         return hashes;
     }

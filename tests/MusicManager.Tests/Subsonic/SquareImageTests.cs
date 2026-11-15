@@ -51,20 +51,39 @@ public class SquareImageTests
         Assert.False(TagIo.CheckHashes(path)!.Edited);
     }
 
+    /// <summary>Edits the file like another tagger would (TagLib, no Music Manager code).</summary>
+    private static void EditOutside(string path, Action<AppleTag> edit)
+    {
+        using var file = TagLib.File.Create(path);
+        edit((AppleTag)file.GetTag(TagTypes.Apple, true));
+        file.Save();
+    }
+
     [Fact]
-    public void ReplacingTheCoverKeepsAnOutsideEditVisible()
+    public void ReplacingTheCoverKeepsAnOutsideTagEditVisible()
     {
         using var app = new SubsonicTestHost();
         var path = app.AddFile("A/B/1.m4a", Tags("One"));
         TagIo.WriteM4a(path, Tags("One"), [0xFF, 0xD8, 1, 2, 3], "musicbrainz");
-        using (var file = TagLib.File.Create(path))
-        {
-            ((AppleTag)file.GetTag(TagTypes.Apple, true)).Title = "Edited elsewhere";
-            file.Save();
-        }
+        EditOutside(path, apple => apple.Title = "Edited elsewhere");
+
+        Assert.NotNull(TagIo.ReplaceCover(path, [0xFF, 0xD8, 9, 9, 9]));
+
+        var check = TagIo.CheckHashes(path)!;
+        Assert.True(check.TagsEdited); // still visible
+        Assert.False(check.CoverEdited); // the new cover is the tool's own
+    }
+
+    [Fact]
+    public void ReplacingACoverEditedOutsideKeepsTheEditVisible()
+    {
+        using var app = new SubsonicTestHost();
+        var path = app.AddFile("A/B/1.m4a", Tags("One"));
+        TagIo.WriteM4a(path, Tags("One"), [0xFF, 0xD8, 1, 2, 3], "musicbrainz");
+        EditOutside(path, apple => apple.Pictures = [new Picture(new ByteVector(new byte[] { 0xFF, 0xD8, 7, 7 })) { Type = PictureType.FrontCover }]);
 
         Assert.Null(TagIo.ReplaceCover(path, [0xFF, 0xD8, 9, 9, 9]));
-        Assert.True(TagIo.CheckHashes(path)!.TagsEdited);
+        Assert.True(TagIo.CheckHashes(path)!.CoverEdited);
     }
 
     [Fact]
@@ -94,8 +113,8 @@ public class SquareImageTests
         var time = new DateTime(2020, 1, 2, 3, 4, 5, DateTimeKind.Utc);
         System.IO.File.SetLastWriteTimeUtc(path, time);
 
-        Assert.True(await audio.SquareImageFileAsync(path, default));
-        Assert.False(await audio.SquareImageFileAsync(path, default));
+        Assert.True(await audio.SquareImageFileAsync(path, null, default));
+        Assert.False(await audio.SquareImageFileAsync(path, null, default));
 
         var data = await System.IO.File.ReadAllBytesAsync(path);
         Assert.Equal([0x89, 0x50, 0x4E, 0x47], data[..4]); // still a PNG
@@ -139,6 +158,12 @@ public class SquareImageTests
         Assert.Equal((200, 200), await audio.ImageSizeAsync(await System.IO.File.ReadAllBytesAsync(folderCover), default));
         Assert.Equal((300, 300), await audio.ImageSizeAsync(await System.IO.File.ReadAllBytesAsync(artist), default));
         Assert.Equal(squareSongBytes, await System.IO.File.ReadAllBytesAsync(squareSong)); // untouched
+
+        // The original folder cover is in the trash; the artist image (a cache) is not.
+        var trashed = Directory.GetFiles(Path.Combine(app.Root, "trash"), "*", SearchOption.AllDirectories);
+        var original = Assert.Single(trashed);
+        Assert.EndsWith(Path.Combine(ImageSquareService.TrashFolder, "A", "B", "cover.jpg"), original);
+        Assert.Equal(wide, await System.IO.File.ReadAllBytesAsync(original));
 
         // The index knows the new file, and the new cover does not count as an outside edit.
         var entry = (await app.EntryAsync("A/B/1.m4a"))!;

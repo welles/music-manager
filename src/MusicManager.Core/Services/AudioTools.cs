@@ -233,9 +233,10 @@ public sealed class AudioTools(IOptions<MusicManagerOptions> options, ILogger<Au
 
     /// <summary>
     /// Makes an image file square in place (same format, by its extension). Returns true when it was changed;
-    /// false when it was square already or could not be read.
+    /// false when it was square already or could not be read. <paramref name="keepOriginal"/> is called with the
+    /// path right before it is replaced, e.g. to move the original to the trash.
     /// </summary>
-    public async Task<bool> SquareImageFileAsync(string path, CancellationToken ct)
+    public async Task<bool> SquareImageFileAsync(string path, Action<string>? keepOriginal, CancellationToken ct)
     {
         var image = await File.ReadAllBytesAsync(path, ct);
         var format = Path.GetExtension(path).Equals(".png", StringComparison.OrdinalIgnoreCase) ? "png" : "jpg";
@@ -249,6 +250,7 @@ public sealed class AudioTools(IOptions<MusicManagerOptions> options, ILogger<Au
         {
             await File.WriteAllBytesAsync(tmp, square, ct);
             File.SetLastWriteTimeUtc(tmp, time);
+            keepOriginal?.Invoke(path);
             File.Move(tmp, path, overwrite: true);
         }
         finally

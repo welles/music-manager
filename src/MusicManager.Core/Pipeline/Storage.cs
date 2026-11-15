@@ -28,6 +28,13 @@ public sealed class Storage(IOptions<MusicManagerOptions> options)
         return target;
     }
 
+    /// <summary>
+    /// Moves a library file that is about to be overwritten with a changed version (e.g. a cover cut to a square)
+    /// to the trash under <c>&lt;date&gt;/&lt;folder&gt;/&lt;its library path&gt;</c>, so the original can be restored.
+    /// </summary>
+    public string KeepOriginalInTrash(string absolutePath, string folder) =>
+        MoveToTrash(absolutePath, Path.Combine(folder, Path.GetRelativePath(LibraryRoot, absolutePath)));
+
     /// <summary>Moves a file, preserving its modification time (also across volumes).</summary>
     public static void MovePreservingTime(string source, string target, bool overwrite = false)
     {
