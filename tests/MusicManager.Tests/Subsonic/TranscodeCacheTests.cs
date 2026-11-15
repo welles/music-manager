@@ -75,7 +75,7 @@ public class TranscodeCacheTests
     }
 
     [Fact]
-    public async Task EachFormatAndBitrateHasItsOwnEntryAndAChangedFileIsEncodedAgain()
+    public async Task EachFormatAndBitrateHasItsOwnEntryAndAChangedFileReplacesThemAll()
     {
         if (!await FfmpegTestTools.AvailableAsync()) return;
         var (app, id, path) = await LibraryAsync();
@@ -84,12 +84,62 @@ public class TranscodeCacheTests
 
         await client.GetByteArrayAsync(Url(id, "maxBitRate=64"));
         await client.GetByteArrayAsync(Url(id, "maxBitRate=96"));
-        Assert.Equal(2, (await CachedSoonAsync(app, 2)).Length);
+        var before = await CachedSoonAsync(app, 2);
+        Assert.Equal(2, before.Length);
 
-        // A retag or replacement changes the file: the old entry must not be served for it.
+        // Changed but not yet indexed: the old entries are not served, and writing the new one removes them.
         File.SetLastWriteTimeUtc(path, DateTime.UtcNow.AddMinutes(1));
+        var response = await client.GetAsync(Url(id, "maxBitRate=64"), HttpCompletionOption.ResponseHeadersRead);
+        Assert.Contains("none", response.Headers.AcceptRanges); // encoded again, not from the cache
+        await response.Content.ReadAsByteArrayAsync();
+        await Task.Delay(300);
+        var after = Assert.Single(Cached(app));
+        Assert.DoesNotContain(after, before);
+    }
+
+    [Fact]
+    public async Task TheIndexForgetsTheEntriesOfAChangedOrDeletedOriginal()
+    {
+        if (!await FfmpegTestTools.AvailableAsync()) return;
+        var (app, id, path) = await LibraryAsync();
+        using var _app = app;
+        var otherTags = Tags;
+        otherTags.Title = "Other";
+        otherTags.TrackNumber = 2;
+        var other = app.AddFile("A/B/2.m4a", otherTags);
+        await app.ScanAsync();
+        var otherId = (await app.EntryAsync("A/B/2.m4a"))!.SongId!;
+        var client = app.CreateClient();
         await client.GetByteArrayAsync(Url(id, "maxBitRate=64"));
+        await client.GetByteArrayAsync(Url(id, "format=opus"));
+        await client.GetByteArrayAsync(Url(otherId, "format=mp3"));
         Assert.Equal(3, (await CachedSoonAsync(app, 3)).Length);
+
+        // Changed outside Music Manager and picked up by the scan: both entries of that song go, the other stays.
+        File.SetLastWriteTimeUtc(path, DateTime.UtcNow.AddMinutes(1));
+        await app.ScanAsync();
+        var left = Assert.Single(Cached(app));
+        Assert.EndsWith(".mp3", left);
+
+        // Deleted: its entry goes with it.
+        File.Delete(other);
+        await app.ScanAsync();
+        Assert.Empty(Cached(app));
+    }
+
+    [Fact]
+    public async Task FilingAFileAnewForgetsItsEntries()
+    {
+        if (!await FfmpegTestTools.AvailableAsync()) return;
+        var (app, id, _) = await LibraryAsync();
+        using var _app = app;
+        await app.CreateClient().GetByteArrayAsync(Url(id, "maxBitRate=64"));
+        Assert.Single(await CachedSoonAsync(app, 1));
+
+        // What the pipeline does after writing a file (retag, replacement by a duplicate "keep new").
+        await app.Get<MusicManager.Core.Pipeline.LibraryIndexer>().UpsertAsync("A/B/1.m4a", null, default);
+
+        Assert.Empty(Cached(app));
     }
 
     [Fact]
@@ -172,6 +222,42 @@ public class TranscodeCacheTests
             Assert.False(File.Exists(oldest)); // 1200 KB > 1 MB: the one used longest ago goes
             Assert.False(File.Exists(staleTmp));
             Assert.True(File.Exists(freshTmp)); // may still be written
+        }
+        finally
+        {
+            if (Directory.Exists(data)) Directory.Delete(data, true);
+        }
+    }
+
+    [Fact]
+    public void ForgetRemovesOnlyTheEntriesOfThatOriginal()
+    {
+        var data = Path.Combine(Path.GetTempPath(), $"mm-tc-{Guid.NewGuid():N}");
+        try
+        {
+            var cache = new TranscodeCache(Options.Create(new MusicManagerOptions { DataPath = data }), NullLogger<TranscodeCache>.Instance);
+            var music = Path.Combine(data, "music");
+            Directory.CreateDirectory(music);
+            var a = Path.Combine(music, "a.m4a");
+            var b = Path.Combine(music, "b.m4a");
+            File.WriteAllBytes(a, [1]);
+            File.WriteAllBytes(b, [2]);
+            async Task Write(string source, TranscodePlan plan)
+            {
+                await using var entry = cache.Begin(source, plan)!;
+                await entry.Stream.WriteAsync(new byte[] { 9 });
+                await entry.CommitAsync();
+            }
+
+            Write(a, new TranscodePlan(Transcoding.Mp3, 128)).GetAwaiter().GetResult();
+            Write(a, new TranscodePlan(Transcoding.Opus, 96)).GetAwaiter().GetResult();
+            Write(b, new TranscodePlan(Transcoding.Mp3, 128)).GetAwaiter().GetResult();
+            Assert.Equal(3, Directory.GetFiles(cache.Root).Length);
+
+            Assert.Equal(2, cache.Forget(a));
+
+            Assert.Null(cache.Find(a, new TranscodePlan(Transcoding.Mp3, 128)));
+            Assert.NotNull(cache.Find(b, new TranscodePlan(Transcoding.Mp3, 128)));
         }
         finally
         {

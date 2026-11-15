@@ -22,6 +22,7 @@ public sealed class LibraryIndexer(
     AudioTools audio,
     PipelineNotifier notifier,
     UserDataStore userData,
+    TranscodeCache transcodes,
     ILogger<LibraryIndexer> logger) : BackgroundService
 {
     /// <summary>Raise when <see cref="Fill"/> reads more or different data, so existing entries are re-read.</summary>
@@ -143,6 +144,8 @@ public sealed class LibraryIndexer(
                 else
                 {
                     updated++;
+                    // Changed outside Music Manager (or since the last scan): transcodes of the old file no longer fit.
+                    if (!unchanged) transcodes.Forget(path);
                 }
 
                 Fill(entry, path, info, resetFingerprint: !unchanged);
@@ -155,6 +158,7 @@ public sealed class LibraryIndexer(
             }
 
             var removed = existing.Values.Where(e => !seen.Contains(e.RelativePath)).ToList();
+            foreach (var gone in removed) transcodes.Forget(storage.LibraryPath(gone.RelativePath));
             var moved = CarryOverMoved(removed, newEntries);
 
             DropDuplicateSongIds(existing.Values.Where(e => seen.Contains(e.RelativePath)));
@@ -375,6 +379,9 @@ public sealed class LibraryIndexer(
     {
         var path = storage.LibraryPath(relativePath);
         if (!File.Exists(path)) return;
+        // Written anew (filed, retagged, replaced): transcodes of what was there before no longer fit.
+        transcodes.Forget(path);
+        if (replaces != null && replaces != relativePath) transcodes.Forget(storage.LibraryPath(replaces));
         await using var db = await dbFactory.CreateDbContextAsync(ct);
         await using var tx = await db.Database.BeginTransactionAsync(ct);
         var entry = await db.Library.FirstOrDefaultAsync(e => e.RelativePath == relativePath, ct);
@@ -429,6 +436,7 @@ public sealed class LibraryIndexer(
     /// <summary>Removes an entry (file moved to the trash).</summary>
     public async Task RemoveAsync(string relativePath, CancellationToken ct)
     {
+        transcodes.Forget(storage.LibraryPath(relativePath));
         await using var db = await dbFactory.CreateDbContextAsync(ct);
         if (await db.Library.Where(e => e.RelativePath == relativePath).ExecuteDeleteAsync(ct) > 0)
             OnChanged();
