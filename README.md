@@ -149,7 +149,9 @@ transcoding settings, e.g. Opus 128 kbit/s on mobile data.
 
 Finished transcodes are kept under `<data>/cache/transcodes` (limit `MusicManager__TranscodeCacheMb`,
 default 2 GB, about 500 songs at 128 kbit/s; what was used longest ago goes first). The first
-request of a song in a format is encoded while it is sent and stored at the same time; later ones
+request of a song in a format is encoded while it is sent and stored at the same time; when the
+player hangs up early (skip), the encode still runs to the end, so the song is complete in the
+cache next time (only complete, error-free transcodes are kept); later ones
 get the file right away, with its length and with ranges, so players know the duration at once
 (e.g. Symfonium's waveform). When a song's original changes, is replaced, moved or deleted, its
 cached transcodes are removed (the library index notices it) and it is encoded again on the next

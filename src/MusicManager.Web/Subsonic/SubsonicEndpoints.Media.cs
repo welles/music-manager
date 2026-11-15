@@ -89,21 +89,45 @@ public static partial class SubsonicEndpoints
             await using var _ = entry;
             var exact = length != null ? new ExactLengthStream(output, length.Value) : null;
             Stream target = exact ?? output;
+            if (entry == null)
+            {
+                // Nothing to keep: when the client goes away (skip), ffmpeg is stopped right there.
+                await audio.PumpAsync(ffmpeg, path, target, r.Aborted);
+                if (exact != null) await exact.PadAsync(r.Aborted);
+                return;
+            }
+
+            // Into the cache as well: the encode runs to the end even when the client goes away early (a skip, a
+            // cancelled pre-cache), so the next request finds the whole song. Only a server shutdown stops it.
             // The cache gets ffmpeg's output as it is, before an estimated length pads or cuts what the client gets.
-            if (entry != null) target = new TeeStream(entry.Stream, target);
-            var complete = await audio.PumpAsync(ffmpeg, path, target, r.Aborted);
-            if (exact != null) await exact.PadAsync(r.Aborted);
-            if (complete && entry != null) await entry.CommitAsync();
+            var tee = new TeeStream(entry.Stream, target, r.Aborted);
+            var complete = await audio.PumpAsync(ffmpeg, path, tee, r.Service<IHostApplicationLifetime>().ApplicationStopping);
+            if (exact != null && !tee.ClientGone) await exact.PadAsync(r.Aborted);
+            if (complete) await entry.CommitAsync();
         }, plan.Format.ContentType);
     }
 
-    /// <summary>Writes everything to the cache file first, then to the client.</summary>
-    private sealed class TeeStream(Stream file, Stream client) : Stream
+    /// <summary>
+    /// Writes everything to the cache file first, then to the client. Once the client is gone, the rest only goes to
+    /// the file: a failing client write ends nothing but its own part.
+    /// </summary>
+    private sealed class TeeStream(Stream file, Stream client, CancellationToken clientAborted) : Stream
     {
+        public bool ClientGone { get; private set; }
+
         public override async ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken ct = default)
         {
             await file.WriteAsync(buffer, ct);
-            await client.WriteAsync(buffer, ct);
+            if (ClientGone) return;
+            try
+            {
+                await client.WriteAsync(buffer, clientAborted);
+            }
+            catch (Exception) when (!ct.IsCancellationRequested)
+            {
+                // Connection closed or reset (OperationCanceledException, IOException …): the cache still wants the rest.
+                ClientGone = true;
+            }
         }
 
         public override Task WriteAsync(byte[] buffer, int offset, int count, CancellationToken ct) =>
