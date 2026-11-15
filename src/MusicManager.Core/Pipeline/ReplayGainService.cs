@@ -95,7 +95,8 @@ public sealed class ReplayGainService(
                     notifier.Notify();
                 }
 
-                await db.SaveChangesAsync(ct);
+                // An entry the index removed in the meantime (song moved, replaced or deleted) must not end the run.
+                await db.SaveSkippingDeletedAsync(ct);
             }
         }
         finally
