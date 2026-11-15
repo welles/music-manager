@@ -12,6 +12,9 @@ namespace MusicManager.Core.Pipeline;
 /// <summary>State of the Spotify sync for the playlists page.</summary>
 public sealed record SpotifySyncState(bool Running, DateTimeOffset? LastRun, string? Current);
 
+/// <summary>Last update of the playlist of missing tracks: how many it holds, or why it failed.</summary>
+public sealed record MissingPlaylistState(int? Count, string? Error, DateTimeOffset At);
+
 /// <summary>
 /// Keeps the chosen Spotify playlists in step: every <see cref="Interval"/> and on request. A tracklist is only read again
 /// when Spotify's snapshot changed; the playlist picture is fetched when it changed (shown with a Spotify badge, see
@@ -21,6 +24,7 @@ public sealed class SpotifyPlaylistSync(
     IDbContextFactory<AppDbContext> dbFactory,
     SpotifyUserClient spotify,
     CoverArtService covers,
+    Catalog.MediaCatalog catalog,
     PipelineNotifier notifier,
     IOptions<MusicManagerOptions> options,
     ILogger<SpotifyPlaylistSync> logger) : BackgroundService
@@ -31,6 +35,10 @@ public sealed class SpotifyPlaylistSync(
     private readonly SemaphoreSlim _running = new(1, 1);
 
     public SpotifySyncState State { get; private set; } = new(false, null, null);
+
+    public MissingPlaylistState? MissingState { get; private set; }
+
+    public const string MissingPlaylistName = "Fehlt im Music Manager";
 
     /// <summary>Raised after playlists or their tracks changed (pages refresh, clients get the new content).</summary>
     public event Action? Changed;
@@ -82,6 +90,7 @@ public sealed class SpotifyPlaylistSync(
                 notifier.Notify();
             }
 
+            await UpdateMissingPlaylistAsync(ct);
             State = new SpotifySyncState(false, DateTimeOffset.UtcNow, null);
         }
         finally
@@ -149,6 +158,62 @@ public sealed class SpotifyPlaylistSync(
         }
 
         await db.SaveChangesAsync(ct);
+    }
+
+    /// <summary>
+    /// Keeps the private Spotify playlist "<see cref="MissingPlaylistName"/>" in step when it is turned on: all tracks of
+    /// the kept playlists that are not in the library, each once, by playlist name and position. Tracks that arrived in the
+    /// library leave it, new missing ones join; it is created (again) when there is none, and written only when its
+    /// content changed. A failure is shown on the playlists page and does not stop the sync.
+    /// </summary>
+    public async Task UpdateMissingPlaylistAsync(CancellationToken ct)
+    {
+        var account = await spotify.AccountAsync(ct);
+        if (account is not { MissingPlaylistEnabled: true }) return;
+        if (!account.CanWritePlaylists)
+        {
+            MissingState = new MissingPlaylistState(null, "Spotify hat das Anlegen von Playlists nicht erlaubt. Bitte einmal neu mit Spotify verbinden.",
+                DateTimeOffset.UtcNow);
+            return;
+        }
+
+        try
+        {
+            List<SpotifyPlaylist> playlists;
+            await using (var db = await dbFactory.CreateDbContextAsync(ct))
+                playlists = await db.SpotifyPlaylists.AsNoTracking().Include(p => p.Tracks)
+                    .Where(p => p.SpotifyId != account.MissingPlaylistId).OrderBy(p => p.Name).ToListAsync(ct);
+
+            var matcher = Catalog.SpotifyMatcher.For(await catalog.GetAsync(ct));
+            var missing = playlists.SelectMany(p => p.Tracks.OrderBy(t => t.Position))
+                .Where(t => t.SpotifyTrackId != null && matcher.Match(t) == null)
+                .Select(t => t.SpotifyTrackId!)
+                .Distinct()
+                .ToList();
+
+            var id = account.MissingPlaylistId;
+            if (id == null || !await spotify.PlaylistExistsAsync(id, ct))
+            {
+                id = await spotify.CreatePlaylistAsync(MissingPlaylistName,
+                    "Titel aus deinen Spotify-Playlists, die noch nicht in der Music-Manager-Bibliothek sind. Wird vom Music Manager gepflegt.", ct);
+                await spotify.SetMissingPlaylistIdAsync(id, ct);
+                logger.LogInformation("Spotify playlist of missing tracks created: {Id}", id);
+            }
+
+            var current = (await spotify.PlaylistTracksAsync(id, ct)).Select(t => t.Id).ToList();
+            if (!current.SequenceEqual(missing))
+            {
+                await spotify.ReplaceTracksAsync(id, missing, ct);
+                logger.LogInformation("Spotify playlist of missing tracks: {Count} tracks", missing.Count);
+            }
+
+            MissingState = new MissingPlaylistState(missing.Count, null, DateTimeOffset.UtcNow);
+        }
+        catch (Exception ex) when (ex is SpotifyException or HttpRequestException or TaskCanceledException && !ct.IsCancellationRequested)
+        {
+            MissingState = new MissingPlaylistState(null, ex.Message, DateTimeOffset.UtcNow);
+            logger.LogWarning(ex, "Updating the Spotify playlist of missing tracks failed");
+        }
     }
 
     private async Task SaveCoverAsync(int playlistId, string? url, CancellationToken ct)

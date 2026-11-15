@@ -67,6 +67,35 @@ else if (_account == null)
     </MudPaper>
 }
 
+@if (_account != null)
+{
+    <MudPaper Outlined="true" Class="pa-3 mb-4">
+        <MudSwitch T="bool" Value="_account.MissingPlaylistEnabled" ValueChanged="SetMissing" Color="Color.Primary"
+                   Label="@($"Fehlende Titel aller Playlists in der Spotify-Playlist „{SpotifyPlaylistSync.MissingPlaylistName}“ sammeln")" />
+        <MudText Typo="Typo.caption" Class="d-block" Style="opacity:.75">
+            Privat in deinem Spotify-Konto, bei jedem Abgleich aktualisiert: Titel, die inzwischen in deiner Bibliothek sind, fliegen raus,
+            neue fehlende kommen dazu.
+        </MudText>
+        @if (_account.MissingPlaylistEnabled && !_account.CanWritePlaylists)
+        {
+            <MudAlert Severity="Severity.Warning" Dense="true" Class="mt-2">
+                Dafür braucht der Music Manager die Erlaubnis, Playlists anzulegen.
+                <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Primary" OnClick="Connect">Neu mit Spotify verbinden</MudButton>
+            </MudAlert>
+        }
+        else if (_account.MissingPlaylistEnabled && Sync.MissingState is { } missing)
+        {
+            <MudText Typo="Typo.body2" Class="mt-2" Color="@(missing.Error == null ? Color.Default : Color.Error)">
+                @(missing.Error ?? $"{missing.Count} Titel, aktualisiert {missing.At.ToLocalTime():g}")
+                @if (_account.MissingPlaylistId is { } missingId)
+                {
+                    <MudLink Href="@($"https://open.spotify.com/playlist/{missingId}")" Target="_blank" Class="ml-2">In Spotify öffnen</MudLink>
+                }
+            </MudText>
+        }
+    </MudPaper>
+}
+
 @if (_adding)
 {
     <MudPaper Outlined="true" Class="pa-3 mb-4">
@@ -84,7 +113,8 @@ else if (_account == null)
             <MudTextField @bind-Value="_filter" Placeholder="Suchen" Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"
                           Immediate="true" Clearable="true" Class="mt-0 mb-2" />
             <div class="card-list">
-                @foreach (var p in _available.Where(p => string.IsNullOrWhiteSpace(_filter) || p.Name.Contains(_filter, StringComparison.OrdinalIgnoreCase)))
+                @foreach (var p in _available.Where(p => p.Id != _account!.MissingPlaylistId
+                                                          && (string.IsNullOrWhiteSpace(_filter) || p.Name.Contains(_filter, StringComparison.OrdinalIgnoreCase))))
                 {
                     var readable = SpotifyPlaylistSync.Readable(p, _account!.UserId);
                     var added = _playlists.Any(x => x.Playlist.SpotifyId == p.Id);
@@ -202,6 +232,17 @@ else if (_account == null)
         finally
         {
             _busy = false;
+        }
+    }
+
+    private async Task SetMissing(bool enabled)
+    {
+        await Spotify.SetMissingPlaylistAsync(enabled);
+        _account = await Spotify.AccountAsync();
+        if (enabled && _account!.CanWritePlaylists)
+        {
+            Sync.Request();
+            Snackbar.Add($"„{SpotifyPlaylistSync.MissingPlaylistName}“ wird angelegt bzw. aktualisiert.", Severity.Info);
         }
     }
 

@@ -495,8 +495,17 @@ namespace MusicManager.Core.Data.Migrations
                     b.Property<string>("DisplayName")
                         .HasColumnType("TEXT");
 
+                    b.Property<bool>("MissingPlaylistEnabled")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("MissingPlaylistId")
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("RefreshToken")
                         .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Scopes")
                         .HasColumnType("TEXT");
 
                     b.Property<string>("UserId")

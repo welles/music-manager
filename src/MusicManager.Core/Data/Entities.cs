@@ -502,6 +502,17 @@ public sealed class SpotifyAccount
     public string? DisplayName { get; set; }
     public required string RefreshToken { get; set; }
     public DateTimeOffset ConnectedAt { get; set; } = DateTimeOffset.UtcNow;
+
+    /// <summary>The permissions Spotify granted at the login (space separated); writing playlists needs a newer login.</summary>
+    public string? Scopes { get; set; }
+
+    /// <summary>Keep the private playlist of all tracks the library lacks (<see cref="MissingPlaylistId"/>) in step.</summary>
+    public bool MissingPlaylistEnabled { get; set; }
+
+    /// <summary>Spotify ID of that playlist once created; made anew when it was deleted on Spotify.</summary>
+    public string? MissingPlaylistId { get; set; }
+
+    public bool CanWritePlaylists => (Scopes ?? "").Split(' ').Contains("playlist-modify-private");
 }
 
 /// <summary>
