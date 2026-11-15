@@ -238,4 +238,22 @@ public sealed class SpotifyPlaylistTests : IDisposable
 
         Assert.Contains("Soundiiz", playlist.SyncError);
     }
+
+    [Fact]
+    public async Task RemovingAPlaylistTakesItsTracksAndCoversAlong()
+    {
+        await ConnectAsync();
+        var sync = Get<SpotifyPlaylistSync>();
+        var playlist = await sync.AddAsync((await Get<SpotifyUserClient>().MyPlaylistsAsync())[0]);
+        await File.WriteAllBytesAsync($"{sync.CoverPath(playlist.Id)}.badge.jpg", [1]);
+
+        await sync.RemoveAsync(playlist.Id);
+
+        Assert.False(File.Exists(sync.CoverPath(playlist.Id)));
+        Assert.False(File.Exists($"{sync.CoverPath(playlist.Id)}.badge.jpg"));
+        await using var db = await Get<IDbContextFactory<AppDbContext>>().CreateDbContextAsync();
+        Assert.Empty(await db.SpotifyPlaylistTracks.ToListAsync());
+        var gone = await _base.CallAsync("getPlaylist", $"id=pl-spotify-{playlist.Id}");
+        Assert.Equal(70, gone.GetProperty("error").GetProperty("code").GetInt32());
+    }
 }

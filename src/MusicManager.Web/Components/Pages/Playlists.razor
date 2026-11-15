@@ -182,10 +182,11 @@ else if (_account == null)
         {
             _available = await Spotify.MyPlaylistsAsync();
         }
-        catch (SpotifyException ex)
+        catch (Exception ex) when (ex is SpotifyException or HttpRequestException or TaskCanceledException)
         {
+            // Spotify refused, unreachable or too slow: a message, not a broken page.
             _adding = false;
-            Snackbar.Add(ex.Message, Severity.Error);
+            Snackbar.Add(ex is SpotifyException ? ex.Message : $"Spotify nicht erreichbar: {ex.Message}", Severity.Error);
         }
     }
 
