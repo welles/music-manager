@@ -24,6 +24,7 @@ public sealed class ImageSquareService(
     AudioTools audio,
     Storage storage,
     IOptions<MusicManagerOptions> options,
+    LibraryIndexer indexer,
     PipelineNotifier notifier,
     ILogger<ImageSquareService> logger)
 {
@@ -110,6 +111,21 @@ public sealed class ImageSquareService(
     }
 
     private async Task EmbeddedCoversAsync(List<int> songIds, CancellationToken ct)
+    {
+        var squaredBefore = _squared;
+        try
+        {
+            await EmbeddedCoverChunksAsync(songIds, ct);
+        }
+        finally
+        {
+            // New file size and time are in the index: the catalog reloads, so cover caches keyed on them (Subsonic
+            // getCoverArt) serve the new cover. The next scan finds the files unchanged and would not do it.
+            if (_squared > squaredBefore) indexer.OnChanged();
+        }
+    }
+
+    private async Task EmbeddedCoverChunksAsync(List<int> songIds, CancellationToken ct)
     {
         foreach (var chunk in songIds.Chunk(100))
         {
