@@ -29,11 +29,27 @@ public static partial class SubsonicEndpoints
         // A jump into the song (timeOffset) needs a stream from that point even when the client wants the original.
         var plan = Transcoding.Decide(song.Suffix, song.BitrateKbps, r.Get("format"), r.GetInt("maxBitRate"))
                    ?? (r.GetInt("timeOffset") is > 0 && !IsRaw(r) ? Transcoding.ForOffset(song.Suffix, song.BitrateKbps) : null);
-        if (!download && plan != null && Transcoded(r, path, song, plan) is { } transcoded)
+        if (!download && plan != null)
         {
-            var offset = r.GetInt("timeOffset") is > 0 and var o ? $" from {o} s" : "";
-            StreamMeter.Attach(r, song, $"{plan.Format.Name} {plan.Kbps}k{offset}");
-            return transcoded;
+            // Parameters first: one that fails must not leave a started ffmpeg behind without a reader.
+            // A duration of 0 means unknown (unreadable file): then the offset is not limited.
+            var offset = Math.Max(0, r.GetInt("timeOffset") ?? 0);
+            if (song.Duration > 0) offset = Math.Min(offset, song.Duration - 1);
+            var estimate = r.GetBool("estimateContentLength") == true;
+            var mode = $"{plan.Format.Name} {plan.Kbps}k{(offset > 0 ? $" from {offset} s" : "")}";
+
+            // Encoded before: the finished file, with its length and ranges.
+            if (offset == 0 && r.Service<TranscodeCache>().Find(path, plan) is { } cached)
+            {
+                StreamMeter.Attach(r, song, $"{mode} cached");
+                return Results.File(cached, plan.Format.ContentType, enableRangeProcessing: true);
+            }
+
+            if (Transcoded(r, path, song, plan, offset, estimate) is { } transcoded)
+            {
+                StreamMeter.Attach(r, song, mode);
+                return transcoded;
+            }
         }
 
         StreamMeter.Attach(r, song, download ? "download" : $"original {song.Suffix}{(song.BitrateKbps is { } k ? $" {k}k" : "")}");
@@ -47,17 +63,14 @@ public static partial class SubsonicEndpoints
     /// <c>timeOffset</c> in seconds (OpenSubsonic "transcodeOffset"). With <c>estimateContentLength</c> the response
     /// announces an estimated size and is padded or cut to exactly that, as some players need a length.
     /// </summary>
-    /// <remarks>Null when ffmpeg cannot be started: then the original is served, music rather than an error.</remarks>
-    private static IResult? Transcoded(SubsonicRequest r, string path, CatalogSong song, TranscodePlan plan)
+    /// <remarks>
+    /// Null when ffmpeg cannot be started: then the original is served, music rather than an error. A whole song (no
+    /// offset) is written to the <see cref="TranscodeCache"/> while it is sent and kept there if it ran through.
+    /// </remarks>
+    private static IResult? Transcoded(SubsonicRequest r, string path, CatalogSong song, TranscodePlan plan, int offset, bool estimate)
     {
-        // All parameters first: one that fails must not leave a started ffmpeg behind without a reader.
-        // A duration of 0 means unknown (unreadable file): then the offset is not limited and no length is announced,
-        // since an estimate from nothing would cut the song after a second.
-        var offset = Math.Max(0, r.GetInt("timeOffset") ?? 0);
-        if (song.Duration > 0) offset = Math.Min(offset, song.Duration - 1);
-        long? length = r.GetBool("estimateContentLength") == true && song.Duration > 0
-            ? Transcoding.EstimateBytes(plan, song.Duration, offset)
-            : null;
+        // Without a known duration no length is announced: an estimate from nothing would cut the song after a second.
+        long? length = estimate && song.Duration > 0 ? Transcoding.EstimateBytes(plan, song.Duration, offset) : null;
 
         // HEAD only wants the headers: no need to encode the whole song for a body nobody receives.
         if (HttpMethods.IsHead(r.Http.Request.Method))
@@ -69,19 +82,44 @@ public static partial class SubsonicEndpoints
         var audio = r.Service<AudioTools>();
         if (audio.StartTranscode(path, plan, offset) is not { } ffmpeg) return null;
 
+        var entry = offset == 0 ? r.Service<TranscodeCache>().Begin(path, plan) : null;
         SetTranscodedHeaders(r, length);
         return Results.Stream(async output =>
         {
-            if (length == null)
-            {
-                await audio.PumpAsync(ffmpeg, path, output, r.Aborted);
-                return;
-            }
-
-            var exact = new ExactLengthStream(output, length.Value);
-            await audio.PumpAsync(ffmpeg, path, exact, r.Aborted);
-            await exact.PadAsync(r.Aborted);
+            await using var _ = entry;
+            var exact = length != null ? new ExactLengthStream(output, length.Value) : null;
+            Stream target = exact ?? output;
+            // The cache gets ffmpeg's output as it is, before an estimated length pads or cuts what the client gets.
+            if (entry != null) target = new TeeStream(entry.Stream, target);
+            var complete = await audio.PumpAsync(ffmpeg, path, target, r.Aborted);
+            if (exact != null) await exact.PadAsync(r.Aborted);
+            if (complete && entry != null) await entry.CommitAsync();
         }, plan.Format.ContentType);
+    }
+
+    /// <summary>Writes everything to the cache file first, then to the client.</summary>
+    private sealed class TeeStream(Stream file, Stream client) : Stream
+    {
+        public override async ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken ct = default)
+        {
+            await file.WriteAsync(buffer, ct);
+            await client.WriteAsync(buffer, ct);
+        }
+
+        public override Task WriteAsync(byte[] buffer, int offset, int count, CancellationToken ct) =>
+            WriteAsync(buffer.AsMemory(offset, count), ct).AsTask();
+
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+        public override void Flush() => client.Flush();
+        public override Task FlushAsync(CancellationToken ct) => client.FlushAsync(ct);
+        public override int Read(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+        public override void SetLength(long value) => throw new NotSupportedException();
+        public override bool CanRead => false;
+        public override bool CanSeek => false;
+        public override bool CanWrite => true;
+        public override long Length => throw new NotSupportedException();
+        public override long Position { get => throw new NotSupportedException(); set => throw new NotSupportedException(); }
     }
 
     private static void SetTranscodedHeaders(SubsonicRequest r, long? length)

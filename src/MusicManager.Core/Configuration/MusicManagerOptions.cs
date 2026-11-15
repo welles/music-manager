@@ -46,6 +46,12 @@ public sealed class MusicManagerOptions
     /// <summary>Last.fm API key (https://www.last.fm/api/account/create) – genre fallback when MusicBrainz has none.</summary>
     public string? LastFmApiKey { get; set; }
 
+    /// <summary>
+    /// Size limit of the cache of finished transcodes (<c>&lt;data&gt;/cache/transcodes</c>) in MB; 0 turns it off.
+    /// At 128 kbit/s a song takes about 4 MB, so 2 GB hold some 500 songs.
+    /// </summary>
+    public int TranscodeCacheMb { get; set; } = 2048;
+
     public string FfmpegPath { get; set; } = "ffmpeg";
     public string FfprobePath { get; set; } = "ffprobe";
     public string FpcalcPath { get; set; } = "fpcalc";
