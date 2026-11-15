@@ -218,8 +218,9 @@ public class SubsonicPlaylistTests
         Assert.Equal("owner", created.GetProperty("owner").GetString());
         Assert.False(created.GetProperty("public").GetBoolean());
 
-        var list = (await app.CallAsync("getPlaylists")).GetProperty("playlists").GetProperty("playlist");
-        Assert.Equal(id, list.EnumerateArray().Single().GetProperty("id").GetString());
+        // The client's own playlists come after the smart ones Music Manager keeps (SmartPlaylistTests).
+        var list = OwnPlaylists(await app.CallAsync("getPlaylists"));
+        Assert.Equal(id, list.Single().GetProperty("id").GetString());
         Assert.False(list[0].TryGetProperty("entry", out _));
 
         // Add, remove by index (before adding), rename, comment, public.
@@ -240,9 +241,14 @@ public class SubsonicPlaylistTests
         Assert.Equal(["tr-4", "tr-1", "tr-4"], Entries(replaced));
 
         await Ok(app, "deletePlaylist", $"id={id}");
-        Assert.Equal(0, (await app.CallAsync("getPlaylists")).GetProperty("playlists").GetProperty("playlist").GetArrayLength());
+        Assert.Empty(OwnPlaylists(await app.CallAsync("getPlaylists")));
         Assert.Equal(70, (await app.CallAsync("getPlaylist", $"id={id}")).GetProperty("error").GetProperty("code").GetInt32());
     }
+
+    private static List<JsonElement> OwnPlaylists(JsonElement response) =>
+        response.GetProperty("playlists").GetProperty("playlist").EnumerateArray()
+            .Where(p => !p.GetProperty("id").GetString()!.StartsWith(MusicManager.Core.Catalog.SmartPlaylists.Prefix, StringComparison.Ordinal))
+            .ToList();
 
     [Theory]
     [InlineData("getPlaylist", "id=pl-999")]

@@ -119,6 +119,13 @@ public sealed class PlaylistDto
     public required string Created { get; init; }
     public required string Changed { get; init; }
     public string? CoverArt { get; init; }
+
+    /// <summary>OpenSubsonic: the client may not change it (playlists kept by Music Manager).</summary>
+    public bool? Readonly { get; init; }
+
+    /// <summary>OpenSubsonic: the content is valid until then (shuffled ones: right away, so clients load them anew).</summary>
+    public string? ValidUntil { get; init; }
+
     public List<SongDto>? Entry { get; init; }
 }
 

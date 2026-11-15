@@ -129,4 +129,22 @@ public sealed class SubsonicMapper(UserDataSnapshot userData)
             Entry = withEntries ? songs.Select(Song).ToList() : null,
         };
     }
+
+    /// <summary>A playlist Music Manager keeps by itself (<see cref="SmartPlaylists"/>): read-only for the client.</summary>
+    public PlaylistDto SmartPlaylist(SmartPlaylist p, IReadOnlyList<CatalogSong> songs, DateTimeOffset now, bool withEntries) => new()
+    {
+        Id = p.Id,
+        Name = p.Name,
+        Comment = p.Comment,
+        Owner = Owner,
+        Public = false,
+        SongCount = songs.Count,
+        Duration = songs.Sum(s => s.Duration),
+        Created = Iso(SmartPlaylists.Created)!,
+        Changed = Iso(SmartPlaylists.Changed(p, songs, userData, now))!,
+        CoverArt = songs.Select(s => s.CoverArt).FirstOrDefault(c => c != null),
+        Readonly = true,
+        ValidUntil = p.Shuffled ? Iso(now) : null,
+        Entry = withEntries ? songs.Select(Song).ToList() : null,
+    };
 }
