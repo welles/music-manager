@@ -58,10 +58,12 @@ public static class FingerprintMatcher
         var startB = Math.Max(0, -offset);
         var overlap = Math.Max(0, Math.Min(a.Length - startA, b.Length - startB));
         var (weakest, weakestAt) = (overall, 0);
-        for (var k = 0; k + SectionValues <= overlap; k += SectionValues)
+        for (var k = 0; overlap >= SectionValues && k < overlap; k += SectionValues)
         {
-            var s = SimilarityAt(a, b, offset, k, SectionValues);
-            if (s < weakest) (weakest, weakestAt) = (s, k);
+            // The last section ends with the overlap, so the final seconds are checked as well.
+            var at = Math.Min(k, overlap - SectionValues);
+            var s = SimilarityAt(a, b, offset, at, SectionValues);
+            if (s < weakest) (weakest, weakestAt) = (s, at);
         }
 
         return new AudioComparison(overall, weakest, TimeSpan.FromSeconds((startA + weakestAt) * SecondsPerValue));

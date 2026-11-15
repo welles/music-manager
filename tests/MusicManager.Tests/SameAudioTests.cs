@@ -30,6 +30,19 @@ public class SameAudioTests
     }
 
     [Fact]
+    public void TheLastSecondsAreCheckedToo()
+    {
+        var a = RandomFingerprint(5, 1630); // not a whole number of sections
+        var rnd = new Random(6);
+        var b = a.Select((v, i) => i >= 1600 ? (uint)rnd.NextInt64(0, uint.MaxValue) : v).ToArray(); // the last ~4 s differ
+
+        var c = FingerprintMatcher.Compare(a, b);
+
+        Assert.True(c.Weakest < SameAudioChecker.SectionThreshold);
+        Assert.InRange(c.WeakestAt.TotalSeconds, 190, 202);
+    }
+
+    [Fact]
     public void AReEncodeIsTheSameAudio()
     {
         var a = RandomFingerprint(3, 1600);

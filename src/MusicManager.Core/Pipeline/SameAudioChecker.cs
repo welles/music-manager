@@ -66,7 +66,7 @@ public sealed class SameAudioChecker(
             if (fresh is not { Values.Length: > 0 } || existing is not { Values.Length: > 0 })
             {
                 m.SameAudio = null;
-                m.AudioCheck = fresh == null ? "Audio-Vergleich nicht möglich: neue Datei nicht lesbar"
+                m.AudioCheck = fresh is not { Values.Length: > 0 } ? "Audio-Vergleich nicht möglich: neue Datei nicht lesbar"
                     : "Audio-Vergleich nicht möglich: vorhandene Datei nicht lesbar";
                 continue;
             }
