@@ -40,13 +40,21 @@ public static partial class SubsonicEndpoints
     /// <remarks>Null when ffmpeg cannot be started: then the original is served, music rather than an error.</remarks>
     private static IResult? Transcoded(SubsonicRequest r, string path, CatalogSong song, TranscodePlan plan)
     {
+        // All parameters first: one that fails must not leave a started ffmpeg behind without a reader.
         var offset = Math.Clamp(r.GetInt("timeOffset") ?? 0, 0, Math.Max(0, song.Duration - 1));
+        long? length = r.GetBool("estimateContentLength") == true ? Transcoding.EstimateBytes(plan, song.Duration, offset) : null;
+
+        // HEAD only wants the headers: no need to encode the whole song for a body nobody receives.
+        if (HttpMethods.IsHead(r.Http.Request.Method))
+        {
+            SetTranscodedHeaders(r, length);
+            return Results.Stream(_ => Task.CompletedTask, plan.Format.ContentType);
+        }
+
         var audio = r.Service<AudioTools>();
         if (audio.StartTranscode(path, plan, offset) is not { } ffmpeg) return null;
 
-        long? length = r.GetBool("estimateContentLength") == true ? Transcoding.EstimateBytes(plan, song.Duration, offset) : null;
-        r.Http.Response.Headers.AcceptRanges = "none";
-        if (length != null) r.Http.Response.ContentLength = length;
+        SetTranscodedHeaders(r, length);
         return Results.Stream(async output =>
         {
             if (length == null)
@@ -59,6 +67,12 @@ public static partial class SubsonicEndpoints
             await audio.PumpAsync(ffmpeg, path, exact, r.Aborted);
             await exact.PadAsync(r.Aborted);
         }, plan.Format.ContentType);
+    }
+
+    private static void SetTranscodedHeaders(SubsonicRequest r, long? length)
+    {
+        r.Http.Response.Headers.AcceptRanges = "none";
+        if (length != null) r.Http.Response.ContentLength = length;
     }
 
     /// <summary>Passes on at most <c>length</c> bytes and fills up to it with zeros at the end (players skip those).</summary>
