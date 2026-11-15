@@ -15,8 +15,9 @@ public sealed record ImageSquareState(bool Running, string? Phase, int Progress,
 
 /// <summary>
 /// Album and artist images are square: new ones are cut when they are fetched (<see cref="AudioTools.SquareImageAsync"/>).
-/// This cuts the ones that exist already, on request: the cover files in the album folders (incl. own images),
-/// the cached artist images and the covers embedded in the library's M4A files. Square images stay untouched.
+/// This cuts the ones that exist already, on request: the cover files in the album folders (incl. own images;
+/// the originals go to the trash), the cached artist images and the covers embedded in the library's M4A files.
+/// Square images stay untouched.
 /// </summary>
 public sealed class ImageSquareService(
     IDbContextFactory<AppDbContext> dbFactory,
@@ -78,9 +79,11 @@ public sealed class ImageSquareService(
         notifier.Notify();
 
         _phase = "Album-Cover";
-        foreach (var path in folderCovers) await ImageFileAsync(path, ct);
+        // Cover files may be own images: the original goes to the trash. Artist images are a cache that can be
+        // loaded again.
+        foreach (var path in folderCovers) await ImageFileAsync(path, p => storage.KeepOriginalInTrash(p, TrashFolder), ct);
         _phase = "Künstlerbilder";
-        foreach (var path in artistImages) await ImageFileAsync(path, ct);
+        foreach (var path in artistImages) await ImageFileAsync(path, null, ct);
         _phase = "Eingebettete Cover";
         await EmbeddedCoversAsync(songs, ct);
 
@@ -88,11 +91,14 @@ public sealed class ImageSquareService(
             _squared, _skipped, _failed, _total);
     }
 
-    private async Task ImageFileAsync(string path, CancellationToken ct)
+    /// <summary>Folder in the trash for the originals of cut cover files.</summary>
+    public const string TrashFolder = "zugeschnitten";
+
+    private async Task ImageFileAsync(string path, Action<string>? keepOriginal, CancellationToken ct)
     {
         try
         {
-            if (await audio.SquareImageFileAsync(path, ct)) _squared++;
+            if (await audio.SquareImageFileAsync(path, keepOriginal, ct)) _squared++;
         }
         catch (Exception ex) when (!ct.IsCancellationRequested)
         {
