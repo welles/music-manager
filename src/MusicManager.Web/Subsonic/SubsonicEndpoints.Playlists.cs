@@ -1,9 +1,10 @@
+using Microsoft.EntityFrameworkCore;
 using MusicManager.Core.Catalog;
 using MusicManager.Core.Data;
 
 namespace MusicManager.Web.Subsonic;
 
-// Playlists: getPlaylists, getPlaylist, createPlaylist, updatePlaylist, deletePlaylist. Smart playlists are read-only.
+// Playlists: getPlaylists, getPlaylist, createPlaylist, updatePlaylist, deletePlaylist. Smart and Spotify playlists are read-only.
 public static partial class SubsonicEndpoints
 {
     private static void MapPlaylists()
@@ -17,7 +18,11 @@ public static partial class SubsonicEndpoints
             var now = DateTimeOffset.UtcNow;
             var playlists = await r.Service<PlaylistStore>().ListAsync(r.Aborted);
             var smart = SmartPlaylists.Every.Select(p => mapper.SmartPlaylist(p, SmartPlaylists.Songs(p, catalog, user), now, withEntries: false));
-            return Ok("playlists", new { playlist = smart.Concat(playlists.Select(p => mapper.Playlist(p, catalog, withEntries: false))).ToList() });
+            var spotify = (await SpotifyPlaylistsAsync(r, null)).Select(p => mapper.SpotifyPlaylist(p, SpotifyPlaylistIds.Songs(p, catalog), now, withEntries: false));
+            return Ok("playlists", new
+            {
+                playlist = smart.Concat(spotify).Concat(playlists.Select(p => mapper.Playlist(p, catalog, withEntries: false))).ToList(),
+            });
         });
 
         Add("getPlaylist", async r =>
@@ -32,6 +37,14 @@ public static partial class SubsonicEndpoints
                 r.Service<ILoggerFactory>().CreateLogger("MusicManager.Web.Subsonic.Playlists")
                     .LogInformation("Smart playlist {Name} ({Count} songs) loaded by {Client}", smart.Name, songs.Count, r.Get("c") ?? "?");
                 return Ok("playlist", new SubsonicMapper(user).SmartPlaylist(smart, songs, DateTimeOffset.UtcNow, withEntries: true));
+            }
+
+            if (SpotifyPlaylistIds.Parse(id) is { } spotifyId)
+            {
+                var spotify = (await SpotifyPlaylistsAsync(r, spotifyId)).FirstOrDefault() ?? throw PlaylistNotFound();
+                var catalog = await Catalog(r);
+                return Ok("playlist", (await Mapper(r)).SpotifyPlaylist(spotify, SpotifyPlaylistIds.Songs(spotify, catalog), DateTimeOffset.UtcNow,
+                    withEntries: true));
             }
 
             var playlist = await r.Service<PlaylistStore>().GetAsync(PlaylistKey(id), r.Aborted) ?? throw PlaylistNotFound();
@@ -86,10 +99,18 @@ public static partial class SubsonicEndpoints
 
     private static SubsonicException PlaylistNotFound() => SubsonicException.NotFound("Playlist");
 
-    /// <summary>Smart playlists are kept by Music Manager; a client may read but not change or delete them.</summary>
-    private static string RefuseSmart(string id) => SmartPlaylists.Find(id) is null
+    /// <summary>Smart and Spotify playlists are kept by Music Manager; a client may read but not change or delete them.</summary>
+    private static string RefuseSmart(string id) => SmartPlaylists.Find(id) is null && SpotifyPlaylistIds.Parse(id) is null
         ? id
         : throw new SubsonicException(SubsonicErrors.NotAuthorized, "This playlist is kept by Music Manager and cannot be changed");
+
+    /// <summary>The Spotify playlists with their tracks (all, or the one with <paramref name="id"/>).</summary>
+    private static async Task<List<SpotifyPlaylist>> SpotifyPlaylistsAsync(SubsonicRequest r, int? id)
+    {
+        await using var db = await r.Service<IDbContextFactory<AppDbContext>>().CreateDbContextAsync(r.Aborted);
+        return await db.SpotifyPlaylists.AsNoTracking().Include(p => p.Tracks).Where(p => id == null || p.Id == id).OrderBy(p => p.Name)
+            .ToListAsync(r.Aborted);
+    }
 
     /// <summary>Song IDs of a repeated parameter. Songs that are not in the library are accepted (and hidden).</summary>
     private static List<string> SongIds(SubsonicRequest r, string name)

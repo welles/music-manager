@@ -394,6 +394,34 @@ public sealed class AudioTools(IOptions<MusicManagerOptions> options, ILogger<Au
         return dir;
     }
 
+    /// <summary>
+    /// <paramref name="image"/> as a square of <paramref name="size"/> pixels with <paramref name="badgePath"/> (a PNG with
+    /// transparency) in the bottom right corner, e.g. to mark a playlist's origin. Null when ffmpeg cannot read it.
+    /// </summary>
+    public async Task<byte[]?> AddBadgeAsync(byte[] image, string badgePath, int size, CancellationToken ct)
+    {
+        var input = Path.Combine(ImageWorkDir(), Guid.NewGuid().ToString("N"));
+        var output = $"{input}.jpg";
+        var badge = size / 5;
+        var margin = size / 25;
+        try
+        {
+            await File.WriteAllBytesAsync(input, image, ct);
+            var r = await ProcessRunner.RunAsync(_o.FfmpegPath,
+            [
+                "-nostdin", "-hide_banner", "-loglevel", "error", "-y", "-i", input, "-i", badgePath, "-filter_complex",
+                $"[0:v]scale={size}:{size}:force_original_aspect_ratio=increase,crop={size}:{size}[c];[1:v]scale={badge}:{badge}[b];" +
+                $"[c][b]overlay=W-w-{margin}:H-h-{margin}", "-frames:v", "1", "-q:v", "3", output,
+            ], ct);
+            return r.ExitCode == 0 ? await File.ReadAllBytesAsync(output, ct) : null;
+        }
+        finally
+        {
+            File.Delete(input);
+            File.Delete(output);
+        }
+    }
+
     private async Task<byte[]?> ConvertImageAsync(byte[] image, string filter, string format, CancellationToken ct)
     {
         var input = Path.Combine(ImageWorkDir(), Guid.NewGuid().ToString("N"));

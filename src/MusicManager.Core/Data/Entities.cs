@@ -490,3 +490,60 @@ public sealed class PlaylistEntry
     public int Position { get; set; }
     public required string SongId { get; set; }
 }
+
+/// <summary>
+/// The owner's Spotify login (a single row): its refresh token reads the owner's own and collaborative playlists, which
+/// Spotify only gives out with a user login since February 2026.
+/// </summary>
+public sealed class SpotifyAccount
+{
+    public int Id { get; set; }
+    public required string UserId { get; set; }
+    public string? DisplayName { get; set; }
+    public required string RefreshToken { get; set; }
+    public DateTimeOffset ConnectedAt { get; set; } = DateTimeOffset.UtcNow;
+}
+
+/// <summary>
+/// A Spotify playlist Music Manager keeps in step with (public ID "pl-spotify-{Id}"): its tracks as Spotify lists them;
+/// which of them are in the library is worked out when it is read, so new songs show up without another sync.
+/// </summary>
+public sealed class SpotifyPlaylist
+{
+    public int Id { get; set; }
+    public required string SpotifyId { get; set; }
+    public required string Name { get; set; }
+    public string? Description { get; set; }
+    public string? OwnerId { get; set; }
+    public string? OwnerName { get; set; }
+    public bool Collaborative { get; set; }
+    public string? ImageUrl { get; set; }
+
+    /// <summary>Spotify's version of the tracklist; the tracks are only read again when it changed.</summary>
+    public string? SnapshotId { get; set; }
+
+    public DateTimeOffset AddedAt { get; set; } = DateTimeOffset.UtcNow;
+    public DateTimeOffset? SyncedAt { get; set; }
+
+    /// <summary>Why the last sync failed (shown on the playlists page); null after a good one.</summary>
+    public string? SyncError { get; set; }
+
+    /// <summary>Ordered by <see cref="SpotifyPlaylistTrack.Position"/>.</summary>
+    public List<SpotifyPlaylistTrack> Tracks { get; set; } = [];
+}
+
+/// <summary>One track of a <see cref="SpotifyPlaylist"/> as Spotify describes it.</summary>
+public sealed class SpotifyPlaylistTrack
+{
+    public int Id { get; set; }
+    public int PlaylistId { get; set; }
+    public int Position { get; set; }
+    public string? SpotifyTrackId { get; set; }
+    public required string Title { get; set; }
+    public List<string> Artists { get; set; } = [];
+    public string? Album { get; set; }
+    public int? DurationMs { get; set; }
+    public string? Isrc { get; set; }
+    public string? ImageUrl { get; set; }
+}
+

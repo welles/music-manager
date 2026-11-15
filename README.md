@@ -172,6 +172,25 @@ Playlists kept by Music Manager come first in every client and are read-only the
   `submission=true`); songs that were only started and skipped stay in. Shuffled like "Alle".
 - **Favoriten** – starred songs, the most recently starred first.
 
+**Spotify playlists** (issues #19, #21): on the *Playlists* page you connect your Spotify account
+once and add playlists; Music Manager reads their tracks every 6 hours (and on "Jetzt abgleichen"),
+only again when Spotify's snapshot changed. Clients get them read-only with the Spotify name, owner
+"Spotify", a comment like "Spotify-Playlist · von … · 12 von 40 Titeln vorhanden" and the Spotify
+picture with a green badge; they contain only the tracks that are in the library (matched by ISRC,
+else by title, artist and length), so new songs show up without another sync. The page shows all
+tracks, the missing ones greyed, with a filter for them.
+
+Since February 2026 Spotify gives out the tracks only with a user login and only for playlists you
+own or collaborate on (the app owner needs Premium). Playlists of others you follow can be mirrored
+into an own playlist with [Soundiiz](https://soundiiz.com) (Premium: 20 automatic daily syncs,
+method "replace tracks"); add the copy. Setup:
+
+1. In the [Spotify dashboard](https://developer.spotify.com/dashboard) add
+   `https://<your host>/spotify/callback` as redirect URI of the app whose ID and secret are in
+   `MusicManager__SpotifyClientId` / `MusicManager__SpotifyClientSecret`
+   (`MusicManager__SpotifyRedirectUri` overrides the address worked out from the request).
+2. *Playlists* → "Mit Spotify verbinden", then "Hinzufügen".
+
 Each has its own cover (`getCoverArt` with the playlist's ID; pictures in
 `src/MusicManager.Web/wwwroot/playlist-covers`, SVG sources in `docs/playlist-covers`). Each load of
 one of them writes a log line (`Smart playlist … loaded by …`). Playlists created in a client stay

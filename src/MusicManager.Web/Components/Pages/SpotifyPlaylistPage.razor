@@ -1,0 +1,141 @@
+@page "/playlists/spotify/{Id:int}"
+@inherits LivePage
+@using MusicManager.Core.Catalog
+@inject IDbContextFactory<AppDbContext> DbFactory
+@inject MediaCatalog Catalog
+@inject LibraryCatalog Library
+@inject SpotifyPlaylistSync Sync
+@inject PlayerService Player
+@inject IDialogService Dialogs
+@inject NavigationManager Nav
+
+<PageTitle>@(_playlist?.Name ?? "Spotify-Playlist") – Music Manager</PageTitle>
+
+<PageHeader Title="@(_playlist?.Name ?? "Spotify-Playlist")" UseHistory="true" />
+
+@if (_playlist == null)
+{
+    @if (_missing)
+    {
+        <MudAlert Severity="Severity.Info">Diese Playlist gibt es nicht (mehr).</MudAlert>
+    }
+    else
+    {
+        <MudProgressLinear Indeterminate="true" />
+    }
+
+    return;
+}
+
+<MudPaper Outlined="true" Class="pa-3 mb-4">
+    <div class="d-flex flex-wrap" style="gap:16px">
+        <img src="@($"api/playlists/spotify/{_playlist.Id}/cover?v={_playlist.SyncedAt?.UtcTicks}")" alt="" width="160" height="160" class="rounded"
+             style="object-fit:cover;flex-shrink:0" />
+        <div style="min-width:0;flex:1 1 220px">
+            <MudText Typo="Typo.h5">@_playlist.Name</MudText>
+            <MudText Typo="Typo.body2">Spotify-Playlist@(_playlist.OwnerName is { Length: > 0 } o ? $" von {o}" : "")</MudText>
+            @if (!string.IsNullOrWhiteSpace(_playlist.Description))
+            {
+                <MudText Typo="Typo.body2" Style="opacity:.75" Class="mt-1">@_playlist.Description</MudText>
+            }
+            <MudText Typo="Typo.body2" Class="mt-2"><b>@Matched</b> von @_rows.Count Titeln in deiner Bibliothek</MudText>
+            @if (_playlist.SyncError != null)
+            {
+                <MudAlert Severity="Severity.Warning" Dense="true" Class="mt-2">@_playlist.SyncError</MudAlert>
+            }
+            else if (_playlist.SyncedAt is { } synced)
+            {
+                <MudText Typo="Typo.caption" Style="opacity:.6">zuletzt abgeglichen @synced.ToLocalTime().ToString("g")</MudText>
+            }
+            <div class="d-flex flex-wrap mt-2" style="gap:8px">
+                <MudButton Variant="Variant.Outlined" Size="Size.Small" StartIcon="@Icons.Material.Filled.OpenInNew"
+                           Href="@($"https://open.spotify.com/playlist/{_playlist.SpotifyId}")" Target="_blank">In Spotify öffnen</MudButton>
+                <MudButton Variant="Variant.Outlined" Size="Size.Small" StartIcon="@Icons.Material.Filled.Sync" Disabled="Sync.State.Running"
+                           OnClick="() => Sync.Request()">Jetzt abgleichen</MudButton>
+                <MudButton Variant="Variant.Outlined" Size="Size.Small" Color="Color.Error" StartIcon="@Icons.Material.Filled.Delete"
+                           OnClick="Remove">Entfernen</MudButton>
+            </div>
+        </div>
+    </div>
+</MudPaper>
+
+<MudChipSet T="Show" SelectedValue="_show" SelectedValueChanged="v => _show = v" SelectionMode="SelectionMode.SingleSelection" CheckMark="true"
+            Size="Size.Small" Class="mb-2">
+    <MudChip T="Show" Value="Show.All" Text="@($"Alle ({_rows.Count})")" Variant="Variant.Outlined" />
+    <MudChip T="Show" Value="Show.Present" Text="@($"Vorhanden ({Matched})")" Variant="Variant.Outlined" />
+    <MudChip T="Show" Value="Show.Missing" Text="@($"Fehlend ({_rows.Count - Matched})")" Variant="Variant.Outlined" />
+</MudChipSet>
+
+<div class="card-list">
+    @foreach (var row in Visible)
+    {
+        <MudPaper Outlined="true" Class="@($"pa-2 {(row.Track == null ? "spotify-missing" : "")}")">
+            <div class="d-flex align-start" style="gap:4px">
+                <MudText Typo="Typo.caption" Style="width:32px;flex-shrink:0;opacity:.6;padding-top:14px;text-align:right">@(row.Position + 1)</MudText>
+                <SongCard Song="row.Song" />
+                @if (row.Track is { } track)
+                {
+                    <MudIconButton Icon="@Icons.Material.Filled.PlayArrow" Size="Size.Small" OnClick="() => Player.Play(track)" aria-label="Abspielen" />
+                }
+                else
+                {
+                    <MudChip T="string" Size="Size.Small" Variant="Variant.Text" Style="flex-shrink:0">fehlt</MudChip>
+                }
+            </div>
+        </MudPaper>
+    }
+</div>
+
+@code {
+    [Parameter] public int Id { get; set; }
+
+    private enum Show { All, Present, Missing }
+
+    private sealed record Row(int Position, SongInfo Song, LibraryTrack? Track);
+
+    private SpotifyPlaylist? _playlist;
+    private List<Row> _rows = [];
+    private Show _show = Show.All;
+    private bool _missing;
+
+    private int Matched => _rows.Count(r => r.Track != null);
+
+    private IEnumerable<Row> Visible => _show switch
+    {
+        Show.Present => _rows.Where(r => r.Track != null),
+        Show.Missing => _rows.Where(r => r.Track == null),
+        _ => _rows,
+    };
+
+    protected override async Task ReloadAsync()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        _playlist = await db.SpotifyPlaylists.AsNoTracking().Include(p => p.Tracks).FirstOrDefaultAsync(p => p.Id == Id);
+        _missing = _playlist == null;
+        if (_playlist == null) return;
+
+        var matcher = SpotifyMatcher.For(await Catalog.GetAsync());
+        var tracks = (await Library.GetTracksAsync()).ToDictionary(t => t.RelativePath);
+        _rows = _playlist.Tracks.OrderBy(t => t.Position).Select(t =>
+        {
+            // In the library: shown like any library song (and playable); missing: as Spotify lists it, greyed.
+            if (matcher.Match(t) is { } song && tracks.TryGetValue(song.RelativePath, out var track))
+                return new Row(t.Position, SongInfo.From(track), track);
+            return new Row(t.Position, new SongInfo
+            {
+                Title = t.Title, Artist = string.Join(", ", t.Artists), Artists = t.Artists, Album = t.Album,
+                Duration = SongInfo.FormatLength(t.DurationMs / 1000.0), CoverUrl = t.ImageUrl,
+            }, null);
+        }).ToList();
+    }
+
+    private async Task Remove()
+    {
+        var ok = await Dialogs.ShowMessageBoxAsync("Playlist entfernen",
+            $"„{_playlist!.Name}“ wird aus dem Music Manager und aus Symfonium entfernt. Auf Spotify bleibt sie, wie sie ist.",
+            yesText: "Entfernen", cancelText: "Abbrechen");
+        if (ok != true) return;
+        await Sync.RemoveAsync(_playlist.Id);
+        Nav.NavigateTo("playlists");
+    }
+}

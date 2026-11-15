@@ -29,6 +29,10 @@ public static class ServiceCollectionExtensions
         });
 
         services.AddHttpClient<SpotifyClient>(c => c.Timeout = TimeSpan.FromSeconds(20));
+        // One instance: it keeps the login states and the access token.
+        services.AddHttpClient(nameof(SpotifyUserClient), c => c.Timeout = TimeSpan.FromSeconds(30));
+        services.AddSingleton(sp => ActivatorUtilities.CreateInstance<SpotifyUserClient>(sp,
+            sp.GetRequiredService<IHttpClientFactory>().CreateClient(nameof(SpotifyUserClient))));
         services.AddHttpClient<DeezerClient>(c =>
         {
             c.DefaultRequestHeaders.UserAgent.ParseAdd(userAgent);
@@ -73,6 +77,8 @@ public static class ServiceCollectionExtensions
 
         services.AddSingleton<InboxScanner>();
         services.AddHostedService(sp => sp.GetRequiredService<InboxScanner>());
+        services.AddSingleton<SpotifyPlaylistSync>();
+        services.AddHostedService(sp => sp.GetRequiredService<SpotifyPlaylistSync>());
         services.AddSingleton<LibraryIndexer>();
         services.AddHostedService(sp => sp.GetRequiredService<LibraryIndexer>());
         services.AddHostedService<PipelineWorker>();

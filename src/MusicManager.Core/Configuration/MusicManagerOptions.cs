@@ -31,6 +31,12 @@ public sealed class MusicManagerOptions
 
     public string? SpotifyClientSecret { get; set; }
 
+    /// <summary>
+    /// Address Spotify sends the login back to; must be registered with the app in the Spotify dashboard. Empty = worked
+    /// out from the request (<c>https://&lt;host&gt;/spotify/callback</c>).
+    /// </summary>
+    public string? SpotifyRedirectUri { get; set; }
+
     /// <summary>Contact (mail address or URL) sent in the MusicBrainz User-Agent.</summary>
     public string MusicBrainzContact { get; set; } = "https://github.com/welles/music-manager";
 

@@ -130,6 +130,27 @@ public sealed class SubsonicMapper(UserDataSnapshot userData)
         };
     }
 
+    /// <summary>
+    /// A Spotify playlist Music Manager keeps in step: read-only, owner "Spotify" and a comment that says so (the cover also
+    /// carries a Spotify badge); only the tracks that are in the library.
+    /// </summary>
+    public PlaylistDto SpotifyPlaylist(SpotifyPlaylist p, IReadOnlyList<CatalogSong> songs, DateTimeOffset now, bool withEntries) => new()
+    {
+        Id = SpotifyPlaylistIds.Format(p.Id),
+        Name = p.Name,
+        Comment = $"Spotify-Playlist{(p.OwnerName is { Length: > 0 } o ? $" · von {o}" : "")} · {songs.Count} von {p.Tracks.Count} Titeln vorhanden",
+        Owner = "Spotify",
+        Public = false,
+        SongCount = songs.Count,
+        Duration = songs.Sum(s => s.Duration),
+        Created = Iso(p.AddedAt),
+        // Now: which tracks are in the library changes with the library, not only with Spotify.
+        Changed = Iso(now),
+        CoverArt = SpotifyPlaylistIds.Format(p.Id),
+        Readonly = true,
+        Entry = withEntries ? songs.Select(Song).ToList() : null,
+    };
+
     /// <summary>A playlist Music Manager keeps by itself (<see cref="SmartPlaylists"/>): read-only for the client.</summary>
     public PlaylistDto SmartPlaylist(SmartPlaylist p, IReadOnlyList<CatalogSong> songs, DateTimeOffset now, bool withEntries) => new()
     {

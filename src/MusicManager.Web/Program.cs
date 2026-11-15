@@ -101,6 +101,8 @@ app.MapGet("/api/status", async (Microsoft.EntityFrameworkCore.IDbContextFactory
 });
 app.MapAudioEndpoints();
 app.MapSubsonicEndpoints();
+app.MapSpotifyEndpoints();
+app.MapSpotifyCovers();
 app.MapStaticAssets();
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
