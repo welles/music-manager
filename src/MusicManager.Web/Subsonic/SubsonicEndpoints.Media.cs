@@ -102,8 +102,9 @@ public static partial class SubsonicEndpoints
             // The cache gets ffmpeg's output as it is, before an estimated length pads or cuts what the client gets.
             var tee = new CacheTeeStream(entry.Stream, target, r.Aborted, r.Service<ILoggerFactory>().CreateLogger<CacheTeeStream>());
             var complete = await audio.PumpAsync(ffmpeg, path, tee, r.Service<IHostApplicationLifetime>().ApplicationStopping);
-            if (exact != null && !tee.ClientGone) await exact.PadAsync(r.Aborted);
+            // Into the cache first: padding goes to the client only, and its going away then must not cost the entry.
             if (complete && !tee.CacheFailed) await entry.CommitAsync();
+            if (exact != null && !tee.ClientGone) await exact.PadAsync(r.Aborted);
         }, plan.Format.ContentType);
     }
 
