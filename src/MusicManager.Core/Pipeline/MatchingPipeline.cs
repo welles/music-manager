@@ -794,7 +794,7 @@ public sealed partial class MatchingPipeline(
             var replayGain = await audio.MeasureReplayGainAsync(converted, ct);
             AddEvent(file, replayGain != null
                 ? $"Lautstärke gemessen: ReplayGain {replayGain.GainText}"
-                : "Lautstärke nicht messbar (Stille?) – ohne ReplayGain einsortiert", replayGain != null ? EventLevel.Info : EventLevel.Warning);
+                : "Lautstärke nicht messbar – ohne ReplayGain einsortiert", replayGain != null ? EventLevel.Info : EventLevel.Warning);
             return replayGain;
         }
         catch (Exception ex) when (!ct.IsCancellationRequested)

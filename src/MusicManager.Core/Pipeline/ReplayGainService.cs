@@ -8,7 +8,7 @@ namespace MusicManager.Core.Pipeline;
 /// <summary>State of the run that measures the loudness of library songs.</summary>
 /// <param name="Written">Songs that got their ReplayGain tags.</param>
 /// <param name="Skipped">Song files changed on disk since the last scan; left for the next run.</param>
-/// <param name="Failed">Songs that could not be measured (e.g. silence) or written.</param>
+/// <param name="Failed">Songs that could not be measured or written (damaged files); they are tried again next time.</param>
 public sealed record ReplayGainState(bool Running, int Progress, int Total, int Written, int Skipped, int Failed);
 
 /// <summary>

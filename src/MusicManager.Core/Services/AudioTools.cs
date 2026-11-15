@@ -212,7 +212,7 @@ public sealed class AudioTools(IOptions<MusicManagerOptions> options, ILogger<Au
 
     /// <summary>
     /// Measures the loudness of a file (EBU R128 integrated loudness and true peak) and returns it as ReplayGain
-    /// values. Null when ffmpeg cannot measure it (no audio, silence only).
+    /// values (<see cref="Model.ReplayGain.Silence"/> for a silent file). Null when ffmpeg cannot measure it.
     /// </summary>
     public async Task<Model.ReplayGain?> MeasureReplayGainAsync(string path, CancellationToken ct)
     {
@@ -228,13 +228,14 @@ public sealed class AudioTools(IOptions<MusicManagerOptions> options, ILogger<Au
         if (summary < 0) return null;
         var text = ffmpegOutput[summary..];
         var loudness = System.Text.RegularExpressions.Regex.Match(text, @"\bI:\s*(-?[\d.]+) LUFS");
-        var peak = System.Text.RegularExpressions.Regex.Match(text, @"True peak:\s*Peak:\s*(-?[\d.]+) dBFS");
-        if (!loudness.Success || !peak.Success
-            || !double.TryParse(loudness.Groups[1].Value, CultureInfo.InvariantCulture, out var lufs)
-            || !double.TryParse(peak.Groups[1].Value, CultureInfo.InvariantCulture, out var db))
+        var peak = System.Text.RegularExpressions.Regex.Match(text, @"True peak:\s*Peak:\s*(-inf|-?[\d.]+) dBFS");
+        if (!loudness.Success || !peak.Success || !double.TryParse(loudness.Groups[1].Value, CultureInfo.InvariantCulture, out var lufs))
             return null;
-        // -70 LUFS is the filter's floor: silence, nothing to normalize.
-        return lufs <= -70 ? null : Model.ReplayGain.FromMeasurement(lufs, db);
+        // Silence (-70 LUFS is the filter's floor, the peak "-inf"): nothing to level, but measured. It gets the
+        // neutral gain, so the song counts as normalized and is not measured again on every run.
+        if (lufs <= -70 || !double.TryParse(peak.Groups[1].Value, CultureInfo.InvariantCulture, out var db))
+            return Model.ReplayGain.Silence;
+        return Model.ReplayGain.FromMeasurement(lufs, db);
     }
 
     /// <summary>
