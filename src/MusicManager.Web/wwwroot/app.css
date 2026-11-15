@@ -136,9 +136,12 @@
     white-space: nowrap;
 }
 
+/* break-word, not anywhere: a value keeps its word width and the field moves to the next line instead of
+   being squeezed into one letter per line ("The Thund erclap s"); only a single overlong word is broken. */
 .song-field dd {
     margin: 0;
-    overflow-wrap: anywhere;
+    overflow-wrap: break-word;
+    min-width: 0;
 }
 
 /* Dense: "LABEL value" pairs in a row that wraps. */
