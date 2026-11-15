@@ -1,0 +1,79 @@
+@typeparam T
+@* The narrow counterpart of a table: one card per item, optionally under group headers, and a "show more"
+   button instead of a pager (scrolling is easier than paging on a phone). *@
+
+@if (Toolbar != null)
+{
+    <MudPaper Outlined="true" Class="card-list-toolbar">@Toolbar</MudPaper>
+}
+
+<div class="card-list">
+    @if (!Items.Any())
+    {
+        <MudPaper Outlined="true" Class="pa-4 text-center">@(NoItems ?? (RenderFragment)(b => b.AddContent(0, "Keine Einträge.")))</MudPaper>
+    }
+    else
+    {
+        string? group = null;
+        var first = true;
+        foreach (var item in Items.Take(_shown))
+        {
+            if (GroupBy != null)
+            {
+                var key = GroupBy(item);
+                if (first || key != group)
+                {
+                    group = key;
+                    <div class="card-list-group">
+                        @if (GroupHeader != null)
+                        {
+                            @GroupHeader((key, _groupCounts.GetValueOrDefault(key ?? "")))
+                        }
+                        else
+                        {
+                            @key
+                        }
+                    </div>
+                }
+            }
+
+            first = false;
+            @ItemTemplate(item)
+        }
+
+        @if (Items.Count() > _shown)
+        {
+            <MudButton Variant="Variant.Outlined" FullWidth="true" OnClick="() => _shown += PageSize">
+                Weitere @Math.Min(PageSize, Items.Count() - _shown) von @(Items.Count() - _shown) anzeigen
+            </MudButton>
+        }
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public IEnumerable<T> Items { get; set; } = [];
+    [Parameter, EditorRequired] public RenderFragment<T> ItemTemplate { get; set; } = null!;
+
+    /// <summary>Above the cards: search, filters, actions (what the table has in its toolbar).</summary>
+    [Parameter] public RenderFragment? Toolbar { get; set; }
+
+    [Parameter] public RenderFragment? NoItems { get; set; }
+
+    /// <summary>Group key of an item; the items must already be ordered by it.</summary>
+    [Parameter] public Func<T, string?>? GroupBy { get; set; }
+
+    /// <summary>Header of a group: its key and the number of items in it.</summary>
+    [Parameter] public RenderFragment<(string? Key, int Count)>? GroupHeader { get; set; }
+
+    [Parameter] public int PageSize { get; set; } = 30;
+
+    private int _shown;
+    private Dictionary<string, int> _groupCounts = [];
+
+    protected override void OnInitialized() => _shown = PageSize;
+
+    protected override void OnParametersSet()
+    {
+        if (GroupBy != null) _groupCounts = Items.GroupBy(i => GroupBy(i) ?? "").ToDictionary(g => g.Key, g => g.Count());
+    }
+}

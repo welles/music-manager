@@ -1,0 +1,12 @@
+@* Lists as a table where there is room (desktop) and as cards below that (tablet, phone): a table with three or
+   four song columns needs about 1280 px. Only one of the two is rendered. *@
+
+<MudHidden Breakpoint="WideFrom" Invert="true">@Wide</MudHidden>
+<MudHidden Breakpoint="WideFrom">@Narrow</MudHidden>
+
+@code {
+    public const Breakpoint WideFrom = Breakpoint.LgAndUp;
+
+    [Parameter, EditorRequired] public RenderFragment Wide { get; set; } = null!;
+    [Parameter, EditorRequired] public RenderFragment Narrow { get; set; } = null!;
+}

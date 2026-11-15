@@ -318,3 +318,89 @@
 @keyframes reconnect-spin {
     to { transform: rotate(360deg); }
 }
+
+/* ---- Card lists: the narrow form of the tables (tablet, phone), see ListLayout / CardList. ---- */
+.card-list-toolbar {
+    padding: 8px 12px;
+    margin-bottom: 12px;
+}
+
+.card-list {
+    display: grid;
+    gap: 10px;
+}
+
+.card-list-group {
+    margin-top: 8px;
+    font-size: 0.8125rem;
+    font-weight: 500;
+    opacity: 0.75;
+    overflow-wrap: anywhere;
+}
+
+.file-card,
+.track-card {
+    padding: 10px 12px;
+    min-width: 0;
+}
+
+.file-card-selected,
+.track-card-selected {
+    border-color: var(--mud-palette-primary) !important;
+    box-shadow: inset 3px 0 0 var(--mud-palette-primary);
+}
+
+.file-card-head,
+.track-card-head {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 4px 6px;
+    margin-bottom: 8px;
+}
+
+.file-card-time {
+    margin-left: auto;
+    font-size: 0.75rem;
+    opacity: 0.6;
+    white-space: nowrap;
+}
+
+.file-card-original,
+.track-card-meta {
+    margin-top: 6px;
+    font-size: 0.8125rem;
+    opacity: 0.75;
+    overflow-wrap: anywhere;
+}
+
+.file-card-label {
+    font-size: 0.6875rem;
+    font-weight: 500;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    opacity: 0.8;
+    margin-right: 5px;
+}
+
+/* In a card a long path is one line; the full path is on the detail page. */
+.file-card .song-path,
+.track-card .song-path {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.track-card .song {
+    flex: 1 1 auto;
+}
+
+.track-card .chip-wrap {
+    justify-content: flex-start;
+}
+
+.file-card-candidate {
+    margin-top: 10px;
+    padding-top: 8px;
+    border-top: 1px solid var(--mud-palette-lines-default);
+}
