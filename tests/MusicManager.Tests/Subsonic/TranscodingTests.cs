@@ -297,4 +297,29 @@ public class TranscodingTests
         var later = await client.GetByteArrayAsync(Url("tr-1", "maxBitRate=64&timeOffset=6"));
         Assert.InRange(await DecodedSecondsAsync(app, later, "mp3"), 3.5, 4.5);
     }
+
+    [Fact]
+    public void AJumpIntoTheOriginalKeepsItsFormatAndBitrate()
+    {
+        Assert.Equal(new TranscodePlan(Transcoding.Aac, 256), Transcoding.ForOffset("m4a", 256));
+        Assert.Equal(new TranscodePlan(Transcoding.Mp3, Transcoding.MaxKbps), Transcoding.ForOffset("flac", 900));
+        Assert.Equal(new TranscodePlan(Transcoding.Opus, 128), Transcoding.ForOffset("opus", null));
+    }
+
+    [Fact]
+    public async Task TimeOffsetAlsoWorksWithoutTranscoding()
+    {
+        if (!await FfmpegTestTools.AvailableAsync()) return;
+        var (app, id, path) = await LibraryAsync();
+        using var _app = app;
+        var client = app.CreateClient();
+
+        // A client that knows "transcodeOffset" seeks this way even in the original.
+        var response = await client.GetAsync(Url(id, "timeOffset=6"));
+
+        Assert.Equal("audio/aac", response.Content.Headers.ContentType?.MediaType);
+        Assert.InRange(await DecodedSecondsAsync(app, await response.Content.ReadAsByteArrayAsync(), "aac"), 3.5, 4.5);
+        // raw stays the untouched file, offset or not.
+        Assert.Equal(await File.ReadAllBytesAsync(path), await client.GetByteArrayAsync(Url(id, "format=raw&timeOffset=6")));
+    }
 }

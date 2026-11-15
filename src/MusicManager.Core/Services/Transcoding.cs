@@ -54,6 +54,22 @@ public static class Transcoding
         return new TranscodePlan(target, kbps);
     }
 
+    /// <summary>
+    /// For a jump into a song the client wants as it is (<c>timeOffset</c> without a lower bitrate or another format): a
+    /// stream from that point in the file's own format and bitrate. A client that knows "transcodeOffset" may seek this way
+    /// in every stream, as it cannot tell whether it gets the original.
+    /// </summary>
+    public static TranscodePlan ForOffset(string sourceSuffix, int? sourceKbps)
+    {
+        var format = sourceSuffix.TrimStart('.').ToLowerInvariant() switch
+        {
+            "m4a" or "aac" or "mp4" => Aac,
+            "opus" => Opus,
+            _ => Mp3,
+        };
+        return new TranscodePlan(format, Math.Clamp(sourceKbps ?? format.DefaultKbps, MinKbps, MaxKbps));
+    }
+
     private static bool IsSame(TranscodeFormat format, string suffix)
     {
         suffix = suffix.TrimStart('.').ToLowerInvariant();

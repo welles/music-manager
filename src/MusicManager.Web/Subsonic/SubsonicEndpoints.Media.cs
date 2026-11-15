@@ -26,8 +26,10 @@ public static partial class SubsonicEndpoints
         var song = catalog.Song(r.Require("id")) ?? throw SubsonicException.NotFound("Song");
         var path = r.Service<Storage>().LibraryPath(song.RelativePath);
         if (!File.Exists(path)) throw SubsonicException.NotFound("File");
-        if (!download && Transcoding.Decide(song.Suffix, song.BitrateKbps, r.Get("format"), r.GetInt("maxBitRate")) is { } plan
-            && Transcoded(r, path, song, plan) is { } transcoded)
+        // A jump into the song (timeOffset) needs a stream from that point even when the client wants the original.
+        var plan = Transcoding.Decide(song.Suffix, song.BitrateKbps, r.Get("format"), r.GetInt("maxBitRate"))
+                   ?? (r.GetInt("timeOffset") is > 0 && !IsRaw(r) ? Transcoding.ForOffset(song.Suffix, song.BitrateKbps) : null);
+        if (!download && plan != null && Transcoded(r, path, song, plan) is { } transcoded)
         {
             var offset = r.GetInt("timeOffset") is > 0 and var o ? $" from {o} s" : "";
             StreamMeter.Attach(r, song, $"{plan.Format.Name} {plan.Kbps}k{offset}");
@@ -37,6 +39,8 @@ public static partial class SubsonicEndpoints
         StreamMeter.Attach(r, song, download ? "download" : $"original {song.Suffix}{(song.BitrateKbps is { } k ? $" {k}k" : "")}");
         return Results.File(path, SubsonicMapper.ContentType(path), download ? Path.GetFileName(path) : null, enableRangeProcessing: true);
     }
+
+    private static bool IsRaw(SubsonicRequest r) => string.Equals(r.Get("format")?.Trim(), "raw", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
     /// The song encoded while it is sent. No ranges (the size is not known in advance); a jump into the song comes as
