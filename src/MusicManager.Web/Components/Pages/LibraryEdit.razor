@@ -15,9 +15,27 @@
     Bearbeitete Dateien gelten danach als manuell getaggt und werden beim Neu-Taggen nicht mehr aus MusicBrainz überschrieben.
 </MudText>
 
-@if (_rows.Count == 0)
+@if (!_loaded)
 {
     <MudProgressLinear Indeterminate="true" />
+    return;
+}
+
+@if (_missing.Count > 0)
+{
+    @* Moved or deleted outside Music Manager since the last index run: nothing to read, so nothing to edit. *@
+    <MudAlert Severity="Severity.Warning" Class="mb-3">
+        @_missing.Count Datei(en) nicht mehr vorhanden, werden übersprungen:
+        @foreach (var path in _missing)
+        {
+            <div class="mono" style="overflow-wrap:anywhere">@path</div>
+        }
+    </MudAlert>
+}
+
+@if (_rows.Count == 0)
+{
+    <MudText>Keine der ausgewählten Dateien ist mehr vorhanden.</MudText>
     return;
 }
 
@@ -65,6 +83,8 @@
     }
 
     private List<Row> _rows = [];
+    private List<string> _missing = [];
+    private bool _loaded;
     private string? _album, _albumArtists, _date, _genres;
     private string? _initialAlbum, _initialAlbumArtists, _initialDate, _initialGenres;
 
@@ -73,7 +93,8 @@
         var ids = (Ids ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries).Select(int.Parse).ToList();
         await using var db = await DbFactory.CreateDbContextAsync();
         var entries = await db.Library.AsNoTracking().Where(e => ids.Contains(e.Id)).OrderBy(e => e.RelativePath).ToListAsync();
-        _rows = entries.Select(e =>
+        _missing = entries.Where(e => !File.Exists(Storage.LibraryPath(e.RelativePath))).Select(e => e.RelativePath).ToList();
+        _rows = entries.Where(e => !_missing.Contains(e.RelativePath)).Select(e =>
         {
             var tags = TagIo.Read(Storage.LibraryPath(e.RelativePath));
             return new Row
@@ -87,6 +108,7 @@
         _albumArtists = _initialAlbumArtists = Common(r => Join(r.Original.AlbumArtists.Count > 0 ? r.Original.AlbumArtists : r.Original.AlbumArtist == null ? [] : [r.Original.AlbumArtist]));
         _date = _initialDate = Common(r => r.Original.Date);
         _genres = _initialGenres = Common(r => Join(r.Original.Genres));
+        _loaded = true;
     }
 
     /// <summary>The value if all files share it, otherwise null (shown as "verschiedene").</summary>
