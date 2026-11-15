@@ -9,9 +9,14 @@ namespace MusicManager.Core.Services;
 /// <summary>
 /// Finished transcodes under <c>&lt;data&gt;/cache/transcodes</c>. The first request of a song in a format is encoded while
 /// it is sent and written here at the same time; later requests get the file as it is: right away, with its length and
-/// with ranges (players can tell the duration at once, e.g. for Symfonium's waveform, and seek by bytes). The key holds
-/// the source file's size and time, so a retagged or replaced song is encoded again. The folder is kept below
-/// <see cref="MusicManagerOptions.TranscodeCacheMb"/> by removing what was used longest ago; it can be deleted any time.
+/// with ranges (players can tell the duration at once, e.g. for Symfonium's waveform, and seek by bytes).
+/// <para>
+/// File names are <c>&lt;source&gt;-&lt;version&gt;-&lt;format&gt;.&lt;suffix&gt;</c>: a hash of the original's path, a hash
+/// of its size and time, and format plus bitrate. So the entries of a song can be found by its path: when the original
+/// changes, moves or goes, <see cref="Forget"/> (called by the library index) removes them, and writing a new version
+/// removes the old ones too. The folder is kept below <see cref="MusicManagerOptions.TranscodeCacheMb"/> by removing
+/// what was used longest ago; it can be deleted any time.
+/// </para>
 /// </summary>
 public sealed class TranscodeCache(IOptions<MusicManagerOptions> options, ILogger<TranscodeCache> logger)
 {
@@ -66,9 +71,43 @@ public sealed class TranscodeCache(IOptions<MusicManagerOptions> options, ILogge
     {
         var info = new FileInfo(source);
         if (!info.Exists) return null;
-        var key = $"{info.FullName}|{info.Length}|{info.LastWriteTimeUtc.Ticks}|{plan.Format.Name}|{plan.Kbps}";
-        var hash = Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(key)))[..32];
-        return Path.Combine(Root, $"{hash}.{plan.Format.Suffix}");
+        return Path.Combine(Root, $"{SourcePrefix(source)}{Version(info)}-{plan.Format.Name}{plan.Kbps}.{plan.Format.Suffix}");
+    }
+
+    /// <summary>The start of the names of all entries of one original, whatever its version or the format.</summary>
+    private static string SourcePrefix(string source) => $"{Hash(Path.GetFullPath(source))}-";
+
+    private static string Version(FileInfo info) => Hash($"{info.Length}|{info.LastWriteTimeUtc.Ticks}");
+
+    private static string Hash(string value) => Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(value)))[..16];
+
+    /// <summary>
+    /// Removes every entry of <paramref name="source"/> (all formats and versions): the original was changed, replaced,
+    /// moved or deleted, so none of them fits any more. Returns the number of removed files.
+    /// </summary>
+    public int Forget(string source) => RemoveEntries(SourcePrefix(source), keepVersion: null);
+
+    private int RemoveEntries(string prefix, string? keepVersion)
+    {
+        if (!Directory.Exists(Root)) return 0;
+        var removed = 0;
+        foreach (var file in new DirectoryInfo(Root).EnumerateFiles($"{prefix}*"))
+        {
+            // Unfinished transcodes are not touched here: their writer drops or commits them itself.
+            if (file.Name.EndsWith(".tmp", StringComparison.Ordinal)) continue;
+            if (keepVersion != null && file.Name.AsSpan(prefix.Length).StartsWith(keepVersion, StringComparison.Ordinal)) continue;
+            if (TryDelete(file)) removed++;
+        }
+
+        return removed;
+    }
+
+    /// <summary>After a new version of <paramref name="path"/> was written: older versions of the same original go.</summary>
+    private void RemoveOlderVersions(string path)
+    {
+        var name = Path.GetFileName(path);
+        var parts = name.Split('-', 3);
+        if (parts.Length == 3) RemoveEntries($"{parts[0]}-", keepVersion: parts[1]);
     }
 
     /// <summary>
@@ -93,15 +132,17 @@ public sealed class TranscodeCache(IOptions<MusicManagerOptions> options, ILogge
         }
     }
 
-    private void TryDelete(FileInfo file)
+    private bool TryDelete(FileInfo file)
     {
         try
         {
             file.Delete();
+            return true;
         }
         catch (IOException ex)
         {
             logger.LogDebug(ex, "Could not remove {File} from the transcode cache", file.Name);
+            return false;
         }
     }
 
@@ -118,6 +159,7 @@ public sealed class TranscodeCache(IOptions<MusicManagerOptions> options, ILogge
             _done = true;
             await stream.DisposeAsync();
             File.Move(tmp, path, overwrite: true);
+            cache.RemoveOlderVersions(path);
             cache.Trim();
         }
 

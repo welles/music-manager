@@ -151,8 +151,9 @@ Finished transcodes are kept under `<data>/cache/transcodes` (limit `MusicManage
 default 2 GB, about 500 songs at 128 kbit/s; what was used longest ago goes first). The first
 request of a song in a format is encoded while it is sent and stored at the same time; later ones
 get the file right away, with its length and with ranges, so players know the duration at once
-(e.g. Symfonium's waveform). A changed song is encoded again; jumps into a song (`timeOffset`) are
-not cached. The folder can be deleted at any time.
+(e.g. Symfonium's waveform). When a song's original changes, is replaced, moved or deleted, its
+cached transcodes are removed (the library index notices it) and it is encoded again on the next
+request; jumps into a song (`timeOffset`) are not cached. The folder can be deleted at any time.
 
 Every stream and download writes one log line (category `MusicManager.Web.Subsonic.Stream`):
 song, what was sent (original, range, transcoded format and bitrate), size, time, rate, when the
