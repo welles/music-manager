@@ -27,6 +27,8 @@ public class ImportRobustnessTests
         Assert.Equal("welcome to the black parade", TextUtil.Normalize("Welcome to the Black Parade 🖤"));
 
     // A damaged FLAC: ffmpeg stopped at the damaged spot, exited with 0, and the song was filed cut short.
+    private const string DecodeError = "[flac @ 0x1] invalid residual\n[flac @ 0x1] decode_frame() failed";
+
     [Theory]
     [InlineData(345.6, 27.3, true)]
     [InlineData(278.9, 131.2, true)]
@@ -37,5 +39,10 @@ public class ImportRobustnessTests
     [InlineData(null, 10.0, false)] // source length unknown
     [InlineData(200.0, 205.0, false)] // longer is not truncated
     public void TruncatedConversionIsDetected(double? source, double? converted, bool truncated) =>
-        Assert.Equal(truncated, AudioTools.IsTruncated(source, converted));
+        Assert.Equal(truncated, AudioTools.IsTruncated(source, converted, DecodeError));
+
+    // VBR MP3 without Xing header: ffprobe estimated 35.7 s for a 20 s file, ffmpeg decoded it without any error.
+    [Fact]
+    public void EstimatedSourceLengthWithoutDecodeErrorsIsNotTruncated() =>
+        Assert.False(AudioTools.IsTruncated(35.7, 20.0, ""));
 }
