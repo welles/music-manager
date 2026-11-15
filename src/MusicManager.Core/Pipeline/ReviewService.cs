@@ -205,7 +205,7 @@ public sealed class ReviewService(
                 }
 
                 var source = MatchingPipeline.SourceName(match.Source);
-                notifier.SetActivity($"Tags aus {source} übernehmen ({i + 1}/{fileIds.Count}): {match.Title}");
+                notifier.SetBackgroundActivity($"Tags aus {source} übernehmen ({i + 1}/{fileIds.Count}): {match.Title}");
                 try
                 {
                     await pipeline.BuildManualTagsAsync(file, ExternalSourceService.ToTagSet(match), ct);
@@ -233,7 +233,7 @@ public sealed class ReviewService(
         }
         finally
         {
-            notifier.SetActivity(null);
+            notifier.SetBackgroundActivity(null);
         }
 
         return problems;
