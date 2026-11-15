@@ -163,6 +163,18 @@ first byte went out and whether the client skipped. The time is taken where the 
 the Cloudflare tunnel, so for songs of several MB it shows how fast the way to the phone is, e.g.
 `docker logs music_manager 2>&1 | grep "Stream "`. URLs are not logged, they carry the API key.
 
+Playlists kept by Music Manager come first in every client and are read-only there (OpenSubsonic
+`readonly`); they are worked out on every request:
+
+- **Alle** – every song, in a new random order each time the playlist is loaded (`validUntil` tells
+  clients the content is only valid right now). A player keeps the order once playback started.
+- **Noch nie gespielt** – songs without a single play reported by a client (`scrobble` with
+  `submission=true`); songs that were only started and skipped stay in. Shuffled like "Alle".
+- **Favoriten** – starred songs, the most recently starred first.
+
+Each load of one of them writes a log line (`Smart playlist … loaded by …`). Playlists created in a
+client stay editable as before.
+
 Limits:
 
 - JSON only (no XML), API key authentication only (no username/password or token auth).
