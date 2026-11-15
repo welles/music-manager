@@ -415,4 +415,21 @@ public sealed class SpotifyPlaylistTests : IDisposable
         Assert.Contains("Lieblingssongs", playlist.SyncError);
         Assert.False((await Get<SpotifyUserClient>().AccountAsync())!.CanReadLikedSongs);
     }
+
+    [Fact]
+    public async Task LikedSongsCountForThePlaylistOfMissingTracksLikeAnyOther()
+    {
+        await ConnectAsync();
+        await SeedLibraryAsync();
+        var client = Get<SpotifyUserClient>();
+        var sync = Get<SpotifyPlaylistSync>();
+        await sync.AddAsync((await client.MyPlaylistsAsync())[0]); // "Der Abspül-Blues": "Never Owned" (s2) is missing
+        await sync.AddAsync(await client.LikedSongsAsync()); // liked songs: "Liked One" (l1) is missing
+        await client.SetMissingPlaylistAsync(true);
+
+        await sync.RunAsync(default);
+
+        // Both missing tracks, by playlist name ("Der Abspül-Blues" before "Lieblingssongs"), each once.
+        Assert.Equal(["s2", "l1"], _spotify.Missing);
+    }
 }
