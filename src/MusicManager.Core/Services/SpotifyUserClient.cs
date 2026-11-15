@@ -34,8 +34,16 @@ public sealed class SpotifyException(HttpStatusCode? status, string message) : E
 public sealed class SpotifyUserClient(HttpClient http, IOptions<MusicManagerOptions> options, IDbContextFactory<AppDbContext> dbFactory,
     ILogger<SpotifyUserClient> logger)
 {
-    /// <summary>Reading own and collaborative playlists, writing private ones (the playlist of missing tracks).</summary>
-    public const string Scopes = "playlist-read-private playlist-read-collaborative playlist-modify-private";
+    /// <summary>
+    /// Reading own and collaborative playlists and the liked songs, writing private playlists (the playlist of missing
+    /// tracks).
+    /// </summary>
+    public const string Scopes = "playlist-read-private playlist-read-collaborative playlist-modify-private user-library-read";
+
+    /// <summary>Stands for the liked songs ("Lieblingssongs"), which Spotify keeps as saved tracks, not as a playlist.</summary>
+    public const string LikedSongsId = "liked-songs";
+
+    public const string LikedSongsName = "Lieblingssongs";
 
     // Overridable in tests.
     internal string AccountsBase { get; set; } = "https://accounts.spotify.com";
@@ -130,6 +138,31 @@ public sealed class SpotifyUserClient(HttpClient http, IOptions<MusicManagerOpti
     {
         var result = new List<SpotifyTrackInfo>();
         string? url = $"{ApiBase}/playlists/{Uri.EscapeDataString(id)}/items?limit=100";
+        while (url != null)
+        {
+            using var page = await GetAsync(url, ct);
+            result.AddRange(ParseTracks(page.RootElement));
+            url = Str(page.RootElement, "next");
+        }
+
+        return result;
+    }
+
+    /// <summary>The liked songs as a playlist entry (for the list to add from); <see cref="SpotifyPlaylistInfo.TrackCount"/> is their number.</summary>
+    public async Task<SpotifyPlaylistInfo> LikedSongsAsync(CancellationToken ct = default)
+    {
+        var account = await AccountAsync(ct);
+        using var doc = await GetAsync($"{ApiBase}/me/tracks?limit=1", ct);
+        var total = doc.RootElement.TryGetProperty("total", out var t) && t.TryGetInt32(out var n) ? n : 0;
+        return new SpotifyPlaylistInfo(LikedSongsId, LikedSongsName, "Deine Lieblingssongs auf Spotify.", account?.UserId, account?.DisplayName,
+            false, null, null, total);
+    }
+
+    /// <summary>All liked songs, the most recently liked first (as Spotify shows them).</summary>
+    public async Task<List<SpotifyTrackInfo>> LikedTracksAsync(CancellationToken ct = default)
+    {
+        var result = new List<SpotifyTrackInfo>();
+        string? url = $"{ApiBase}/me/tracks?limit=50";
         while (url != null)
         {
             using var page = await GetAsync(url, ct);

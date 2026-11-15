@@ -110,16 +110,23 @@ else if (_account == null)
         }
         else
         {
+            @if (!_account!.CanReadLikedSongs)
+            {
+                <MudAlert Severity="Severity.Info" Dense="true" Class="mb-2">
+                    Für deine Lieblingssongs braucht der Music Manager eine neue Erlaubnis.
+                    <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Primary" OnClick="Connect">Neu mit Spotify verbinden</MudButton>
+                </MudAlert>
+            }
             <MudTextField @bind-Value="_filter" Placeholder="Suchen" Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"
                           Immediate="true" Clearable="true" Class="mt-0 mb-2" />
             <div class="card-list">
                 @foreach (var p in _available.Where(p => p.Id != _account!.MissingPlaylistId
                                                           && (string.IsNullOrWhiteSpace(_filter) || p.Name.Contains(_filter, StringComparison.OrdinalIgnoreCase))))
                 {
-                    var readable = SpotifyPlaylistSync.Readable(p, _account!.UserId);
+                    var readable = p.Id == SpotifyUserClient.LikedSongsId || SpotifyPlaylistSync.Readable(p, _account!.UserId);
                     var added = _playlists.Any(x => x.Playlist.SpotifyId == p.Id);
                     <div class="d-flex align-center" style="gap:12px; @(readable ? "" : "opacity:.55")">
-                        <img src="@(p.ImageUrl ?? SongCard.Placeholder)" alt="" width="48" height="48" class="rounded" style="object-fit:cover;flex-shrink:0" />
+                        <img src="@(p.Id == SpotifyUserClient.LikedSongsId ? "playlist-covers/spotify-liked.png" : p.ImageUrl ?? SongCard.Placeholder)" alt="" width="48" height="48" class="rounded" style="object-fit:cover;flex-shrink:0" />
                         <div style="min-width:0;flex:1">
                             <div class="song-title">@p.Name</div>
                             <MudText Typo="Typo.caption">
@@ -210,7 +217,10 @@ else if (_account == null)
         if (!_adding || _available != null) return;
         try
         {
-            _available = await Spotify.MyPlaylistsAsync();
+            var playlists = await Spotify.MyPlaylistsAsync();
+            // The liked songs are no playlist on Spotify: offered first when the login allows reading them.
+            if (_account!.CanReadLikedSongs) playlists.Insert(0, await Spotify.LikedSongsAsync());
+            _available = playlists;
         }
         catch (Exception ex) when (ex is SpotifyException or HttpRequestException or TaskCanceledException)
         {

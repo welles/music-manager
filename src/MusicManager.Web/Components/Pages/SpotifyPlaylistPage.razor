@@ -49,7 +49,9 @@
             }
             <div class="d-flex flex-wrap mt-2" style="gap:8px">
                 <MudButton Variant="Variant.Outlined" Size="Size.Small" StartIcon="@Icons.Material.Filled.OpenInNew"
-                           Href="@($"https://open.spotify.com/playlist/{_playlist.SpotifyId}")" Target="_blank">In Spotify öffnen</MudButton>
+                           Href="@(_playlist.SpotifyId == MusicManager.Core.Services.SpotifyUserClient.LikedSongsId
+                                       ? "https://open.spotify.com/collection/tracks"
+                                       : $"https://open.spotify.com/playlist/{_playlist.SpotifyId}")" Target="_blank">In Spotify öffnen</MudButton>
                 <MudButton Variant="Variant.Outlined" Size="Size.Small" StartIcon="@Icons.Material.Filled.Sync" Disabled="Sync.State.Running"
                            OnClick="() => Sync.Request()">Jetzt abgleichen</MudButton>
                 <MudButton Variant="Variant.Outlined" Size="Size.Small" Color="Color.Error" StartIcon="@Icons.Material.Filled.Delete"
