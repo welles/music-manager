@@ -19,6 +19,8 @@ public static partial class SubsonicEndpoints
         {
             new { name = "apiKeyAuthentication", versions = new[] { 1 } },
             new { name = "formPost", versions = new[] { 1 } },
+            // stream: timeOffset also for transcoded audio (seeking in a stream that has no ranges).
+            new { name = "transcodeOffset", versions = new[] { 1 } },
         })));
 
         Add("getMusicFolders", _ => Task.FromResult(Ok("musicFolders", new

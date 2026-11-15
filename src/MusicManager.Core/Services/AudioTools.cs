@@ -121,6 +121,65 @@ public sealed class AudioTools(IOptions<MusicManagerOptions> options, ILogger<Au
     }
 
     /// <summary>
+    /// Starts encoding <paramref name="input"/> on the fly (see <see cref="PumpAsync"/>). Null when ffmpeg cannot be
+    /// started at all, so the caller can still serve the original file.
+    /// </summary>
+    public Process? StartTranscode(string input, TranscodePlan plan, int offsetSeconds)
+    {
+        var psi = new ProcessStartInfo(_o.FfmpegPath)
+        {
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true,
+        };
+        foreach (var a in Transcoding.Arguments(input, plan, offsetSeconds)) psi.ArgumentList.Add(a);
+        try
+        {
+            return Process.Start(psi);
+        }
+        catch (System.ComponentModel.Win32Exception ex)
+        {
+            logger.LogWarning(ex, "ffmpeg could not be started for transcoding");
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Copies the encoder's output to <paramref name="output"/> while it runs, so the first bytes go out within
+    /// milliseconds. Stops ffmpeg when the client goes away (<paramref name="ct"/>). Returns the bytes written.
+    /// </summary>
+    public async Task<long> PumpAsync(Process ffmpeg, string input, Stream output, CancellationToken ct)
+    {
+        using var p = ffmpeg;
+        // Read stderr alongside, or a chatty ffmpeg blocks once the pipe is full.
+        var stderr = p.StandardError.ReadToEndAsync(CancellationToken.None);
+        long written = 0;
+        try
+        {
+            var buffer = new byte[64 * 1024];
+            var source = p.StandardOutput.BaseStream;
+            int read;
+            while ((read = await source.ReadAsync(buffer, ct)) > 0)
+            {
+                await output.WriteAsync(buffer.AsMemory(0, read), ct);
+                written += read;
+            }
+
+            await p.WaitForExitAsync(ct);
+        }
+        catch (Exception) when (!p.HasExited)
+        {
+            // Client gone (skipped to the next song) or the write failed: no need to encode any further.
+            try { p.Kill(true); } catch { /* ignored */ }
+            throw;
+        }
+
+        if (p.ExitCode != 0) logger.LogWarning("Transcoding {Input} failed: {Error}", input, (await stderr).Trim());
+        return written;
+    }
+
+    /// <summary>
     /// Converts any input to M4A/AAC. AAC streams are only remuxed (no re-encoding);
     /// everything else is encoded with the native AAC encoder. The moov atom is moved to
     /// the front for streaming. Metadata and pictures are dropped, tags are written afterwards.
