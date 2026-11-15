@@ -222,9 +222,10 @@ public sealed class ReviewService(
                     await db.SaveChangesAsync(ct);
                     queue.Enqueue(new WorkItem(WorkKind.WriteFile, file.Id));
                 }
-                catch (Exception e) when (e is not OperationCanceledException)
+                catch (Exception e) when (!ct.IsCancellationRequested)
                 {
-                    // One failing file must not stop (and, before, discard) the rest.
+                    // One failing file must not stop (and, before, discard) the rest – an HTTP timeout
+                    // (TaskCanceledException) included; only a real cancellation ends the loop.
                     problems.Add($"{file.FileName}: {e.Message}");
                 }
 
