@@ -100,51 +100,13 @@ public static partial class SubsonicEndpoints
             // Into the cache as well: the encode runs to the end even when the client goes away early (a skip, a
             // cancelled pre-cache), so the next request finds the whole song. Only a server shutdown stops it.
             // The cache gets ffmpeg's output as it is, before an estimated length pads or cuts what the client gets.
-            var tee = new TeeStream(entry.Stream, target, r.Aborted);
+            var tee = new CacheTeeStream(entry.Stream, target, r.Aborted, r.Service<ILoggerFactory>().CreateLogger<CacheTeeStream>());
             var complete = await audio.PumpAsync(ffmpeg, path, tee, r.Service<IHostApplicationLifetime>().ApplicationStopping);
             if (exact != null && !tee.ClientGone) await exact.PadAsync(r.Aborted);
-            if (complete) await entry.CommitAsync();
+            if (complete && !tee.CacheFailed) await entry.CommitAsync();
         }, plan.Format.ContentType);
     }
 
-    /// <summary>
-    /// Writes everything to the cache file first, then to the client. Once the client is gone, the rest only goes to
-    /// the file: a failing client write ends nothing but its own part.
-    /// </summary>
-    private sealed class TeeStream(Stream file, Stream client, CancellationToken clientAborted) : Stream
-    {
-        public bool ClientGone { get; private set; }
-
-        public override async ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken ct = default)
-        {
-            await file.WriteAsync(buffer, ct);
-            if (ClientGone) return;
-            try
-            {
-                await client.WriteAsync(buffer, clientAborted);
-            }
-            catch (Exception) when (!ct.IsCancellationRequested)
-            {
-                // Connection closed or reset (OperationCanceledException, IOException …): the cache still wants the rest.
-                ClientGone = true;
-            }
-        }
-
-        public override Task WriteAsync(byte[] buffer, int offset, int count, CancellationToken ct) =>
-            WriteAsync(buffer.AsMemory(offset, count), ct).AsTask();
-
-        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
-        public override void Flush() => client.Flush();
-        public override Task FlushAsync(CancellationToken ct) => client.FlushAsync(ct);
-        public override int Read(byte[] buffer, int offset, int count) => throw new NotSupportedException();
-        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
-        public override void SetLength(long value) => throw new NotSupportedException();
-        public override bool CanRead => false;
-        public override bool CanSeek => false;
-        public override bool CanWrite => true;
-        public override long Length => throw new NotSupportedException();
-        public override long Position { get => throw new NotSupportedException(); set => throw new NotSupportedException(); }
-    }
 
     private static void SetTranscodedHeaders(SubsonicRequest r, long? length)
     {
