@@ -55,6 +55,7 @@ public sealed class SpotifyPlaylistTests : IDisposable
         public int Created;
         public int Writes;
         public List<string>? Missing;
+        public bool MissingFollowed = true;
 
         private static object Track(string field, string id, string title, string artist, int ms, string? isrc) => new Dictionary<string, object>
         {
@@ -76,8 +77,7 @@ public sealed class SpotifyPlaylistTests : IDisposable
             {
                 ("accounts.spotify.com", "/api/token") => Json(new { access_token = "access", token_type = "Bearer", expires_in = 3600, refresh_token = "refresh-1", scope = Scope }),
                 (_, "/v1/me") => """{"id":"me","display_name":"Nico"}""",
-                (_, "/v1/me/playlists") =>
-                    """{"items":[{"id":"mine","name":"Der Abspül-Blues","owner":{"id":"me","display_name":"Nico"},"collaborative":false,"images":[],"items":{"total":3}},{"id":"theirs","name":"Top Hits","owner":{"id":"spotify","display_name":"Spotify"},"collaborative":false,"images":[],"tracks":{"total":50}}],"next":null}""",
+                (_, "/v1/me/playlists") => MyPlaylists(),
                 (_, "/v1/playlists/mine") => Json(new
                 {
                     id = "mine", name = "Der Abspül-Blues", description = "Zum &amp; Spülen", owner = new { id = "me", display_name = "Nico" },
@@ -112,6 +112,7 @@ public sealed class SpotifyPlaylistTests : IDisposable
             {
                 Created++;
                 Missing = [];
+                MissingFollowed = true;
                 return Task.FromResult(new HttpResponseMessage(HttpStatusCode.Created) { Content = new StringContent("""{"id":"missing"}""") });
             }
 
@@ -140,6 +141,15 @@ public sealed class SpotifyPlaylistTests : IDisposable
             return Task.FromResult(json == null
                 ? new HttpResponseMessage(HttpStatusCode.NotFound) { Content = new StringContent("""{"error":{"status":404,"message":"Not found"}}""") }
                 : new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(json, Encoding.UTF8, "application/json") });
+
+            string MyPlaylists()
+            {
+                var mine = """{"id":"mine","name":"Der Abspül-Blues","owner":{"id":"me","display_name":"Nico"},"collaborative":false,"images":[],"items":{"total":3}}""";
+                var theirs = """{"id":"theirs","name":"Top Hits","owner":{"id":"spotify","display_name":"Spotify"},"collaborative":false,"images":[],"tracks":{"total":50}}""";
+                // The playlist of missing tracks while the owner still follows it.
+                var missing = Missing != null && MissingFollowed ? """,{"id":"missing","name":"Fehlt im Music Manager","owner":{"id":"me"},"collaborative":false,"images":[]}""" : "";
+                return $$"""{"items":[{{mine}},{{theirs}}{{missing}}],"next":null}""";
+            }
 
             string Page1()
             {
@@ -326,6 +336,12 @@ public sealed class SpotifyPlaylistTests : IDisposable
         await sync.RunAsync(default);
         Assert.Equal(writes, _spotify.Writes); // unchanged: nothing written
         Assert.Equal(1, _spotify.Created); // and not created again
+
+        // "Deleted" in Spotify = unfollowed (the playlist itself still answers): made anew.
+        _spotify.MissingFollowed = false;
+        await sync.RunAsync(default);
+        Assert.Equal(2, _spotify.Created);
+        Assert.Equal(["s2"], _spotify.Missing);
 
         // The song arrives in the library: it leaves the playlist.
         // Into this app's index (_base is another instance on the same database, its catalog would not hear of it).
