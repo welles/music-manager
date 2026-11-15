@@ -36,13 +36,14 @@ public class TranscodeCacheTests
     private static string[] Cached(SubsonicTestHost app)
     {
         var dir = Path.Combine(app.DataRoot, "cache", "transcodes");
-        return Directory.Exists(dir) ? Directory.GetFiles(dir) : [];
+        // Finished entries only: a transcode still being written is a .tmp file.
+        return Directory.Exists(dir) ? Directory.GetFiles(dir).Where(f => !f.EndsWith(".tmp", StringComparison.Ordinal)).ToArray() : [];
     }
 
     /// <summary>The entry is committed right after the last byte; give the server that moment.</summary>
-    private static async Task<string[]> CachedSoonAsync(SubsonicTestHost app, int expected)
+    private static async Task<string[]> CachedSoonAsync(SubsonicTestHost app, int expected, int seconds = 1)
     {
-        for (var i = 0; i < 50 && Cached(app).Length < expected; i++) await Task.Delay(20);
+        for (var i = 0; i < seconds * 50 && Cached(app).Length < expected; i++) await Task.Delay(20);
         return Cached(app);
     }
 
@@ -263,5 +264,39 @@ public class TranscodeCacheTests
         {
             if (Directory.Exists(data)) Directory.Delete(data, true);
         }
+    }
+
+    [Fact]
+    public async Task ASongIsCachedCompletelyEvenWhenTheClientGoesAwayEarly()
+    {
+        if (!await FfmpegTestTools.AvailableAsync()) return;
+        using var app = new SubsonicTestHost();
+        var path = app.AddFile("A/B/1.m4a", Tags);
+        // Two minutes of noise: still encoding when the client has gone after the first bytes.
+        var noise = System.IO.Path.Combine(app.Root, "noise.m4a");
+        Assert.Equal(0, (await ProcessRunner.RunAsync("ffmpeg",
+            ["-nostdin", "-v", "error", "-y", "-f", "lavfi", "-i", "anoisesrc=d=120:a=0.2", "-c:a", "aac", "-b:a", "256k", noise], default)).ExitCode);
+        File.Copy(noise, path, overwrite: true);
+        TagIo.WriteM4a(path, Tags, null, "musicbrainz");
+        await app.ScanAsync();
+        var id = (await app.EntryAsync("A/B/1.m4a"))!.SongId!;
+        var client = app.CreateClient();
+
+        // Read a little, then hang up (a skip in Symfonium).
+        using (var response = await client.GetAsync(Url(id, "format=opus&maxBitRate=128"), HttpCompletionOption.ResponseHeadersRead))
+        {
+            await using var body = await response.Content.ReadAsStreamAsync();
+            var start = new byte[4096];
+            await body.ReadAtLeastAsync(start, start.Length);
+        }
+
+        var file = Assert.Single(await CachedSoonAsync(app, 1, seconds: 15));
+
+        var seconds = await ProcessRunner.RunAsync("ffmpeg", ["-nostdin", "-hide_banner", "-i", file, "-f", "null", "-"], default);
+        var time = System.Text.RegularExpressions.Regex.Matches(seconds.StdErr, @"time=00:(\d+):(\d+\.\d+)")[^1].Groups;
+        Assert.InRange(int.Parse(time[1].Value) * 60 + double.Parse(time[2].Value, System.Globalization.CultureInfo.InvariantCulture), 119.5, 120.5);
+        // And the next request is served from it.
+        var next = await client.GetAsync(Url(id, "format=opus&maxBitRate=128"), HttpCompletionOption.ResponseHeadersRead);
+        Assert.Contains("bytes", next.Headers.AcceptRanges);
     }
 }
