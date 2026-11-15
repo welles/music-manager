@@ -12,9 +12,68 @@
 
 <StatusFilter Statuses="ReviewService.OpenStatuses" Selected="_statuses" SelectedChanged="SetStatuses" />
 
-<MudDataGrid T="TrackFile" Items="Visible" Dense="true" Hover="true" MultiSelection="true" @bind-SelectedItems="_selected"
-             Groupable="true" GroupExpanded="true" RowsPerPage="100">
-    <ToolBarContent>
+<ListLayout>
+    <Wide>
+        <MudDataGrid T="TrackFile" Items="Visible" Dense="true" Hover="true" MultiSelection="true" @bind-SelectedItems="_selected"
+                     Groupable="true" GroupExpanded="true" RowsPerPage="100">
+            <ToolBarContent>@Actions</ToolBarContent>
+            <Columns>
+                <SelectColumn T="TrackFile" />
+                <PropertyColumn Property="x => x.Group!.RelativeFolder" Title="Gruppe" Grouping="true" Hidden="true">
+                    <GroupTemplate>
+                        <MudText Typo="Typo.subtitle2">@(string.IsNullOrEmpty(context.Grouping.Key?.ToString()) ? "Eingang (lose Dateien)" : context.Grouping.Key) (@context.Grouping.Count())</MudText>
+                    </GroupTemplate>
+                </PropertyColumn>
+                <TemplateColumn Title="Original" SortBy="x => x.RelativePath">
+                    <CellTemplate>
+                        <TrackSummary File="context.Item" Variant="TrackSummary.SummaryVariant.Original" Href="@($"datei/{context.Item.Id}")" />
+                    </CellTemplate>
+                </TemplateColumn>
+                <PropertyColumn Property="x => x.Status" Title="Status">
+                    <CellTemplate><StatusChip Status="context.Item.Status" /></CellTemplate>
+                </PropertyColumn>
+                <PropertyColumn Property="x => x.StatusReason" Title="Grund" />
+                <TemplateColumn Title="Bester Kandidat">
+                    <CellTemplate>@BestCandidate(context.Item)</CellTemplate>
+                </TemplateColumn>
+            </Columns>
+            <NoRecordsContent>
+                <MudText>Nichts zu prüfen. 🎉</MudText>
+            </NoRecordsContent>
+        </MudDataGrid>
+    </Wide>
+    <Narrow>
+        <CardList Items="Visible" GroupBy="f => f.Group?.RelativeFolder" PageSize="50">
+            <Toolbar>
+                <div class="d-flex align-center flex-wrap" style="gap:4px 12px">
+                    <MudCheckBox T="bool" Value="@(_selected.Count > 0 && _selected.Count == Visible.Count())" ValueChanged="SelectAll" Dense="true"
+                                 Label="@(_selected.Count > 0 ? $"{_selected.Count} ausgewählt" : "Alle auswählen")" />
+                </div>
+                @Actions
+            </Toolbar>
+            <GroupHeader>@(string.IsNullOrEmpty(context.Key) ? "Eingang (lose Dateien)" : context.Key) (@context.Count)</GroupHeader>
+            <ItemTemplate>
+                <FileCard File="context" Selectable="true" Selected="_selected.Contains(context)" SelectedChanged="on => Select(context, on)">
+                    @if (HasCandidate(context))
+                    {
+                        <div class="file-card-candidate">
+                            <div class="file-card-label mb-1">Bester Kandidat</div>
+                            @BestCandidate(context)
+                        </div>
+                    }
+                </FileCard>
+            </ItemTemplate>
+            <NoItems>Nichts zu prüfen. 🎉</NoItems>
+        </CardList>
+    </Narrow>
+</ListLayout>
+
+@code {
+    private List<TrackFile> _files = [];
+    private HashSet<TrackFile> _selected = [];
+
+    /// <summary>Batch actions; in the table toolbar or above the cards.</summary>
+    private RenderFragment Actions => @<text>
         <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Spacing="2" Class="py-2" Style="width:100%">
             @foreach (var source in PerfectSources)
             {
@@ -35,50 +94,35 @@
                 <MudButton StartIcon="@Icons.Material.Filled.Delete" Color="Color.Error" Disabled="_selected.Count == 0" OnClick="Discard">Verwerfen</MudButton>
             </MudButtonGroup>
         </MudStack>
-    </ToolBarContent>
-    <Columns>
-        <SelectColumn T="TrackFile" />
-        <PropertyColumn Property="x => x.Group!.RelativeFolder" Title="Gruppe" Grouping="true" Hidden="true">
-            <GroupTemplate>
-                <MudText Typo="Typo.subtitle2">@(string.IsNullOrEmpty(context.Grouping.Key?.ToString()) ? "Eingang (lose Dateien)" : context.Grouping.Key) (@context.Grouping.Count())</MudText>
-            </GroupTemplate>
-        </PropertyColumn>
-        <TemplateColumn Title="Original" SortBy="x => x.RelativePath">
-            <CellTemplate>
-                <TrackSummary File="context.Item" Variant="TrackSummary.SummaryVariant.Original" Href="@($"datei/{context.Item.Id}")" />
-            </CellTemplate>
-        </TemplateColumn>
-        <PropertyColumn Property="x => x.Status" Title="Status">
-            <CellTemplate><StatusChip Status="context.Item.Status" /></CellTemplate>
-        </PropertyColumn>
-        <PropertyColumn Property="x => x.StatusReason" Title="Grund" />
-        <TemplateColumn Title="Bester Kandidat">
-            <CellTemplate>
-                @if (context.Item.Candidates.FirstOrDefault() is { } best)
-                {
-                    <SongCard Song="SongInfo.From(best)" />
-                    <MudText Typo="Typo.caption">MusicBrainz · @best.Score.ToString("0.#")@(best.MaxScore > 0 ? $" / {best.MaxScore:0.#}" : "") Punkte · @context.Item.Candidates.Count Kandidaten</MudText>
-                }
-                else if (context.Item.ExternalMatches.OrderByDescending(m => m.Score).FirstOrDefault() is { } ext)
-                {
-                    <SongCard Song="SongInfo.From(ext)" />
-                    <MudText Typo="Typo.caption">@MatchingPipeline.SourceName(ext.Source) · @(ext.FromTagLink ? "Link aus den Tags" : $"{ext.Score:P0} Übereinstimmung") · @context.Item.ExternalMatches.Count Treffer</MudText>
-                }
-                else if (context.Item.AiSuggestion is { } s)
-                {
-                    <MudText Typo="Typo.body2"><MudIcon Icon="@Icons.Material.Filled.AutoAwesome" Size="Size.Small" /> @s.Artist – @s.Title</MudText>
-                }
-            </CellTemplate>
-        </TemplateColumn>
-    </Columns>
-    <NoRecordsContent>
-        <MudText>Nichts zu prüfen. 🎉</MudText>
-    </NoRecordsContent>
-</MudDataGrid>
+    </text>;
 
-@code {
-    private List<TrackFile> _files = [];
-    private HashSet<TrackFile> _selected = [];
+    /// <summary>What the file would most likely become: best MusicBrainz candidate, else best external match or AI guess.</summary>
+    private RenderFragment BestCandidate(TrackFile file) => @<text>
+        @if (file.Candidates.FirstOrDefault() is { } best)
+        {
+            <SongCard Song="SongInfo.From(best)" />
+            <MudText Typo="Typo.caption">MusicBrainz · @best.Score.ToString("0.#")@(best.MaxScore > 0 ? $" / {best.MaxScore:0.#}" : "") Punkte · @file.Candidates.Count Kandidaten</MudText>
+        }
+        else if (file.ExternalMatches.OrderByDescending(m => m.Score).FirstOrDefault() is { } ext)
+        {
+            <SongCard Song="SongInfo.From(ext)" />
+            <MudText Typo="Typo.caption">@MatchingPipeline.SourceName(ext.Source) · @(ext.FromTagLink ? "Link aus den Tags" : $"{ext.Score:P0} Übereinstimmung") · @file.ExternalMatches.Count Treffer</MudText>
+        }
+        else if (file.AiSuggestion is { } s)
+        {
+            <MudText Typo="Typo.body2"><MudIcon Icon="@Icons.Material.Filled.AutoAwesome" Size="Size.Small" /> @s.Artist – @s.Title</MudText>
+        }
+    </text>;
+
+    private static bool HasCandidate(TrackFile f) => f.Candidates.Count > 0 || f.ExternalMatches.Count > 0 || f.AiSuggestion != null;
+
+    private void Select(TrackFile file, bool on)
+    {
+        if (on) _selected.Add(file);
+        else _selected.Remove(file);
+    }
+
+    private void SelectAll(bool on) => _selected = on ? Visible.ToHashSet() : [];
 
     /// <summary>Preselected statuses, e.g. from a dashboard tile: ?status=NeedsReview</summary>
     [SupplyParameterFromQuery] public string? Status { get; set; }

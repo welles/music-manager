@@ -1,0 +1,59 @@
+@* A file of the inbox as a card (the narrow form of the file tables): status on top, then the song as it is
+   (or will be) filed – or, while there is no result yet, as it came in – and below a short line with the
+   original. The title opens the file's detail page. *@
+
+<MudPaper Outlined="true" Class="@($"file-card{(Selected ? " file-card-selected" : "")}")">
+    <div class="file-card-head">
+        @if (Selectable)
+        {
+            <MudCheckBox T="bool" Value="Selected" ValueChanged="SelectedChanged" Dense="true" Size="Size.Small" Class="ml-n2" aria-label="Auswählen" />
+        }
+        <StatusChip Status="File.Status" Reason="@File.StatusReason" />
+        <DecisionChip Decision="File.Decision" />
+        <span class="file-card-time">@File.UpdatedAt.ToLocalTime().ToString("g")</span>
+    </div>
+
+    @if (HasResult)
+    {
+        <TrackSummary File="File" Variant="TrackSummary.SummaryVariant.Result" Href="@Href" />
+        <div class="file-card-original">
+            <span class="file-card-label">Original</span>
+            <span>@OriginalLine</span>
+        </div>
+    }
+    else
+    {
+        <TrackSummary File="File" Variant="TrackSummary.SummaryVariant.Original" Href="@Href" />
+        @if (!string.IsNullOrWhiteSpace(File.StatusReason) && !StatusChip.IsActive(File.Status))
+        {
+            <div class="file-card-original">@File.StatusReason</div>
+        }
+    }
+
+    @ChildContent
+</MudPaper>
+
+@code {
+    [Parameter, EditorRequired] public TrackFile File { get; set; } = null!;
+
+    [Parameter] public bool Selectable { get; set; }
+    [Parameter] public bool Selected { get; set; }
+    [Parameter] public EventCallback<bool> SelectedChanged { get; set; }
+
+    /// <summary>Below the song, e.g. the best candidate in the review queue.</summary>
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    private string Href => $"datei/{File.Id}";
+
+    private bool HasResult => File.FinalTags != null;
+
+    private string OriginalLine
+    {
+        get
+        {
+            var t = File.OriginalTags ?? File.CleanedTags;
+            var parts = new[] { t?.Artist, t?.Title }.Where(x => !string.IsNullOrWhiteSpace(x)).ToList();
+            return parts.Count > 0 ? string.Join(" – ", parts) : File.FileName;
+        }
+    }
+}

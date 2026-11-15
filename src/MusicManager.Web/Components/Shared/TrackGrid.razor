@@ -3,9 +3,96 @@
 @inject NavigationManager Nav
 @* Track table of the library: search, problem filters, multi-selection, playback. *@
 
-<MudDataGrid T="LibraryTrack" Items="Filtered" Class="track-grid" Dense="true" Hover="true" MultiSelection="true" @bind-SelectedItems="_selected"
-             RowsPerPage="50" SortMode="SortMode.Multiple">
-    <ToolBarContent>
+<ListLayout>
+    <Wide>
+        <MudDataGrid T="LibraryTrack" Items="Filtered" Class="track-grid" Dense="true" Hover="true" MultiSelection="true" @bind-SelectedItems="_selected"
+                     RowsPerPage="50" SortMode="SortMode.Multiple">
+            <ToolBarContent>@Toolbar</ToolBarContent>
+            <Columns>
+                <SelectColumn T="LibraryTrack" />
+                <TemplateColumn Title="" Sortable="false" Style="width:56px">
+                    <CellTemplate>
+                        <MudIconButton Icon="@Icons.Material.Filled.PlayArrow" Size="Size.Small" OnClick="() => Player.Play(context.Item)" aria-label="Abspielen" />
+                    </CellTemplate>
+                </TemplateColumn>
+                <TemplateColumn Title="Titel" Sortable="false">
+                    <CellTemplate><SongCard Song="SongInfo.From(context.Item) with { Genres = [], Format = null }" /></CellTemplate>
+                </TemplateColumn>
+                <TemplateColumn Title="Genre" SortBy="x => x.Genres.FirstOrDefault()">
+                    <CellTemplate>@string.Join(", ", context.Item.Genres)</CellTemplate>
+                </TemplateColumn>
+                <TemplateColumn Title="Format" SortBy="x => x.BitrateKbps">
+                    <CellTemplate>@context.Item.Codec @(context.Item.BitrateKbps != null ? $"{context.Item.BitrateKbps} kbps" : "")</CellTemplate>
+                </TemplateColumn>
+                <TemplateColumn Title="ReplayGain" SortBy="x => x.ReplayGainTrackGain ?? double.MinValue">
+                    <CellTemplate>
+                        @if (context.Item.ReplayGainTrackGain is { } gain)
+                        {
+                            <MudTooltip Text="@($"Peak {(context.Item.ReplayGainTrackPeak ?? 1).ToString("0.000", CultureInfo.InvariantCulture)}")">
+                                <span style="white-space:nowrap">@(new ReplayGain(gain, 0).GainText)</span>
+                            </MudTooltip>
+                        }
+                        else
+                        {
+                            <MudText Typo="Typo.body2" Style="opacity:.6">fehlt</MudText>
+                        }
+                    </CellTemplate>
+                </TemplateColumn>
+                <TemplateColumn Title="Hinweise" Sortable="false">
+                    <CellTemplate>
+                        <div class="chip-wrap">
+                            @foreach (var p in context.Item.Problems(RulesVersion))
+                            {
+                                <MudChip T="string" Size="Size.Small" Variant="Variant.Text" Color="@(p == LibraryProblem.OldRules ? Color.Info : Color.Warning)">@ProblemLabel(p)</MudChip>
+                            }
+                        </div>
+                    </CellTemplate>
+                </TemplateColumn>
+            </Columns>
+            <PagerContent>
+                <MudDataGridPager T="LibraryTrack" />
+            </PagerContent>
+        </MudDataGrid>
+    </Wide>
+    <Narrow>
+        <CardList Items="Filtered" Toolbar="Toolbar" PageSize="50">
+            <ItemTemplate>
+                <MudPaper Outlined="true" Class="@($"track-card{(_selected.Contains(context) ? " track-card-selected" : "")}")">
+                    <div class="d-flex align-start" style="gap:4px">
+                        <MudCheckBox T="bool" Value="_selected.Contains(context)" ValueChanged="on => Select(context, on)" Dense="true" Size="Size.Small"
+                                     Class="ml-n2" aria-label="Auswählen" />
+                        <SongCard Song="SongInfo.From(context) with { Genres = [], Format = null }" />
+                        <MudIconButton Icon="@Icons.Material.Filled.PlayArrow" Size="Size.Small" OnClick="() => Player.Play(context)" aria-label="Abspielen" />
+                    </div>
+                    <div class="track-card-meta">@Meta(context)</div>
+                    @if (context.Problems(RulesVersion) is { Count: > 0 } problems)
+                    {
+                        <div class="chip-wrap mt-1">
+                            @foreach (var p in problems)
+                            {
+                                <MudChip T="string" Size="Size.Small" Variant="Variant.Text" Color="@(p == LibraryProblem.OldRules ? Color.Info : Color.Warning)">@ProblemLabel(p)</MudChip>
+                            }
+                        </div>
+                    }
+                </MudPaper>
+            </ItemTemplate>
+        </CardList>
+    </Narrow>
+</ListLayout>
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<LibraryTrack> Tracks { get; set; } = [];
+    [Parameter, EditorRequired] public string RulesVersion { get; set; } = "";
+
+    /// <summary>Preset problem filter (e.g. from a link).</summary>
+    [Parameter] public LibraryProblem? InitialProblem { get; set; }
+
+    [Parameter] public string? InitialSearch { get; set; }
+
+    private HashSet<LibraryTrack> _selected = [];
+
+    /// <summary>Search, sort, actions and problem filters; in the table toolbar or above the cards.</summary>
+    private RenderFragment Toolbar => @<text>
         <MudStack Spacing="1" Style="width:100%">
             <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap">
                 <MudTextField @bind-Value="_search" Placeholder="Titel, Künstler, Album suchen" Adornment="Adornment.Start" Immediate="true"
@@ -30,63 +117,22 @@
                 }
             </MudChipSet>
         </MudStack>
-    </ToolBarContent>
-    <Columns>
-        <SelectColumn T="LibraryTrack" />
-        <TemplateColumn Title="" Sortable="false" Style="width:56px">
-            <CellTemplate>
-                <MudIconButton Icon="@Icons.Material.Filled.PlayArrow" Size="Size.Small" OnClick="() => Player.Play(context.Item)" aria-label="Abspielen" />
-            </CellTemplate>
-        </TemplateColumn>
-        <TemplateColumn Title="Titel" Sortable="false">
-            <CellTemplate><SongCard Song="SongInfo.From(context.Item) with { Genres = [], Format = null }" /></CellTemplate>
-        </TemplateColumn>
-        <TemplateColumn Title="Genre" SortBy="x => x.Genres.FirstOrDefault()">
-            <CellTemplate>@string.Join(", ", context.Item.Genres)</CellTemplate>
-        </TemplateColumn>
-        <TemplateColumn Title="Format" SortBy="x => x.BitrateKbps">
-            <CellTemplate>@context.Item.Codec @(context.Item.BitrateKbps != null ? $"{context.Item.BitrateKbps} kbps" : "")</CellTemplate>
-        </TemplateColumn>
-        <TemplateColumn Title="ReplayGain" SortBy="x => x.ReplayGainTrackGain ?? double.MinValue">
-            <CellTemplate>
-                @if (context.Item.ReplayGainTrackGain is { } gain)
-                {
-                    <MudTooltip Text="@($"Peak {(context.Item.ReplayGainTrackPeak ?? 1).ToString("0.000", CultureInfo.InvariantCulture)}")">
-                        <span style="white-space:nowrap">@(new ReplayGain(gain, 0).GainText)</span>
-                    </MudTooltip>
-                }
-                else
-                {
-                    <MudText Typo="Typo.body2" Style="opacity:.6">fehlt</MudText>
-                }
-            </CellTemplate>
-        </TemplateColumn>
-        <TemplateColumn Title="Hinweise" Sortable="false">
-            <CellTemplate>
-                <div class="chip-wrap">
-                    @foreach (var p in context.Item.Problems(RulesVersion))
-                    {
-                        <MudChip T="string" Size="Size.Small" Variant="Variant.Text" Color="@(p == LibraryProblem.OldRules ? Color.Info : Color.Warning)">@ProblemLabel(p)</MudChip>
-                    }
-                </div>
-            </CellTemplate>
-        </TemplateColumn>
-    </Columns>
-    <PagerContent>
-        <MudDataGridPager T="LibraryTrack" />
-    </PagerContent>
-</MudDataGrid>
+            
+    </text>;
 
-@code {
-    [Parameter, EditorRequired] public IReadOnlyList<LibraryTrack> Tracks { get; set; } = [];
-    [Parameter, EditorRequired] public string RulesVersion { get; set; } = "";
+    private void Select(LibraryTrack t, bool on)
+    {
+        if (on) _selected.Add(t);
+        else _selected.Remove(t);
+    }
 
-    /// <summary>Preset problem filter (e.g. from a link).</summary>
-    [Parameter] public LibraryProblem? InitialProblem { get; set; }
-
-    [Parameter] public string? InitialSearch { get; set; }
-
-    private HashSet<LibraryTrack> _selected = [];
+    /// <summary>Genre, format and ReplayGain in one line (the table has a column for each).</summary>
+    private static string Meta(LibraryTrack t) => string.Join(" · ", new[]
+    {
+        t.Genres.Count > 0 ? string.Join(", ", t.Genres) : null,
+        string.Join(" ", new[] { t.Codec, t.BitrateKbps != null ? $"{t.BitrateKbps} kbps" : null }.Where(x => !string.IsNullOrWhiteSpace(x))).NullIfEmptyText(),
+        t.ReplayGainTrackGain is { } g ? $"ReplayGain {new ReplayGain(g, 0).GainText}" : "ohne ReplayGain",
+    }.Where(x => !string.IsNullOrWhiteSpace(x)));
     private IReadOnlyCollection<LibraryProblem> _problemFilter = [];
     private string? _search;
 

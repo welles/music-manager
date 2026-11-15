@@ -43,23 +43,33 @@
     }
 </MudText>
 
-<MudTable Items="_recent" Dense="true" Hover="true" Outlined="true" OnRowClick="@((TableRowClickEventArgs<TrackFile> e) => Nav.NavigateTo($"datei/{e.Item!.Id}"))" T="TrackFile">
-    <ToolBarContent>
-        <MudText Typo="Typo.h6">Zuletzt bearbeitet</MudText>
-    </ToolBarContent>
-    <HeaderContent>
-        <MudTh>Original</MudTh>
-        <MudTh>Status</MudTh>
-        <MudTh>Ergebnis</MudTh>
-        <MudTh>Zeit</MudTh>
-    </HeaderContent>
-    <RowTemplate>
-        <MudTd DataLabel="Original"><TrackSummary File="context" Variant="TrackSummary.SummaryVariant.Original" /></MudTd>
-        <MudTd DataLabel="Status"><StatusChip Status="context.Status" Reason="@context.StatusReason" /> <DecisionChip Decision="context.Decision" /></MudTd>
-        <MudTd DataLabel="Ergebnis"><TrackSummary File="context" Variant="TrackSummary.SummaryVariant.Result" /></MudTd>
-        <MudTd DataLabel="Zeit">@context.UpdatedAt.ToLocalTime().ToString("g")</MudTd>
-    </RowTemplate>
-</MudTable>
+<ListLayout>
+    <Wide>
+        <MudTable Items="_recent" Dense="true" Hover="true" Outlined="true" OnRowClick="@((TableRowClickEventArgs<TrackFile> e) => Nav.NavigateTo($"datei/{e.Item!.Id}"))" T="TrackFile">
+            <ToolBarContent>
+                <MudText Typo="Typo.h6">Zuletzt bearbeitet</MudText>
+            </ToolBarContent>
+            <HeaderContent>
+                <MudTh>Original</MudTh>
+                <MudTh>Status</MudTh>
+                <MudTh>Ergebnis</MudTh>
+                <MudTh>Zeit</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd DataLabel="Original"><TrackSummary File="context" Variant="TrackSummary.SummaryVariant.Original" /></MudTd>
+                <MudTd DataLabel="Status"><StatusChip Status="context.Status" Reason="@context.StatusReason" /> <DecisionChip Decision="context.Decision" /></MudTd>
+                <MudTd DataLabel="Ergebnis"><TrackSummary File="context" Variant="TrackSummary.SummaryVariant.Result" /></MudTd>
+                <MudTd DataLabel="Zeit">@context.UpdatedAt.ToLocalTime().ToString("g")</MudTd>
+            </RowTemplate>
+        </MudTable>
+    </Wide>
+    <Narrow>
+        <MudText Typo="Typo.h6" Class="mb-2">Zuletzt bearbeitet</MudText>
+        <CardList Items="_recent">
+            <ItemTemplate><FileCard File="context" /></ItemTemplate>
+        </CardList>
+    </Narrow>
+</ListLayout>
 
 @code {
     [Inject] private NavigationManager Nav { get; set; } = null!;
