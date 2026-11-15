@@ -18,6 +18,7 @@ namespace MusicManager.Tests;
 public sealed class ExternalTakeoverTests : IDisposable
 {
     private const string FailingCover = "https://covers.test/fails.jpg";
+    private const string TimingOutCover = "https://covers.test/times-out.jpg";
 
     private readonly SubsonicTestHost _base = new();
     private readonly Microsoft.AspNetCore.Mvc.Testing.WebApplicationFactory<Program> _host;
@@ -40,9 +41,14 @@ public sealed class ExternalTakeoverTests : IDisposable
     private sealed class FakeCovers : HttpMessageHandler
     {
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct) =>
-            request.RequestUri!.ToString() == FailingCover
-                ? throw new InvalidOperationException("cover broken")
-                : Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent([1, 2, 3]) });
+            request.RequestUri!.ToString() switch
+            {
+                FailingCover => throw new InvalidOperationException("cover broken"),
+                // Like a timeout deeper down (e.g. a MusicBrainz call during the genre lookup): a cancellation
+                // nobody asked for. The cover download itself does not catch this one.
+                TimingOutCover => throw new OperationCanceledException("timed out"),
+                _ => Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent([1, 2, 3]) }),
+            };
     }
 
     private async Task<List<int>> SeedAsync(params string?[] coverUrls)
@@ -142,6 +148,22 @@ public sealed class ExternalTakeoverTests : IDisposable
 
         var queued = await DrainQueueAsync();
         Assert.Equal([ids[0], ids[2]], queued.Select(w => w.Id).Order());
+        Assert.Null(Get<PipelineNotifier>().CurrentActivity);
+    }
+
+    [Fact]
+    public async Task A_timeout_in_one_file_does_not_end_the_takeover()
+    {
+        var ids = await SeedAsync(TimingOutCover, "https://covers.test/1.jpg");
+
+        var (applied, problems) = await Get<ReviewService>().ApplyPerfectExternalAsync("spotify");
+
+        Assert.Equal(1, applied);
+        Assert.Contains("timed out", Assert.Single(problems));
+        var files = await LoadAsync();
+        Assert.Equal(FileStatus.NotInMusicBrainz, files[ids[0]].Status);
+        Assert.Equal(FileStatus.Approved, files[ids[1]].Status);
+        Assert.Equal([ids[1]], (await DrainQueueAsync()).Select(w => w.Id));
         Assert.Null(Get<PipelineNotifier>().CurrentActivity);
     }
 }
