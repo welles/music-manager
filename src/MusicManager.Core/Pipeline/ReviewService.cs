@@ -186,34 +186,56 @@ public sealed class ReviewService(
     private async Task<List<string>> ApplyExternalAsync(IReadOnlyList<int> fileIds, Func<TrackFile, ExternalMatch?> pick, CancellationToken ct)
     {
         var problems = new List<string>();
-        await using var db = await dbFactory.CreateDbContextAsync(ct);
-        var files = await db.Files.Where(f => fileIds.Contains(f.Id)).ToListAsync(ct);
-        foreach (var file in files)
+        // Each file takes seconds (genre lookup with the MusicBrainz rate limit, title translation, cover download).
+        // So every file is saved and queued for writing on its own, and the app bar shows the progress: with
+        // hundreds of files nothing would otherwise be visible for many minutes, and a restart would lose it all.
+        try
         {
-            var match = pick(file);
-            if (match == null)
+            for (var i = 0; i < fileIds.Count; i++)
             {
-                problems.Add($"{file.FileName}: kein Treffer aus Spotify/Deezer");
-                continue;
-            }
+                // A context of its own per file: a failing file is simply not saved and does not touch the others.
+                await using var db = await dbFactory.CreateDbContextAsync(ct);
+                var file = await db.Files.FirstOrDefaultAsync(f => f.Id == fileIds[i], ct);
+                if (file == null) continue;
+                var match = pick(file);
+                if (match == null)
+                {
+                    problems.Add($"{file.FileName}: kein Treffer aus Spotify/Deezer");
+                    continue;
+                }
 
-            await pipeline.BuildManualTagsAsync(file, ExternalSourceService.ToTagSet(match), ct);
-            file.ExternalSource = match.Source;
-            file.Decision = DecisionSource.External;
-            if (match.CoverUrl != null && await coverArt.DownloadAsync(match.CoverUrl, MatchingPipeline.SourceName(match.Source), ct) is { } cover)
-            {
-                Directory.CreateDirectory(Path.Combine(storage.WorkRoot, "covers"));
-                file.ManualCoverFile = Path.Combine(storage.WorkRoot, "covers", $"{Guid.NewGuid():N}.img");
-                await File.WriteAllBytesAsync(file.ManualCoverFile, cover.Data, ct);
-            }
+                var source = MatchingPipeline.SourceName(match.Source);
+                notifier.SetActivity($"Tags aus {source} übernehmen ({i + 1}/{fileIds.Count}): {match.Title}");
+                try
+                {
+                    await pipeline.BuildManualTagsAsync(file, ExternalSourceService.ToTagSet(match), ct);
+                    file.ExternalSource = match.Source;
+                    file.Decision = DecisionSource.External;
+                    if (match.CoverUrl != null && await coverArt.DownloadAsync(match.CoverUrl, source, ct) is { } cover)
+                    {
+                        Directory.CreateDirectory(Path.Combine(storage.WorkRoot, "covers"));
+                        file.ManualCoverFile = Path.Combine(storage.WorkRoot, "covers", $"{Guid.NewGuid():N}.img");
+                        await File.WriteAllBytesAsync(file.ManualCoverFile, cover.Data, ct);
+                    }
 
-            Approve(file, $"Tags aus {MatchingPipeline.SourceName(match.Source)} übernommen: {match.Title} ({match.Album})");
+                    Approve(file, $"Tags aus {source} übernommen: {match.Title} ({match.Album})");
+                    await db.SaveChangesAsync(ct);
+                    queue.Enqueue(new WorkItem(WorkKind.WriteFile, file.Id));
+                }
+                catch (Exception e) when (e is not OperationCanceledException)
+                {
+                    // One failing file must not stop (and, before, discard) the rest.
+                    problems.Add($"{file.FileName}: {e.Message}");
+                }
+
+                notifier.Notify();
+            }
+        }
+        finally
+        {
+            notifier.SetActivity(null);
         }
 
-        await db.SaveChangesAsync(ct);
-        foreach (var f in files.Where(f => f.Status == FileStatus.Approved))
-            queue.Enqueue(new WorkItem(WorkKind.WriteFile, f.Id));
-        notifier.Notify();
         return problems;
     }
 
