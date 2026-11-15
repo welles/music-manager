@@ -74,12 +74,14 @@ public static class Transcoding
     }
 
     /// <summary>
-    /// Expected size of the stream for <c>estimateContentLength</c>: bitrate × remaining length, plus a little for
-    /// container overhead (the stream is padded or cut to exactly this size).
+    /// Expected size of the stream for <c>estimateContentLength</c>: bitrate × remaining length, plus the container's
+    /// share (the stream is padded or cut to exactly this size, so too little would cut off the end). Per second up to
+    /// ~330 bytes of frame headers come on top of the audio (ADTS: 7 bytes per AAC frame, Ogg pages for Opus); 2 % and
+    /// 512 bytes per second cover that also at low bitrates, 4 KB the headers at the start.
     /// </summary>
     public static long EstimateBytes(TranscodePlan plan, double durationSeconds, int offsetSeconds)
     {
         var seconds = Math.Max(1, durationSeconds - offsetSeconds);
-        return (long)Math.Ceiling(seconds * plan.Kbps * 125 * 1.02) + 4096;
+        return (long)Math.Ceiling(seconds * (plan.Kbps * 125 * 1.02 + 512)) + 4096;
     }
 }

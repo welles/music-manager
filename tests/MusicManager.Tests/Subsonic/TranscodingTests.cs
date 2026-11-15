@@ -80,14 +80,14 @@ public class TranscodingTests
         TrackNumber = 1, TrackCount = 1, MbRecordingId = "rec", MbReleaseId = "rel",
     };
 
-    /// <summary>A library with one 10 s AAC song at 256 kbit/s; returns the host, the song ID and the file.</summary>
-    private static async Task<(SubsonicTestHost App, string Id, string Path)> LibraryAsync()
+    /// <summary>A library with one AAC song at 256 kbit/s (10 s by default); returns the host, the song ID and the file.</summary>
+    private static async Task<(SubsonicTestHost App, string Id, string Path)> LibraryAsync(int seconds = 10)
     {
         var app = new SubsonicTestHost();
         var path = app.AddFile("A/B/1.m4a", Tags);
         var tone = System.IO.Path.Combine(app.Root, "tone.m4a");
         Assert.Equal(0, (await ProcessRunner.RunAsync("ffmpeg",
-            ["-nostdin", "-v", "error", "-y", "-f", "lavfi", "-i", "sine=f=440:d=10", "-c:a", "aac", "-b:a", "256k", tone], default)).ExitCode);
+            ["-nostdin", "-v", "error", "-y", "-f", "lavfi", "-i", $"sine=f=440:d={seconds}", "-c:a", "aac", "-b:a", "256k", tone], default)).ExitCode);
         File.Copy(tone, path, overwrite: true);
         TagIo.WriteM4a(path, Tags, null, "musicbrainz");
         await app.ScanAsync();
@@ -219,5 +219,53 @@ public class TranscodingTests
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Equal("audio/mp4", response.Content.Headers.ContentType?.MediaType);
         Assert.Equal(await File.ReadAllBytesAsync(path), await response.Content.ReadAsByteArrayAsync());
+    }
+
+    [Fact]
+    public async Task AacWithAnEstimatedLengthKeepsTheEnd()
+    {
+        if (!await FfmpegTestTools.AvailableAsync()) return;
+        // At a low bitrate the ADTS frame headers are a noticeable share; a minute makes a cut-off end measurable.
+        var (app, id, _) = await LibraryAsync(seconds: 60);
+        using var _app = app;
+
+        var response = await app.CreateClient().GetAsync(Url(id, "format=aac&maxBitRate=32&estimateContentLength=true"));
+
+        Assert.Equal("audio/aac", response.Content.Headers.ContentType?.MediaType);
+        var body = await response.Content.ReadAsByteArrayAsync();
+        Assert.Equal(response.Content.Headers.ContentLength, body.Length);
+        Assert.InRange(await DecodedSecondsAsync(app, body, "aac"), 59.5, 60.5);
+    }
+
+    [Fact]
+    public async Task HeadOnlyAnswersWithTheHeaders()
+    {
+        // No ffmpeg needed: HEAD must not start an encoder for a body nobody receives.
+        using var app = new SubsonicTestHost();
+        app.AddFile("A/B/1.m4a", Tags);
+        await app.ScanAsync();
+        var id = (await app.EntryAsync("A/B/1.m4a"))!.SongId!;
+
+        var response = await app.CreateClient().SendAsync(new HttpRequestMessage(HttpMethod.Head,
+            Url(id, "format=mp3&estimateContentLength=true")));
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("audio/mpeg", response.Content.Headers.ContentType?.MediaType);
+        Assert.Contains("none", response.Headers.AcceptRanges);
+        Assert.NotNull(response.Content.Headers.ContentLength);
+        Assert.Empty(await response.Content.ReadAsByteArrayAsync());
+    }
+
+    [Fact]
+    public async Task AnInvalidParameterIsRefusedBeforeEncoding()
+    {
+        using var app = new SubsonicTestHost();
+        app.AddFile("A/B/1.m4a", Tags);
+        await app.ScanAsync();
+        var id = (await app.EntryAsync("A/B/1.m4a"))!.SongId!;
+
+        var response = await app.CreateClient().GetAsync(Url(id, "format=mp3&estimateContentLength=yes&f=json"));
+
+        Assert.Equal("failed", (await SubsonicTestHost.ReadAsync(response)).GetProperty("status").GetString());
     }
 }
