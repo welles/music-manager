@@ -1,6 +1,7 @@
 @inherits LayoutComponentBase
 @implements IDisposable
 @inject PipelineNotifier Notifier
+@inject WorkQueue Queue
 @inject PlayerService Player
 
 <MudThemeProvider @ref="_theme" @bind-IsDarkMode="_dark" />
@@ -28,6 +29,11 @@
             <div class="d-flex align-center mx-4" style="min-width:0;max-width:60%">
                 <MudProgressCircular Indeterminate="true" Size="Size.Small" Color="Color.Inherit" Class="mr-2 flex-shrink-0" />
                 <MudText Typo="Typo.body2" Style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="@activity">@activity</MudText>
+                @* Jobs still waiting behind the current one (e.g. files to write after a bulk takeover). *@
+                @if (Queue.Count > 0)
+                {
+                    <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="Color.Inherit" Class="ml-2 flex-shrink-0">noch @Queue.Count</MudChip>
+                }
             </div>
         }
         <MudToggleIconButton @bind-Toggled="_dark" Icon="@Icons.Material.Filled.DarkMode" ToggledIcon="@Icons.Material.Filled.LightMode" Color="Color.Inherit" />
