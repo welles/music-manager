@@ -92,6 +92,14 @@ public class SmartPlaylistTests
         Assert.Equal(["tr-03", "tr-12", "tr-05"], SongIds(favorites));
         Assert.Equal(SongIds(favorites), SongIds(await PlaylistAsync(app, Favorites))); // not shuffled
         Assert.False(favorites.TryGetProperty("validUntil", out _));
+
+        // Taking back an older favorite changes the list: "changed" must move so clients reload it.
+        var before = favorites.GetProperty("changed").GetDateTimeOffset();
+        await Task.Delay(20);
+        await app.CallAsync("unstar", "id=tr-05");
+        var after = await PlaylistAsync(app, Favorites);
+        Assert.Equal(["tr-03", "tr-12"], SongIds(after));
+        Assert.True(after.GetProperty("changed").GetDateTimeOffset() > before);
     }
 
     [Theory]

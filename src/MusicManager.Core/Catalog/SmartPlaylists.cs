@@ -48,13 +48,11 @@ public static class SmartPlaylists
     }
 
     /// <summary>
-    /// When the content last changed: for the shuffled ones always now (a new order each time, so clients that compare
-    /// it reload), for favorites the latest star.
+    /// When the content last changed, for clients that reload a playlist only when this moves: always now. The shuffled
+    /// ones have a new order each time; for favorites no date says when one was removed (an older star taken back, a
+    /// song gone from the library), so "now" is the only value that never misses a change. The lists are cheap to load.
     /// </summary>
-    public static DateTimeOffset Changed(SmartPlaylist playlist, IReadOnlyList<CatalogSong> songs, UserDataSnapshot user, DateTimeOffset now) =>
-        playlist.Shuffled
-            ? now
-            : songs.Select(s => user.Starred(s.Id)).Max() ?? Created;
+    public static DateTimeOffset Changed(DateTimeOffset now) => now;
 
     /// <summary>A fixed creation date: they have always existed as far as clients are concerned.</summary>
     public static readonly DateTimeOffset Created = new(2026, 11, 15, 0, 0, 0, TimeSpan.Zero);
