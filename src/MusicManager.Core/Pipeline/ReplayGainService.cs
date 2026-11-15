@@ -126,6 +126,15 @@ public sealed class ReplayGainService(
             return;
         }
 
+        // Replaced or changed while it was measured (e.g. a new version filed under the same path): the values
+        // belong to the old audio.
+        info.Refresh();
+        if (!info.Exists || info.Length != entry.FileSize || info.LastWriteTimeUtc != entry.FileModifiedUtc)
+        {
+            _skipped++;
+            return;
+        }
+
         TagIo.WriteReplayGain(path, replayGain);
         info.Refresh();
         entry.ReplayGainTrackGain = replayGain.TrackGain;
