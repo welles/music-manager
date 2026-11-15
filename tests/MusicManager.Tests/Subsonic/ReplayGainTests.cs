@@ -39,10 +39,17 @@ public class ReplayGainTests
         Assert.Equal("0.966051", rg.PeakText);
     }
 
-    [Theory]
-    [InlineData("no summary at all")]
-    [InlineData("Integrated loudness:\n I: -70.0 LUFS\n True peak:\n Peak: -inf dBFS")] // silence
-    public void UnmeasurableIsNull(string output) => Assert.Null(AudioTools.ParseReplayGain(output));
+    [Fact]
+    public void UnmeasurableIsNull() => Assert.Null(AudioTools.ParseReplayGain("no summary at all"));
+
+    [Fact]
+    public void SilenceGetsTheNeutralGain()
+    {
+        var rg = AudioTools.ParseReplayGain("Integrated loudness:\n I: -70.0 LUFS\n True peak:\n Peak: -inf dBFS");
+        Assert.Equal(ReplayGain.Silence, rg);
+        Assert.Equal("0.00 dB", rg!.GainText);
+        Assert.Equal(ReplayGain.Silence, ReplayGain.Parse(rg.GainText, rg.PeakText)); // round trip through the tags
+    }
 
     [Theory]
     [InlineData("-6.20 dB", "0.988553", -6.2, 0.988553)]
@@ -182,7 +189,7 @@ public class ReplayGainTests
     }
 
     [Fact]
-    public async Task ASilentSongStaysWithoutTheTag()
+    public async Task ASilentSongCountsAsMeasured()
     {
         if (!await FfmpegTestTools.AvailableAsync()) return;
         using var app = new SubsonicTestHost();
@@ -192,7 +199,8 @@ public class ReplayGainTests
 
         await service.RunAsync(default);
 
-        Assert.Equal(new ReplayGainState(false, 1, 1, 0, 0, 1), service.State);
-        Assert.Null((await app.EntryAsync("A/B/1.m4a"))!.ReplayGainTrackGain);
+        Assert.Equal(new ReplayGainState(false, 1, 1, 1, 0, 0), service.State);
+        Assert.Equal(0, (await app.EntryAsync("A/B/1.m4a"))!.ReplayGainTrackGain);
+        Assert.Equal(0, await service.CountMissingAsync()); // not measured again on the next run
     }
 }

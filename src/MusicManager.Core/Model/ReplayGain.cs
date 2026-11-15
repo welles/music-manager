@@ -20,6 +20,9 @@ public sealed record ReplayGain(double TrackGain, double TrackPeak)
 
     public static readonly string[] TagNames = [GainTag, PeakTag];
 
+    /// <summary>A silent file: nothing to level, the volume stays as it is.</summary>
+    public static readonly ReplayGain Silence = new(0, 0);
+
     /// <summary>From a measurement: integrated loudness in LUFS and true peak in dBFS.</summary>
     public static ReplayGain FromMeasurement(double integratedLufs, double truePeakDb) =>
         new(Math.Round(TargetLufs - integratedLufs, 2), Math.Round(Math.Pow(10, truePeakDb / 20), 6));
@@ -35,7 +38,7 @@ public sealed record ReplayGain(double TrackGain, double TrackPeak)
         if (number.EndsWith("dB", StringComparison.OrdinalIgnoreCase)) number = number[..^2].Trim();
         if (!double.TryParse(number, NumberStyles.Float, CultureInfo.InvariantCulture, out var g)) return null;
         // Without a readable peak, full scale is the careful assumption.
-        var p = double.TryParse(peak?.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var parsed) && parsed > 0 ? parsed : 1.0;
+        var p = double.TryParse(peak?.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var parsed) && parsed >= 0 ? parsed : 1.0;
         return new ReplayGain(g, p);
     }
 }
