@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Net;
 using System.Text.Json;
+using MusicManager.Core.Data;
 using MusicManager.Core.Model;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.DependencyInjection;
@@ -267,5 +268,33 @@ public class TranscodingTests
         var response = await app.CreateClient().GetAsync(Url(id, "format=mp3&estimateContentLength=yes&f=json"));
 
         Assert.Equal("failed", (await SubsonicTestHost.ReadAsync(response)).GetProperty("status").GetString());
+    }
+
+    [Fact]
+    public async Task AnUnknownDurationAnnouncesNoLengthAndSendsTheWholeSong()
+    {
+        if (!await FfmpegTestTools.AvailableAsync()) return;
+        using var app = new SubsonicTestHost();
+        var path = System.IO.Path.Combine(app.LibraryRoot, "A", "B", "1.m4a");
+        Directory.CreateDirectory(System.IO.Path.GetDirectoryName(path)!);
+        Assert.Equal(0, (await ProcessRunner.RunAsync("ffmpeg",
+            ["-nostdin", "-v", "error", "-y", "-f", "lavfi", "-i", "sine=f=440:d=10", "-c:a", "aac", path], default)).ExitCode);
+        // As for a file TagLib cannot read: no duration, no bitrate in the index.
+        await app.SeedAsync([new LibraryEntry
+        {
+            RelativePath = "A/B/1.m4a", SongId = "tr-1", Title = "One", Artist = "A", Artists = ["A"], AlbumArtist = "A",
+            AlbumArtists = ["A"], Album = "B", DurationSeconds = null, BitrateKbps = null, FileSize = new FileInfo(path).Length,
+        }]);
+        var client = app.CreateClient();
+
+        // Headers as sent: a buffered HttpClient response fills in Content-Length itself.
+        var response = await client.GetAsync(Url("tr-1", "maxBitRate=64&estimateContentLength=true"), HttpCompletionOption.ResponseHeadersRead);
+
+        Assert.Equal("audio/mpeg", response.Content.Headers.ContentType?.MediaType);
+        Assert.Null(response.Content.Headers.ContentLength);
+        Assert.InRange(await DecodedSecondsAsync(app, await response.Content.ReadAsByteArrayAsync(), "mp3"), 9.5, 10.5);
+        // Seeking still works without a known length.
+        var later = await client.GetByteArrayAsync(Url("tr-1", "maxBitRate=64&timeOffset=6"));
+        Assert.InRange(await DecodedSecondsAsync(app, later, "mp3"), 3.5, 4.5);
     }
 }
