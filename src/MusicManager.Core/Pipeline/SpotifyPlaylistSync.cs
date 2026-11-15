@@ -228,7 +228,8 @@ public sealed class SpotifyPlaylistSync(
                 .ToList();
 
             var id = account.MissingPlaylistId;
-            if (id == null || !await spotify.PlaylistExistsAsync(id, ct))
+            // "Deleting" a playlist on Spotify only unfollows it; it still answers. Gone from the own list = gone for the user.
+            if (id == null || !(await spotify.MyPlaylistsAsync(ct)).Any(p => p.Id == id))
             {
                 id = await spotify.CreatePlaylistAsync(MissingPlaylistName,
                     "Titel aus deinen Spotify-Playlists, die noch nicht in der Music-Manager-Bibliothek sind. Wird vom Music Manager gepflegt.", ct);

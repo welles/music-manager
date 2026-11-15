@@ -193,20 +193,6 @@ public sealed class SpotifyUserClient(HttpClient http, IOptions<MusicManagerOpti
         return doc.RootElement.GetProperty("id").GetString()!;
     }
 
-    /// <summary>Whether a playlist still exists (it may have been deleted on Spotify).</summary>
-    public async Task<bool> PlaylistExistsAsync(string id, CancellationToken ct = default)
-    {
-        try
-        {
-            await PlaylistAsync(id, ct);
-            return true;
-        }
-        catch (SpotifyException ex) when (ex.Status == HttpStatusCode.NotFound)
-        {
-            return false;
-        }
-    }
-
     /// <summary>Replaces all tracks of a playlist; Spotify takes at most 100 per request, the rest is added in blocks.</summary>
     public async Task ReplaceTracksAsync(string id, IReadOnlyList<string> trackIds, CancellationToken ct = default)
     {
