@@ -3,6 +3,7 @@
 @using MusicManager.Core.Services
 @inject IDbContextFactory<AppDbContext> DbFactory
 @inject ReviewService Review
+@inject SameAudioChecker SameAudio
 @inject AudioTools Audio
 @inject Storage Storage
 @inject ISnackbar Snackbar
@@ -20,14 +21,50 @@
         }
         else
         {
+            @if (SameAudio.State.Running)
+            {
+                <MudText Typo="Typo.body2" Class="mb-2">
+                    Audio wird verglichen: @SameAudio.State.Done von @SameAudio.State.Total
+                </MudText>
+                <MudProgressLinear Value="@(SameAudio.State.Total == 0 ? 0 : 100.0 * SameAudio.State.Done / SameAudio.State.Total)" Class="mb-3" />
+            }
+
+            <div class="d-flex flex-wrap align-center mb-3" style="gap:8px">
+                <MudChipSet T="Show" SelectedValue="_show" SelectedValueChanged="SetShow" SelectionMode="SelectionMode.SingleSelection" CheckMark="true"
+                            Size="Size.Small">
+                    <MudChip T="Show" Value="Show.All" Text="@($"Alle ({_files.Count})")" Variant="Variant.Outlined" />
+                    <MudChip T="Show" Value="Show.Same" Text="@($"Gleiche Aufnahme ({SameFiles.Count})")" Variant="Variant.Outlined" />
+                    <MudChip T="Show" Value="Show.Check" Text="@($"Zu prüfen ({_files.Count - SameFiles.Count})")" Variant="Variant.Outlined" />
+                </MudChipSet>
+                @if (_show == Show.Same && SameFiles.Count > 0)
+                {
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small" StartIcon="@Icons.Material.Filled.DeleteSweep"
+                               OnClick="DiscardSame" Disabled="_busy">
+                        Alle @SameFiles.Count neuen Dateien verwerfen
+                    </MudButton>
+                }
+            </div>
+
             <MudGrid>
                 <MudItem xs="12" md="4">
                     <MudPaper Outlined="true">
+                        @if (!Visible.Any())
+                        {
+                            <MudText Typo="Typo.body2" Class="pa-3" Style="opacity:.7">Nichts in dieser Ansicht.</MudText>
+                        }
                         <MudList T="int" SelectedValue="_selectedId" SelectedValueChanged="Select" Dense="true">
-                            @foreach (var f in _files)
+                            @foreach (var f in Visible)
                             {
                                 <MudListItem T="int" Value="f.Id">
-                                    <TrackSummary File="f" />
+                                    <div class="d-flex align-center" style="gap:4px">
+                                        <div style="min-width:0;flex:1"><TrackSummary File="f" /></div>
+                                        @if (SameAudioChecker.IsSafeToDiscard(f))
+                                        {
+                                            <MudTooltip Text="Gleiche Aufnahme wie in der Bibliothek">
+                                                <MudIcon Icon="@Icons.Material.Filled.GraphicEq" Color="Color.Success" Size="Size.Small" />
+                                            </MudTooltip>
+                                        }
+                                    </div>
                                 </MudListItem>
                             }
                         </MudList>
@@ -49,7 +86,11 @@
                             </MudChipSet>
                         }
 
-                        <MudAlert Severity="Severity.Warning" Dense="true" Class="mb-3">@_match.Reason</MudAlert>
+                        <MudAlert Severity="Severity.Warning" Dense="true" Class="mb-2">@_match.Reason</MudAlert>
+                        <MudAlert Severity="@(_match.SameAudio switch { true => Severity.Success, false => Severity.Error, _ => Severity.Info })"
+                                  Dense="true" Class="mb-3">
+                            @(_match.AudioCheck ?? "Audio noch nicht verglichen")
+                        </MudAlert>
 
                         <MudSimpleTable Dense="true" Bordered="true" Class="mb-3 compare-table">
                             <thead>
@@ -128,6 +169,18 @@
     private DuplicateMatch? _match;
     private AbPlayer? _player;
     private bool _busy;
+    private Show _show = Show.All;
+
+    private enum Show { All, Same, Check }
+
+    private List<TrackFile> SameFiles => _files.Where(SameAudioChecker.IsSafeToDiscard).ToList();
+
+    private IEnumerable<TrackFile> Visible => _show switch
+    {
+        Show.Same => _files.Where(SameAudioChecker.IsSafeToDiscard),
+        Show.Check => _files.Where(f => !SameAudioChecker.IsSafeToDiscard(f)),
+        _ => _files,
+    };
 
     private List<DuplicateMatch> DuplicateMatches => _file?.Duplicates.Where(d => d.Kind == DuplicateKind.Duplicate).ToList() ?? [];
 
@@ -142,6 +195,40 @@
         if (selected?.Id != _file?.Id)
             _match = selected?.Duplicates.FirstOrDefault(d => d.Kind == DuplicateKind.Duplicate);
         _file = selected;
+    }
+
+    private Task SetShow(Show show)
+    {
+        _show = show;
+        // Keep the detail on a file of the chosen view.
+        if (Visible.All(f => f.Id != _selectedId) && Visible.FirstOrDefault() is { } first) return Select(first.Id);
+        return Task.CompletedTask;
+    }
+
+    private async Task DiscardSame()
+    {
+        var ids = SameFiles.Select(f => f.Id).ToList();
+        var ok = await Dialogs.ShowMessageBoxAsync("Gleiche Aufnahmen verwerfen",
+            $"Bei {ids.Count} neuen Dateien ist das Audio dasselbe wie in der Bibliothek, nur anders kodiert. Die neuen Dateien kommen " +
+            "in den Papierkorb, die vorhandenen bleiben, wie sie sind.",
+            yesText: "Verwerfen", cancelText: "Abbrechen");
+        if (ok != true) return;
+
+        _busy = true;
+        try
+        {
+            if (_player != null) await _player.StopAsync();
+            var count = await Review.DiscardSameAudioAsync(ids);
+            Snackbar.Add($"{count} neue Dateien verworfen, die vorhandenen Versionen bleiben.", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Fehler: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
     }
 
     private Task Select(int id)

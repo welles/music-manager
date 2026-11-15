@@ -312,6 +312,24 @@ public sealed class ReviewService(
         notifier.Notify();
     }
 
+    /// <summary>
+    /// "Keep existing" for the given duplicates in one go – each only if it is still open and all its matches are the same
+    /// audio (<see cref="SameAudioChecker.IsSafeToDiscard"/>). Returns how many new files went to the trash.
+    /// </summary>
+    public async Task<int> DiscardSameAudioAsync(IReadOnlyCollection<int> fileIds, CancellationToken ct = default)
+    {
+        List<int> safe;
+        await using (var db = await dbFactory.CreateDbContextAsync(ct))
+        {
+            safe = (await db.Files.AsNoTracking().Where(f => fileIds.Contains(f.Id) && f.Status == FileStatus.Duplicate).ToListAsync(ct))
+                .Where(SameAudioChecker.IsSafeToDiscard).Select(f => f.Id).ToList();
+        }
+
+        foreach (var id in safe)
+            await ResolveDuplicateAsync(id, DuplicateDecision.KeepExisting, ct: ct);
+        return safe.Count;
+    }
+
     /// <summary>Processes a file again from the beginning.</summary>
     public async Task RetryAsync(int fileId, CancellationToken ct = default)
     {

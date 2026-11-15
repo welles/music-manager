@@ -26,6 +26,7 @@ public sealed partial class MatchingPipeline(
     AiService ai,
     ExternalSourceService external,
     DuplicateDetector duplicates,
+    SameAudioChecker sameAudio,
     LibraryIndexer libraryIndexer,
     AlbumCoverService albumCovers,
     PipelineNotifier notifier,
@@ -711,6 +712,14 @@ public sealed partial class MatchingPipeline(
                 var dup = file.Duplicates.Where(d => d.Kind == DuplicateKind.Duplicate).ToList();
                 if (dup.Count > 0 || File.Exists(storage.LibraryPath(file.TargetPath)))
                 {
+                    if (dup.Count > 0)
+                    {
+                        await StepAsync(file, "Audio wird mit der vorhandenen Datei verglichen", ct);
+                        file.Duplicates = await sameAudio.CheckAsync(source, file.Duplicates, ct);
+                        foreach (var m in file.Duplicates.Where(d => d.Kind == DuplicateKind.Duplicate))
+                            AddEvent(file, $"Audio-Vergleich mit {m.RelativePath}: {m.AudioCheck}");
+                    }
+
                     var reason = dup.Count > 0 ? $"{dup[0].Reason}: {dup[0].RelativePath}" : $"Zieldatei existiert bereits: {file.TargetPath}";
                     SetStatus(file, FileStatus.Duplicate, $"Mögliches Duplikat – {reason}");
                     AddEvent(file, $"Nicht einsortiert, mögliches Duplikat ({dup.Count} Treffer): {reason}", EventLevel.Warning);

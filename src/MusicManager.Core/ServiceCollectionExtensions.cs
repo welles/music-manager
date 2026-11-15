@@ -56,6 +56,8 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<PipelineNotifier>();
         services.AddSingleton<DuplicateDetector>();
         services.AddSingleton<LibraryDuplicateScanner>();
+        services.AddSingleton<SameAudioChecker>();
+        services.AddHostedService(sp => sp.GetRequiredService<SameAudioChecker>());
         services.AddSingleton<LibraryCatalog>();
         services.AddSingleton<MediaCatalog>();
         services.AddSingleton<UserDataStore>();

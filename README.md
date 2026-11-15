@@ -33,6 +33,12 @@ streams straight from Music Manager.
    fingerprint, artist/title + duration); duplicates wait in the duplicate view with
    an A/B player (keep new / keep existing / keep both). The library itself can be
    checked for existing duplicates as well.
+   Each duplicate's audio is also compared with the library file over the whole
+   track (Chromaprint, 10-second sections): if it is the same audio, only encoded
+   differently, it is marked "Gleiche Aufnahme", and all such new files can be
+   discarded in one go. A version with a voice or other sound laid over the music
+   (a commentary track) stays for review. Open duplicates from before this check
+   are compared once after the start.
 
 ## Running with Docker
 

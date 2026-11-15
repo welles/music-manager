@@ -105,10 +105,10 @@ public sealed class AudioTools(IOptions<MusicManagerOptions> options, ILogger<Au
         return new Fingerprint(doc.RootElement.GetProperty("duration").GetDouble(), doc.RootElement.GetProperty("fingerprint").GetString()!);
     }
 
-    /// <summary>Raw Chromaprint values (first 120 s) for local duplicate comparisons.</summary>
-    public async Task<(double Duration, uint[] Values)?> RawFingerprintAsync(string path, CancellationToken ct)
+    /// <summary>Raw Chromaprint values for local duplicate comparisons: the first 120 s, or the whole track.</summary>
+    public async Task<(double Duration, uint[] Values)?> RawFingerprintAsync(string path, CancellationToken ct, bool wholeTrack = false)
     {
-        var r = await ProcessRunner.RunAsync(_o.FpcalcPath, ["-raw", "-json", path], ct);
+        var r = await ProcessRunner.RunAsync(_o.FpcalcPath, wholeTrack ? ["-raw", "-json", "-length", "0", path] : ["-raw", "-json", path], ct);
         if (r.ExitCode != 0)
         {
             logger.LogWarning("fpcalc -raw failed for {Path}: {Error}", path, r.StdErr.Trim());
