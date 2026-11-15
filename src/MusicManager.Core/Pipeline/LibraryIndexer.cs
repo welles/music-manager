@@ -25,7 +25,7 @@ public sealed class LibraryIndexer(
     ILogger<LibraryIndexer> logger) : BackgroundService
 {
     /// <summary>Raise when <see cref="Fill"/> reads more or different data, so existing entries are re-read.</summary>
-    public const int CurrentIndexVersion = 6;
+    public const int CurrentIndexVersion = 7;
 
     private readonly SemaphoreSlim _trigger = new(0, 1);
     private long _version;

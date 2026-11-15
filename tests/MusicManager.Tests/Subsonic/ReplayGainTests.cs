@@ -1,3 +1,5 @@
+using Microsoft.EntityFrameworkCore;
+using MusicManager.Core.Data;
 using MusicManager.Core.Model;
 using MusicManager.Core.Pipeline;
 using MusicManager.Core.Services;
@@ -69,6 +71,51 @@ public class ReplayGainTests
         Assert.Equal(-6.2, entry.ReplayGainTrackGain);
         Assert.Equal(0.9, entry.ReplayGainTrackPeak);
         Assert.False(entry.TagsEditedOutside);
+    }
+
+    [Fact]
+    public async Task EntriesIndexedBeforeGetTheirExistingTagsRead()
+    {
+        using var app = new SubsonicTestHost();
+        var path = app.AddFile("A/B/1.m4a", Tags("One"));
+        TagIo.WriteReplayGain(path, new ReplayGain(-6.2, 0.9));
+        await app.ScanAsync();
+        // As an older version left it: indexed, but without the values.
+        await using (var db = await app.Get<IDbContextFactory<AppDbContext>>().CreateDbContextAsync())
+        {
+            var old = await db.Library.SingleAsync();
+            old.ReplayGainTrackGain = old.ReplayGainTrackPeak = null;
+            old.IndexVersion = 6;
+            await db.SaveChangesAsync();
+        }
+
+        await app.ScanAsync();
+
+        Assert.Equal(-6.2, (await app.EntryAsync("A/B/1.m4a"))!.ReplayGainTrackGain);
+        Assert.Equal(0, await app.Get<ReplayGainService>().CountMissingAsync());
+    }
+
+    [Fact]
+    public async Task ARowDeletedMeanwhileDoesNotFailTheSave()
+    {
+        using var app = new SubsonicTestHost();
+        app.AddFile("A/B/1.m4a", Tags("One"));
+        app.AddFile("A/B/2.m4a", Tags("Two"));
+        await app.ScanAsync();
+        var factory = app.Get<IDbContextFactory<AppDbContext>>();
+        await using var db = await factory.CreateDbContextAsync();
+        var entries = await db.Library.OrderBy(e => e.RelativePath).ToListAsync();
+        foreach (var e in entries) e.ReplayGainTrackGain = -3;
+        await using (var other = await factory.CreateDbContextAsync())
+        {
+            other.Library.Remove(await other.Library.SingleAsync(e => e.Id == entries[0].Id));
+            await other.SaveChangesAsync();
+        }
+
+        Assert.Equal(1, await db.SaveSkippingDeletedAsync(default));
+
+        var left = Assert.Single(await factory.CreateDbContext().Library.AsNoTracking().ToListAsync());
+        Assert.Equal(-3, left.ReplayGainTrackGain);
     }
 
     [Fact]
