@@ -1,3 +1,4 @@
+@using System.Globalization
 @inject PlayerService Player
 @inject NavigationManager Nav
 @* Track table of the library: search, problem filters, multi-selection, playback. *@
@@ -45,6 +46,20 @@
         </TemplateColumn>
         <TemplateColumn Title="Format" SortBy="x => x.BitrateKbps">
             <CellTemplate>@context.Item.Codec @(context.Item.BitrateKbps != null ? $"{context.Item.BitrateKbps} kbps" : "")</CellTemplate>
+        </TemplateColumn>
+        <TemplateColumn Title="ReplayGain" SortBy="x => x.ReplayGainTrackGain ?? double.MinValue">
+            <CellTemplate>
+                @if (context.Item.ReplayGainTrackGain is { } gain)
+                {
+                    <MudTooltip Text="@($"Peak {(context.Item.ReplayGainTrackPeak ?? 1).ToString("0.000", CultureInfo.InvariantCulture)}")">
+                        <span style="white-space:nowrap">@(new ReplayGain(gain, 0).GainText)</span>
+                    </MudTooltip>
+                }
+                else
+                {
+                    <MudText Typo="Typo.body2" Style="opacity:.6">fehlt</MudText>
+                }
+            </CellTemplate>
         </TemplateColumn>
         <TemplateColumn Title="Hinweise" Sortable="false">
             <CellTemplate>
