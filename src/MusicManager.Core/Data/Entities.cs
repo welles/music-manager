@@ -513,6 +513,8 @@ public sealed class SpotifyAccount
     public string? MissingPlaylistId { get; set; }
 
     public bool CanWritePlaylists => (Scopes ?? "").Split(' ').Contains("playlist-modify-private");
+
+    public bool CanReadLikedSongs => (Scopes ?? "").Split(' ').Contains("user-library-read");
 }
 
 /// <summary>

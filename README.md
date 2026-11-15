@@ -189,13 +189,16 @@ method "replace tracks"); add the copy. Setup:
    `https://<your host>/spotify/callback` as redirect URI of the app whose ID and secret are in
    `MusicManager__SpotifyClientId` / `MusicManager__SpotifyClientSecret`
    (`MusicManager__SpotifyRedirectUri` overrides the address worked out from the request).
-2. *Playlists* → "Mit Spotify verbinden", then "Hinzufügen".
+2. *Playlists* → "Mit Spotify verbinden", then "Hinzufügen". Your **liked songs**
+   ("Lieblingssongs") are offered first there: Spotify keeps them as saved tracks, not as a
+   playlist, so they are read on every sync (latest liked first) and get their own cover.
 
 Optionally Music Manager keeps a private Spotify playlist **"Fehlt im Music Manager"** with all
 tracks of the kept playlists that are not in the library (each once): switch on the *Playlists*
 page. It is updated with every sync – tracks that arrived in the library leave it, new missing ones
 join – and created again if it was deleted on Spotify. This needs the permission to write private
-playlists (`playlist-modify-private`); a login from before it was asked for has to connect again.
+playlists (`playlist-modify-private`), the liked songs `user-library-read`; a login from before they
+were asked for has to connect again (the chosen playlists and settings stay).
 
 Each has its own cover (`getCoverArt` with the playlist's ID; pictures in
 `src/MusicManager.Web/wwwroot/playlist-covers`, SVG sources in `docs/playlist-covers`). Each load of

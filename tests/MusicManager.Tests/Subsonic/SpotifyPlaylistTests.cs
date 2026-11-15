@@ -91,6 +91,23 @@ public sealed class SpotifyPlaylistTests : IDisposable
                 _ => null,
             };
 
+            if (path == "/v1/me/tracks")
+            {
+                if (!Scope.Contains("user-library-read"))
+                    return Task.FromResult(new HttpResponseMessage(HttpStatusCode.Forbidden)
+                        { Content = new StringContent("""{"error":{"status":403,"message":"Insufficient client scope"}}""") });
+                // Most recently liked first; the second page holds the rest.
+                var liked = url.Query.Contains("offset=2")
+                    ? Json(new { total = 3, items = new[] { Track("track", "s1", "Haus am See", "Peter Fox", 220000, "dea810800130") }, next = (string?)null })
+                    : Json(new
+                    {
+                        total = 3,
+                        items = new[] { Track("track", "l1", "Liked One", "Somebody", 200000, null), Track("track", "s3", "Dickes B", "Seeed", 245000, null) },
+                        next = "https://api.spotify.com/v1/me/tracks?offset=2&limit=50",
+                    });
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(liked, Encoding.UTF8, "application/json") });
+            }
+
             if (path == "/v1/me/playlists" && request.Method == HttpMethod.Post)
             {
                 Created++;
@@ -346,5 +363,40 @@ public sealed class SpotifyPlaylistTests : IDisposable
         var account = (await client.AccountAsync())!;
         Assert.True(account.MissingPlaylistEnabled);
         Assert.True(account.CanWritePlaylists);
+    }
+
+    [Fact]
+    public async Task LikedSongsAreKeptLikeAPlaylistWithTheirOwnCover()
+    {
+        await ConnectAsync();
+        await SeedLibraryAsync();
+        var client = Get<SpotifyUserClient>();
+        var liked = await client.LikedSongsAsync();
+        Assert.Equal((SpotifyUserClient.LikedSongsId, "Lieblingssongs", 3), (liked.Id, liked.Name, liked.TrackCount));
+
+        var playlist = await Get<SpotifyPlaylistSync>().AddAsync(liked);
+
+        Assert.Null(playlist.SyncError);
+        var id = $"pl-spotify-{playlist.Id}";
+        var entries = (await _base.CallAsync("getPlaylist", $"id={id}")).GetProperty("playlist").GetProperty("entry").EnumerateArray()
+            .Select(e => e.GetProperty("id").GetString()).ToList();
+        Assert.Equal(["tr-seeed", "tr-fox"], entries); // Spotify's order (latest liked first), the missing one left out
+        var cover = await _host.CreateClient().GetAsync($"/rest/getCoverArt?apiKey={SubsonicTestHost.Key}&id={id}");
+        Assert.Equal("image/png", cover.Content.Headers.ContentType?.MediaType); // the liked songs cover, not a Spotify picture
+    }
+
+    [Fact]
+    public async Task WithoutTheRightToReadLikedSongsTheSyncSaysSo()
+    {
+        await ConnectAsync();
+        var liked = await Get<SpotifyUserClient>().LikedSongsAsync();
+        _spotify.Scope = "playlist-read-private"; // as if the login had not granted it
+        await Get<SpotifyUserClient>().DisconnectAsync();
+        await ConnectAsync();
+
+        var playlist = await Get<SpotifyPlaylistSync>().AddAsync(liked);
+
+        Assert.Contains("Lieblingssongs", playlist.SyncError);
+        Assert.False((await Get<SpotifyUserClient>().AccountAsync())!.CanReadLikedSongs);
     }
 }

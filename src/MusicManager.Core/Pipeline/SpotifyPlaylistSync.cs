@@ -110,34 +110,22 @@ public sealed class SpotifyPlaylistSync(
         notifier.Notify();
         try
         {
-            var info = await spotify.PlaylistAsync(playlist.SpotifyId, ct);
-            playlist.Name = info.Name;
-            playlist.Description = info.Description;
-            playlist.OwnerId = info.OwnerId;
-            playlist.OwnerName = info.OwnerName;
-            playlist.Collaborative = info.Collaborative;
-
-            if (info.SnapshotId == null || info.SnapshotId != playlist.SnapshotId || playlist.Tracks.Count == 0)
+            if (playlist.SpotifyId == SpotifyUserClient.LikedSongsId)
             {
-                var tracks = await spotify.PlaylistTracksAsync(playlist.SpotifyId, ct);
-                db.SpotifyPlaylistTracks.RemoveRange(playlist.Tracks);
-                playlist.Tracks = tracks.Select((t, i) => new SpotifyPlaylistTrack
-                {
-                    Position = i, SpotifyTrackId = t.Id, Title = t.Title, Artists = t.Artists, Album = t.Album, DurationMs = t.DurationMs, Isrc = t.Isrc,
-                    ImageUrl = t.ImageUrl,
-                }).ToList();
-                playlist.SnapshotId = info.SnapshotId;
-                logger.LogInformation("Spotify playlist {Name}: {Count} tracks read", playlist.Name, tracks.Count);
+                await SyncLikedSongsAsync(db, playlist, ct);
             }
-
-            if (info.ImageUrl != playlist.ImageUrl || !File.Exists(CoverPath(playlist.Id)))
+            else
             {
-                await SaveCoverAsync(playlist.Id, info.ImageUrl, ct);
-                playlist.ImageUrl = info.ImageUrl;
+                await SyncPlaylistAsync(db, playlist, ct);
             }
 
             playlist.SyncedAt = DateTimeOffset.UtcNow;
             playlist.SyncError = null;
+        }
+        catch (SpotifyException ex) when (playlist.SpotifyId == SpotifyUserClient.LikedSongsId && ex.Status is HttpStatusCode.Forbidden or HttpStatusCode.Unauthorized)
+        {
+            playlist.SyncError = "Spotify hat das Lesen der Lieblingssongs nicht erlaubt. Bitte einmal neu mit Spotify verbinden.";
+            logger.LogWarning("Spotify liked songs: {Error}", ex.Message);
         }
         catch (SpotifyException ex)
         {
@@ -158,6 +146,54 @@ public sealed class SpotifyPlaylistSync(
         }
 
         await db.SaveChangesAsync(ct);
+    }
+
+    private async Task SyncPlaylistAsync(AppDbContext db, SpotifyPlaylist playlist, CancellationToken ct)
+    {
+        var info = await spotify.PlaylistAsync(playlist.SpotifyId, ct);
+        playlist.Name = info.Name;
+        playlist.Description = info.Description;
+        playlist.OwnerId = info.OwnerId;
+        playlist.OwnerName = info.OwnerName;
+        playlist.Collaborative = info.Collaborative;
+
+        if (info.SnapshotId == null || info.SnapshotId != playlist.SnapshotId || playlist.Tracks.Count == 0)
+        {
+            SetTracks(db, playlist, await spotify.PlaylistTracksAsync(playlist.SpotifyId, ct));
+            playlist.SnapshotId = info.SnapshotId;
+        }
+
+        if (info.ImageUrl != playlist.ImageUrl || !File.Exists(CoverPath(playlist.Id)))
+        {
+            await SaveCoverAsync(playlist.Id, info.ImageUrl, ct);
+            playlist.ImageUrl = info.ImageUrl;
+        }
+    }
+
+    /// <summary>
+    /// The liked songs have no snapshot to compare: they are read on every run and stored only when the list changed.
+    /// They have no picture either; the web app shows its own cover for them.
+    /// </summary>
+    private async Task SyncLikedSongsAsync(AppDbContext db, SpotifyPlaylist playlist, CancellationToken ct)
+    {
+        var account = await spotify.AccountAsync(ct);
+        playlist.Name = SpotifyUserClient.LikedSongsName;
+        playlist.OwnerId = account?.UserId;
+        playlist.OwnerName = account?.DisplayName;
+        var tracks = await spotify.LikedTracksAsync(ct);
+        var stored = playlist.Tracks.OrderBy(t => t.Position).Select(t => t.SpotifyTrackId);
+        if (!stored.SequenceEqual(tracks.Select(t => t.Id))) SetTracks(db, playlist, tracks);
+    }
+
+    private void SetTracks(AppDbContext db, SpotifyPlaylist playlist, List<SpotifyTrackInfo> tracks)
+    {
+        db.SpotifyPlaylistTracks.RemoveRange(playlist.Tracks);
+        playlist.Tracks = tracks.Select((t, i) => new SpotifyPlaylistTrack
+        {
+            Position = i, SpotifyTrackId = t.Id, Title = t.Title, Artists = t.Artists, Album = t.Album, DurationMs = t.DurationMs, Isrc = t.Isrc,
+            ImageUrl = t.ImageUrl,
+        }).ToList();
+        logger.LogInformation("Spotify playlist {Name}: {Count} tracks read", playlist.Name, tracks.Count);
     }
 
     /// <summary>

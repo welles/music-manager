@@ -1,3 +1,5 @@
+using Microsoft.EntityFrameworkCore;
+using MusicManager.Core.Data;
 using MusicManager.Core.Pipeline;
 using MusicManager.Core.Services;
 
@@ -13,6 +15,13 @@ public static class SpotifyCovers
     public static async Task<string> PathAsync(IServiceProvider services, int playlistId, CancellationToken ct)
     {
         var covers = Path.Combine(services.GetRequiredService<IWebHostEnvironment>().WebRootPath, "playlist-covers");
+        // The liked songs have no picture on Spotify: their own cover (with the badge already in it).
+        await using (var db = await services.GetRequiredService<IDbContextFactory<AppDbContext>>().CreateDbContextAsync(ct))
+        {
+            if (await db.SpotifyPlaylists.AnyAsync(p => p.Id == playlistId && p.SpotifyId == SpotifyUserClient.LikedSongsId, ct))
+                return Path.Combine(covers, "spotify-liked.png");
+        }
+
         var source = services.GetRequiredService<SpotifyPlaylistSync>().CoverPath(playlistId);
         if (!File.Exists(source)) return Path.Combine(covers, "spotify.png");
 
