@@ -252,3 +252,11 @@
         justify-content: flex-end;
     }
 }
+
+/* Data grid toolbars with several button rows (e.g. the review queue on a tablet) grow instead of
+   overflowing their fixed height onto the content above. */
+.mud-table-toolbar {
+    height: auto;
+    min-height: var(--mud-internal-toolbar-height);
+}
+
