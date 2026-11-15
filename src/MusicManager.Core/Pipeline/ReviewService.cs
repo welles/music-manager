@@ -145,16 +145,52 @@ public sealed class ReviewService(
     /// Takes the tags of a Spotify/Deezer match (the given one, or the best of each file) incl. cover.
     /// Returns files without a match.
     /// </summary>
-    public async Task<List<string>> ApplyExternalAsync(IReadOnlyList<int> fileIds, string? matchKey = null, CancellationToken ct = default)
+    public Task<List<string>> ApplyExternalAsync(IReadOnlyList<int> fileIds, string? matchKey = null, CancellationToken ct = default) =>
+        ApplyExternalAsync(fileIds, file => matchKey != null
+            ? file.ExternalMatches.FirstOrDefault(m => m.Key == matchKey)
+            : file.ExternalMatches.OrderByDescending(m => m.Score).FirstOrDefault(), ct);
+
+    /// <summary>
+    /// The 100 % match from <paramref name="source"/> ("deezer" or "spotify") for a file that MusicBrainz knows nothing
+    /// about, not even a weak candidate. A link from the file's own tags wins over a search hit.
+    /// </summary>
+    public static ExternalMatch? PerfectMatch(TrackFile file, string source) =>
+        file.Status == FileStatus.NotInMusicBrainz && file.Candidates.Count == 0
+            ? file.ExternalMatches
+                .Where(m => m.Source == source && m.Score >= PerfectScore)
+                .OrderByDescending(m => m.FromTagLink)
+                .FirstOrDefault()
+            : null;
+
+    // Scores are rounded to three decimals (ExternalSourceService.Rate), so 100 % is exactly 1.
+    private const double PerfectScore = 0.9995;
+
+    /// <summary>
+    /// Takes the tags (incl. cover) from <paramref name="source"/> for every file in the queue with a
+    /// <see cref="PerfectMatch"/> there. Returns the number of files taken over and the problems.
+    /// </summary>
+    public async Task<(int Applied, List<string> Problems)> ApplyPerfectExternalAsync(string source, CancellationToken ct = default)
+    {
+        List<int> ids;
+        await using (var db = await dbFactory.CreateDbContextAsync(ct))
+        {
+            var candidates = await db.Files.AsNoTracking().Where(f => f.Status == FileStatus.NotInMusicBrainz).ToListAsync(ct);
+            ids = candidates.Where(f => PerfectMatch(f, source) != null).Select(f => f.Id).ToList();
+        }
+
+        if (ids.Count == 0) return (0, []);
+        var problems = await ApplyExternalAsync(ids, file => PerfectMatch(file, source), ct);
+        return (ids.Count - problems.Count, problems);
+    }
+
+    private async Task<List<string>> ApplyExternalAsync(IReadOnlyList<int> fileIds, Func<TrackFile, ExternalMatch?> pick, CancellationToken ct)
     {
         var problems = new List<string>();
         await using var db = await dbFactory.CreateDbContextAsync(ct);
         var files = await db.Files.Where(f => fileIds.Contains(f.Id)).ToListAsync(ct);
         foreach (var file in files)
         {
-            var match = matchKey != null
-                ? file.ExternalMatches.FirstOrDefault(m => m.Key == matchKey)
-                : file.ExternalMatches.OrderByDescending(m => m.Score).FirstOrDefault();
+            var match = pick(file);
             if (match == null)
             {
                 problems.Add($"{file.FileName}: kein Treffer aus Spotify/Deezer");

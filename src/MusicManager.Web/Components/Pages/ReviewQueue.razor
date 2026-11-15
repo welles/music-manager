@@ -15,6 +15,17 @@
 <MudDataGrid T="TrackFile" Items="Visible" Dense="true" Hover="true" MultiSelection="true" @bind-SelectedItems="_selected"
              Groupable="true" GroupExpanded="true" RowsPerPage="100">
     <ToolBarContent>
+        <MudButtonGroup Variant="Variant.Outlined" Size="Size.Small" Color="Color.Primary">
+            @foreach (var source in PerfectSources)
+            {
+                var count = PerfectCount(source);
+                <MudTooltip Text="@($"Alle Dateien ohne jeden MusicBrainz-Fund, die bei {MatchingPipeline.SourceName(source)} einen Treffer mit 100 % Übereinstimmung haben, mit dessen Tags einsortieren")">
+                    <MudButton StartIcon="@Icons.Material.Filled.DoneAll" Disabled="_busy || count == 0" OnClick="() => ApplyPerfect(source)">
+                        @MatchingPipeline.SourceName(source) 100 % (@count)
+                    </MudButton>
+                </MudTooltip>
+            }
+        </MudButtonGroup>
         <MudSpacer />
         <MudButtonGroup Variant="Variant.Outlined" Size="Size.Small">
             <MudButton StartIcon="@Icons.Material.Filled.Search" Disabled="_selected.Count == 0" OnClick="SearchRelease">Release zuweisen</MudButton>
@@ -123,6 +134,33 @@
         foreach (var p in problems) Snackbar.Add(p, Severity.Warning);
         Snackbar.Add($"{ids.Count - problems.Count} Datei(en) mit dem besten Spotify/Deezer-Treffer getaggt – werden geschrieben.", Severity.Success);
         _selected.Clear();
+    }
+
+    private static readonly string[] PerfectSources = ["deezer", "spotify"];
+    private bool _busy;
+
+    private int PerfectCount(string source) => _files.Count(f => ReviewService.PerfectMatch(f, source) != null);
+
+    private async Task ApplyPerfect(string source)
+    {
+        var name = MatchingPipeline.SourceName(source);
+        var ok = await Dialogs.ShowMessageBoxAsync($"100-%-Treffer von {name} übernehmen",
+            $"{PerfectCount(source)} Datei(en) ohne MusicBrainz-Fund mit den Tags und dem Cover ihres 100-%-Treffers von {name} einsortieren?",
+            yesText: "Übernehmen", cancelText: "Abbrechen");
+        if (ok != true) return;
+
+        _busy = true;
+        try
+        {
+            var (applied, problems) = await Review.ApplyPerfectExternalAsync(source);
+            foreach (var p in problems) Snackbar.Add(p, Severity.Warning);
+            Snackbar.Add($"{applied} Datei(en) mit dem 100-%-Treffer von {name} getaggt – werden geschrieben.", Severity.Success);
+            _selected.Clear();
+        }
+        finally
+        {
+            _busy = false;
+        }
     }
 
     private void ManualTag() => Nav.NavigateTo($"manuell?ids={string.Join(",", SelectedIds)}");
