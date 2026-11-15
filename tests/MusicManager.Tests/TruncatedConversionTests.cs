@@ -58,6 +58,30 @@ public sealed class TruncatedConversionTests : IDisposable
     }
 
     [Fact]
+    public async Task VbrMp3WithEstimatedLengthIsConverted()
+    {
+        if (!await HasFfmpegAsync()) return;
+
+        // 10 s of a quiet tone, then 10 s of noise, VBR without Xing header: ffprobe estimates the length from the
+        // bitrate at the start and claims far more than 20 s.
+        var mp3 = Path.Combine(_dir, "vbr.mp3");
+        var r = await ProcessRunner.RunAsync("ffmpeg",
+        [
+            "-nostdin", "-v", "error", "-f", "lavfi", "-i",
+            "sine=f=440:d=10,volume=0.1[a];anoisesrc=d=10[b];[a][b]concat=n=2:v=0:a=1",
+            "-c:a", "libmp3lame", "-q:a", "2", "-write_xing", "0", mp3,
+        ], CancellationToken.None);
+        Assert.Equal(0, r.ExitCode);
+        var info = await _audio.ProbeAsync(mp3, CancellationToken.None);
+        Assert.True(info.DurationSeconds > 25, $"expected an overestimated length, got {info.DurationSeconds}");
+
+        var output = Path.Combine(_dir, "vbr.m4a");
+        await _audio.ConvertToM4aAsync(mp3, output, info.Codec, 256, info.DurationSeconds, CancellationToken.None);
+
+        Assert.InRange((await _audio.ProbeAsync(output, CancellationToken.None)).DurationSeconds ?? 0, 19.5, 20.5);
+    }
+
+    [Fact]
     public async Task IntactFlacIsConverted()
     {
         if (!await HasFfmpegAsync()) return;

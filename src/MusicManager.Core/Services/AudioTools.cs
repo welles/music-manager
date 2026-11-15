@@ -148,9 +148,9 @@ public sealed class AudioTools(IOptions<MusicManagerOptions> options, ILogger<Au
         // ffmpeg stops at a damaged spot in the source and still exits with 0; the result would be filed cut short
         // and the original moved to the trash.
         var converted = (await ProbeAsync(output, ct)).DurationSeconds;
-        if (IsTruncated(sourceSeconds, converted))
+        var detail = r.StdErr.Trim();
+        if (IsTruncated(sourceSeconds, converted, detail))
         {
-            var detail = r.StdErr.Trim();
             throw new InvalidOperationException(
                 $"Umwandlung unvollständig: {converted:0} s statt {sourceSeconds:0} s – die Quelldatei ist vermutlich beschädigt"
                 + (detail.Length > 0 ? $" ({(detail.Length > 300 ? detail[..300] : detail)})" : ""));
@@ -159,9 +159,14 @@ public sealed class AudioTools(IOptions<MusicManagerOptions> options, ILogger<Au
         return copy;
     }
 
-    /// <summary>The converted file is clearly shorter than the source claims to be (more than 1 s and 1 %).</summary>
-    internal static bool IsTruncated(double? sourceSeconds, double? convertedSeconds) =>
-        sourceSeconds is > 0 && convertedSeconds is { } c && sourceSeconds.Value - c > Math.Max(1.0, sourceSeconds.Value * 0.01);
+    /// <summary>
+    /// ffmpeg reported errors and the converted file is clearly shorter than the source claims to be (more than 1 s and
+    /// 1 %). Both are needed: for raw ADTS AAC and VBR MP3s without a Xing/VBRI header ffprobe only estimates the source
+    /// length from the bitrate, so an intact file can come out shorter, but then without decoding errors.
+    /// </summary>
+    internal static bool IsTruncated(double? sourceSeconds, double? convertedSeconds, string ffmpegErrors) =>
+        !string.IsNullOrWhiteSpace(ffmpegErrors)
+        && sourceSeconds is > 0 && convertedSeconds is { } c && sourceSeconds.Value - c > Math.Max(1.0, sourceSeconds.Value * 0.01);
 
     private static readonly HashSet<string> BrowserFormats = [".mp3", ".m4a", ".mp4", ".aac", ".flac", ".ogg", ".oga", ".opus", ".wav", ".webm"];
     private readonly System.Collections.Concurrent.ConcurrentDictionary<string, double?> _loudness = new();
