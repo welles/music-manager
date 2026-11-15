@@ -162,6 +162,38 @@ public class SquareImageTests
     }
 
     [Fact]
+    public async Task SizedEmbeddedCoverIsServedSquareAfterCutting()
+    {
+        if (!await FfmpegTestTools.AvailableAsync()) return;
+        using var app = new SubsonicTestHost();
+        var audio = app.Get<AudioTools>();
+        var wide = await FfmpegTestTools.ImageAsync(Path.Combine(app.Root, "wide.jpg"), 300, 200);
+        var song = app.AddFile("A/B/1.m4a", Tags("One"));
+        TagIo.WriteM4a(song, Tags("One"), wide, "musicbrainz");
+        await app.ScanAsync();
+
+        var albumId = (await app.CallAsync("getAlbumList2", "&type=alphabeticalByName"))
+            .GetProperty("albumList2").GetProperty("album")[0].GetProperty("id").GetString();
+        async Task<(int, int)?> ServedSizeAsync()
+        {
+            var response = await app.CreateClient().GetAsync($"/rest/getCoverArt?apiKey={SubsonicTestHost.Key}&f=json&id={albumId}&size=100");
+            return await audio.ImageSizeAsync(await response.Content.ReadAsByteArrayAsync(), default);
+        }
+
+        // Cached before cutting, like an older version did it: scaled down, not square. The album has no folder
+        // cover, so the embedded cover is served.
+        Assert.NotNull(await ServedSizeAsync());
+        var cached = Assert.Single(Directory.GetFiles(Path.Combine(app.DataRoot, "cache", "covers")));
+        await FfmpegTestTools.ImageAsync(cached + ".jpg", 100, 66);
+        System.IO.File.Move(cached + ".jpg", cached, overwrite: true);
+        Assert.Equal((100, 66), await ServedSizeAsync());
+
+        await app.Get<ImageSquareService>().RunAsync(default);
+
+        Assert.Equal((100, 100), await ServedSizeAsync());
+    }
+
+    [Fact]
     public async Task ExistingImagesAreCutAndTheFileStaysUnflagged()
     {
         if (!await FfmpegTestTools.AvailableAsync()) return;
