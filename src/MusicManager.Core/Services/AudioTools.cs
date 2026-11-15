@@ -147,9 +147,10 @@ public sealed class AudioTools(IOptions<MusicManagerOptions> options, ILogger<Au
 
     /// <summary>
     /// Copies the encoder's output to <paramref name="output"/> while it runs, so the first bytes go out within
-    /// milliseconds. Stops ffmpeg when the client goes away (<paramref name="ct"/>). Returns the bytes written.
+    /// milliseconds. Stops ffmpeg when the client goes away (<paramref name="ct"/>). Returns whether ffmpeg finished
+    /// without an error, i.e. the output is complete.
     /// </summary>
-    public async Task<long> PumpAsync(Process ffmpeg, string input, Stream output, CancellationToken ct)
+    public async Task<bool> PumpAsync(Process ffmpeg, string input, Stream output, CancellationToken ct)
     {
         using var p = ffmpeg;
         // Read stderr alongside, or a chatty ffmpeg blocks once the pipe is full.
@@ -175,8 +176,9 @@ public sealed class AudioTools(IOptions<MusicManagerOptions> options, ILogger<Au
             throw;
         }
 
-        if (p.ExitCode != 0) logger.LogWarning("Transcoding {Input} failed: {Error}", input, (await stderr).Trim());
-        return written;
+        if (p.ExitCode == 0) return true;
+        logger.LogWarning("Transcoding {Input} failed after {Bytes} bytes: {Error}", input, written, (await stderr).Trim());
+        return false;
     }
 
     /// <summary>

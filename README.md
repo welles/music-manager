@@ -49,7 +49,7 @@ docker compose up -d
 | `/inbox` | New files                                                  |
 | `/music` | Music library                                              |
 | `/trash` | Replaced/discarded files, deleted after the retention time |
-| `/data`  | SQLite database, work files, Data Protection keys, cover cache |
+| `/data`  | SQLite database, work files, Data Protection keys, cover and transcode cache |
 
 | Environment variable              | Purpose                                                   |
 |-----------------------------------|-----------------------------------------------------------|
@@ -60,6 +60,7 @@ docker compose up -d
 | `MusicManager__MusicBrainzServer` | Optional own MusicBrainz mirror                           |
 | `MusicManager__SubsonicApiKey`    | API key for the Subsonic API (optional; without it the API is off) |
 | `MusicManager__LastFmApiKey`      | Last.fm API key (optional, https://www.last.fm/api/account/create) – genre fallback |
+| `MusicManager__TranscodeCacheMb`  | Size limit of the transcode cache in MB (default 2048, 0 = off) |
 | `MusicManager__InboxPath` …       | Override the container paths (default `/inbox`, `/music`, `/trash`, `/data`) |
 
 The container runs as `PUID:PGID` (see `docker-compose.yml`), so filed files belong
@@ -145,6 +146,13 @@ over a slow uplink. Without a format it becomes MP3; the bitrate never goes abov
 Seeking in a transcoded stream works through `timeOffset` (OpenSubsonic `transcodeOffset`).
 `download` always serves the original. In Symfonium set it per network in the media provider's
 transcoding settings, e.g. Opus 128 kbit/s on mobile data.
+
+Finished transcodes are kept under `<data>/cache/transcodes` (limit `MusicManager__TranscodeCacheMb`,
+default 2 GB, about 500 songs at 128 kbit/s; what was used longest ago goes first). The first
+request of a song in a format is encoded while it is sent and stored at the same time; later ones
+get the file right away, with its length and with ranges, so players know the duration at once
+(e.g. Symfonium's waveform). A changed song is encoded again; jumps into a song (`timeOffset`) are
+not cached. The folder can be deleted at any time.
 
 Every stream and download writes one log line (category `MusicManager.Web.Subsonic.Stream`):
 song, what was sent (original, range, transcoded format and bitrate), size, time, rate, when the
