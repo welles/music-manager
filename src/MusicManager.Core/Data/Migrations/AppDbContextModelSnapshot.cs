@@ -483,6 +483,122 @@ namespace MusicManager.Core.Data.Migrations
                     b.ToTable("SourceProfiles");
                 });
 
+            modelBuilder.Entity("MusicManager.Core.Data.SpotifyAccount", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("ConnectedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("DisplayName")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("RefreshToken")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("SpotifyAccounts");
+                });
+
+            modelBuilder.Entity("MusicManager.Core.Data.SpotifyPlaylist", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("AddedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("Collaborative")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Description")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ImageUrl")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("OwnerId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("OwnerName")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SnapshotId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SpotifyId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SyncError")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long?>("SyncedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SpotifyId")
+                        .IsUnique();
+
+                    b.ToTable("SpotifyPlaylists");
+                });
+
+            modelBuilder.Entity("MusicManager.Core.Data.SpotifyPlaylistTrack", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Album")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Artists")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("DurationMs")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("ImageUrl")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Isrc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("PlaylistId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("Position")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("SpotifyTrackId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PlaylistId", "Position");
+
+                    b.ToTable("SpotifyPlaylistTracks");
+                });
+
             modelBuilder.Entity("MusicManager.Core.Data.Star", b =>
                 {
                     b.Property<string>("ItemId")
@@ -640,6 +756,15 @@ namespace MusicManager.Core.Data.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("MusicManager.Core.Data.SpotifyPlaylistTrack", b =>
+                {
+                    b.HasOne("MusicManager.Core.Data.SpotifyPlaylist", null)
+                        .WithMany("Tracks")
+                        .HasForeignKey("PlaylistId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("MusicManager.Core.Data.TrackFile", b =>
                 {
                     b.HasOne("MusicManager.Core.Data.InboxGroup", "Group")
@@ -659,6 +784,11 @@ namespace MusicManager.Core.Data.Migrations
             modelBuilder.Entity("MusicManager.Core.Data.Playlist", b =>
                 {
                     b.Navigation("Entries");
+                });
+
+            modelBuilder.Entity("MusicManager.Core.Data.SpotifyPlaylist", b =>
+                {
+                    b.Navigation("Tracks");
                 });
 
             modelBuilder.Entity("MusicManager.Core.Data.TrackFile", b =>

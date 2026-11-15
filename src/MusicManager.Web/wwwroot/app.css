@@ -522,3 +522,24 @@
     min-height: 24px;
     white-space: normal;
 }
+
+/* ---- Playlists page: a grid of cover cards that fits phone, tablet and desktop. ---- */
+.playlist-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 12px;
+}
+
+.playlist-card {
+    padding: 8px;
+    min-width: 0;
+}
+
+.playlist-card-body {
+    padding: 8px 2px 2px;
+    min-width: 0;
+}
+
+.spotify-missing {
+    opacity: 0.45;
+}

@@ -23,6 +23,9 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
     public DbSet<PlayStat> PlayStats => Set<PlayStat>();
     public DbSet<Playlist> Playlists => Set<Playlist>();
     public DbSet<PlaylistEntry> PlaylistEntries => Set<PlaylistEntry>();
+    public DbSet<SpotifyAccount> SpotifyAccounts => Set<SpotifyAccount>();
+    public DbSet<SpotifyPlaylist> SpotifyPlaylists => Set<SpotifyPlaylist>();
+    public DbSet<SpotifyPlaylistTrack> SpotifyPlaylistTracks => Set<SpotifyPlaylistTrack>();
 
     protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
     {
@@ -83,6 +86,17 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
         b.Entity<PlayStat>(e => e.HasKey(x => x.SongId));
         b.Entity<Playlist>(e => e.HasMany(x => x.Entries).WithOne().HasForeignKey(x => x.PlaylistId).OnDelete(DeleteBehavior.Cascade));
         b.Entity<PlaylistEntry>(e => e.HasIndex(x => new { x.PlaylistId, x.Position }));
+
+        b.Entity<SpotifyPlaylist>(e =>
+        {
+            e.HasIndex(x => x.SpotifyId).IsUnique();
+            e.HasMany(x => x.Tracks).WithOne().HasForeignKey(x => x.PlaylistId).OnDelete(DeleteBehavior.Cascade);
+        });
+        b.Entity<SpotifyPlaylistTrack>(e =>
+        {
+            e.Json(x => x.Artists);
+            e.HasIndex(x => new { x.PlaylistId, x.Position });
+        });
 
         b.Entity<FileEvent>(e => e.Property(x => x.Level).HasConversion<string>());
         b.Entity<ArtistRule>(e => e.Property(x => x.Kind).HasConversion<string>());

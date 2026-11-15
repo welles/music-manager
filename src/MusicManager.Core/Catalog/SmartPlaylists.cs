@@ -57,3 +57,25 @@ public static class SmartPlaylists
     /// <summary>A fixed creation date: they have always existed as far as clients are concerned.</summary>
     public static readonly DateTimeOffset Created = new(2026, 11, 15, 0, 0, 0, TimeSpan.Zero);
 }
+
+/// <summary>Public IDs of the Spotify playlists Music Manager keeps in step ("pl-spotify-{Id}").</summary>
+public static class SpotifyPlaylistIds
+{
+    public const string Prefix = CatalogIds.PlaylistPrefix + "spotify-";
+
+    public static string Format(int id) => $"{Prefix}{id.ToString(System.Globalization.CultureInfo.InvariantCulture)}";
+
+    public static int? Parse(string? id) =>
+        id != null && id.StartsWith(Prefix, StringComparison.Ordinal)
+                   && int.TryParse(id.AsSpan(Prefix.Length), System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var v)
+            ? v
+            : null;
+
+    /// <summary>The library songs of a Spotify playlist in Spotify's order; tracks not in the library are left out.</summary>
+    public static List<CatalogSong> Songs(Data.SpotifyPlaylist playlist, CatalogSnapshot catalog)
+    {
+        var matcher = SpotifyMatcher.For(catalog);
+        return playlist.Tracks.OrderBy(t => t.Position).Select(matcher.Match).OfType<CatalogSong>().ToList();
+    }
+}
+

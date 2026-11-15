@@ -177,6 +177,14 @@ public static partial class SubsonicEndpoints
                 load = async () => await File.ReadAllBytesAsync(file, r.Aborted);
             }
         }
+        else if (SpotifyPlaylistIds.Parse(id) is { } spotifyId)
+        {
+            // The playlist's own picture from Spotify with a Spotify badge; without one, a generic Spotify cover.
+            var file = await SpotifyCovers.PathAsync(r.Http.RequestServices, spotifyId, r.Aborted);
+            var info = new FileInfo(file);
+            stamp = $"{file}|{info.Length}|{info.LastWriteTimeUtc.Ticks}";
+            load = async () => File.Exists(file) ? await File.ReadAllBytesAsync(file, r.Aborted) : null;
+        }
         else if (id.StartsWith(CatalogIds.ArtistPrefix, StringComparison.Ordinal) && catalog.Artist(id) is { } artist)
         {
             var file = await r.Service<ArtistImageService>().GetImagePathAsync(artist.Name, artist.MbArtistId, r.Aborted);

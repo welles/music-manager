@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="600" height="600" viewBox="0 0 600 600">
+  <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#2BD46A"/><stop offset="1" stop-color="#0E7A3A"/></linearGradient></defs>
+  <rect width="600" height="600" fill="url(#g)"/>
+  <circle cx="470" cy="130" r="210" fill="#ffffff" fill-opacity="0.06"/>
+  <circle cx="90" cy="560" r="160" fill="#000000" fill-opacity="0.08"/>
+  <g fill="none" stroke="#ffffff" stroke-linecap="round" transform="translate(180,110)">
+    <path d="M8 66 C 80 38, 166 42, 232 76" stroke-width="28"/>
+    <path d="M24 128 C 84 108, 156 112, 210 138" stroke-width="23"/>
+    <path d="M40 186 C 90 170, 142 174, 184 192" stroke-width="18"/>
+  </g>
+  <text x="300" y="500" text-anchor="middle" font-family="Montserrat, Inter, DejaVu Sans, sans-serif" font-weight="700" font-size="58" fill="#ffffff">Spotify</text>
+</svg>

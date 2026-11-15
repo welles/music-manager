@@ -1,0 +1,224 @@
+@page "/playlists"
+@inherits LivePage
+@using MusicManager.Core.Catalog
+@using MusicManager.Core.Services
+@inject IDbContextFactory<AppDbContext> DbFactory
+@inject MediaCatalog Catalog
+@inject UserDataStore UserData
+@inject SpotifyUserClient Spotify
+@inject SpotifyPlaylistSync Sync
+@inject ISnackbar Snackbar
+@inject IDialogService Dialogs
+@inject NavigationManager Nav
+
+<PageTitle>Playlists – Music Manager</PageTitle>
+
+<PageHeader Title="Playlists" />
+
+<MudText Typo="Typo.body2" Class="mb-4">
+    Playlists, die der Music Manager selbst führt. In Symfonium stehen sie vor deinen eigenen Playlists und sind dort nur lesbar.
+</MudText>
+
+<MudText Typo="Typo.h6" Class="mb-2">Smart-Playlists</MudText>
+<div class="playlist-grid mb-6">
+    @foreach (var (playlist, count) in _smart)
+    {
+        <MudPaper Outlined="true" Class="playlist-card">
+            <img src="@($"playlist-covers/{playlist.Id[SmartPlaylists.Prefix.Length..]}.png")" alt="" class="square-media rounded" />
+            <div class="playlist-card-body">
+                <div class="song-title">@playlist.Name</div>
+                <MudText Typo="Typo.caption" Class="d-block">@count Titel</MudText>
+            </div>
+        </MudPaper>
+    }
+</div>
+
+<div class="d-flex align-center flex-wrap mb-2" style="gap:8px">
+    <MudText Typo="Typo.h6">Spotify-Playlists</MudText>
+    <MudSpacer />
+    @if (_account != null)
+    {
+        <MudText Typo="Typo.body2" Style="opacity:.75">Verbunden als @(_account.DisplayName ?? _account.UserId)</MudText>
+        <MudButtonGroup Variant="Variant.Outlined" Size="Size.Small">
+            <MudButton StartIcon="@Icons.Material.Filled.Add" OnClick="ToggleAdd">Hinzufügen</MudButton>
+            <MudButton StartIcon="@Icons.Material.Filled.Sync" Disabled="Sync.State.Running" OnClick="SyncNow">
+                @(Sync.State.Running ? $"Gleiche ab … {Sync.State.Current}" : "Jetzt abgleichen")
+            </MudButton>
+            <MudButton StartIcon="@Icons.Material.Filled.LinkOff" OnClick="Disconnect">Trennen</MudButton>
+        </MudButtonGroup>
+    }
+</div>
+
+@if (!Spotify.IsConfigured)
+{
+    <MudAlert Severity="Severity.Info" Class="mb-4">
+        Für Spotify-Playlists braucht der Music Manager eine Spotify-App: <code>MusicManager__SpotifyClientId</code> und
+        <code>MusicManager__SpotifyClientSecret</code> setzen.
+    </MudAlert>
+}
+else if (_account == null)
+{
+    <MudPaper Outlined="true" Class="pa-4 mb-4">
+        <MudText Typo="Typo.body2" Class="mb-3">
+            Melde dich einmal mit Spotify an. Spotify gibt die Titel nur für deine eigenen und gemeinsamen Playlists heraus;
+            Playlists anderer, denen du folgst, spiegelst du mit Soundiiz in eine eigene Playlist und fügst die Kopie hier hinzu.
+        </MudText>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Login" OnClick="Connect">Mit Spotify verbinden</MudButton>
+    </MudPaper>
+}
+
+@if (_adding)
+{
+    <MudPaper Outlined="true" Class="pa-3 mb-4">
+        <div class="d-flex align-center mb-2" style="gap:8px">
+            <MudText Typo="Typo.subtitle1">Playlist hinzufügen</MudText>
+            <MudSpacer />
+            <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small" OnClick="ToggleAdd" aria-label="Schließen" />
+        </div>
+        @if (_available == null)
+        {
+            <MudProgressLinear Indeterminate="true" />
+        }
+        else
+        {
+            <MudTextField @bind-Value="_filter" Placeholder="Suchen" Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"
+                          Immediate="true" Clearable="true" Class="mt-0 mb-2" />
+            <div class="card-list">
+                @foreach (var p in _available.Where(p => string.IsNullOrWhiteSpace(_filter) || p.Name.Contains(_filter, StringComparison.OrdinalIgnoreCase)))
+                {
+                    var readable = SpotifyPlaylistSync.Readable(p, _account!.UserId);
+                    var added = _playlists.Any(x => x.Playlist.SpotifyId == p.Id);
+                    <div class="d-flex align-center" style="gap:12px; @(readable ? "" : "opacity:.55")">
+                        <img src="@(p.ImageUrl ?? SongCard.Placeholder)" alt="" width="48" height="48" class="rounded" style="object-fit:cover;flex-shrink:0" />
+                        <div style="min-width:0;flex:1">
+                            <div class="song-title">@p.Name</div>
+                            <MudText Typo="Typo.caption">
+                                @p.TrackCount Titel · @(p.OwnerId == _account.UserId ? "deine" : p.Collaborative ? $"gemeinsam mit {p.OwnerName}" : $"von {p.OwnerName}")
+                                @if (!readable)
+                                {
+                                    <span> · Spotify gibt die Titel nicht heraus – mit Soundiiz in eine eigene Playlist spiegeln</span>
+                                }
+                            </MudText>
+                        </div>
+                        @if (added)
+                        {
+                            <MudChip T="string" Size="Size.Small" Variant="Variant.Text" Color="Color.Success">hinzugefügt</MudChip>
+                        }
+                        else
+                        {
+                            <MudButton Size="Size.Small" Variant="Variant.Outlined" Disabled="!readable || _busy" OnClick="() => Add(p)">Hinzufügen</MudButton>
+                        }
+                    </div>
+                }
+            </div>
+        }
+    </MudPaper>
+}
+
+@if (_playlists.Count == 0 && _account != null)
+{
+    <MudText Typo="Typo.body2" Style="opacity:.7">Noch keine Spotify-Playlist hinzugefügt.</MudText>
+}
+
+<div class="playlist-grid">
+    @foreach (var (playlist, matched) in _playlists)
+    {
+        <MudPaper Outlined="true" Class="playlist-card cursor-pointer" @onclick="@(() => Nav.NavigateTo($"playlists/spotify/{playlist.Id}"))">
+            <img src="@($"api/playlists/spotify/{playlist.Id}/cover?v={playlist.SyncedAt?.UtcTicks}")" alt="" class="square-media rounded" />
+            <div class="playlist-card-body">
+                <div class="song-title">@playlist.Name</div>
+                <MudText Typo="Typo.caption" Class="d-block">@matched von @playlist.Tracks.Count vorhanden</MudText>
+                @if (playlist.SyncError != null)
+                {
+                    <MudText Typo="Typo.caption" Color="Color.Error" Class="d-block">@playlist.SyncError</MudText>
+                }
+                else if (playlist.SyncedAt is { } synced)
+                {
+                    <MudText Typo="Typo.caption" Class="d-block" Style="opacity:.6">abgeglichen @synced.ToLocalTime().ToString("g")</MudText>
+                }
+            </div>
+        </MudPaper>
+    }
+</div>
+
+@code {
+    [SupplyParameterFromQuery(Name = "spotify")] public string? SpotifyMessage { get; set; }
+
+    private List<(SmartPlaylist Playlist, int Count)> _smart = [];
+    private List<(SpotifyPlaylist Playlist, int Matched)> _playlists = [];
+    private SpotifyAccount? _account;
+    private List<SpotifyPlaylistInfo>? _available;
+    private bool _adding;
+    private bool _busy;
+    private string? _filter;
+    private bool _messageShown;
+
+    protected override async Task ReloadAsync()
+    {
+        var catalog = await Catalog.GetAsync();
+        var user = await UserData.GetAsync();
+        _smart = SmartPlaylists.Every.Select(p => (p, SmartPlaylists.Songs(p, catalog, user).Count)).ToList();
+        _account = await Spotify.AccountAsync();
+        await using var db = await DbFactory.CreateDbContextAsync();
+        var playlists = await db.SpotifyPlaylists.AsNoTracking().Include(p => p.Tracks).OrderBy(p => p.Name).ToListAsync();
+        _playlists = playlists.Select(p => (p, SpotifyPlaylistIds.Songs(p, catalog).Count)).ToList();
+
+        if (!_messageShown && SpotifyMessage != null)
+        {
+            _messageShown = true;
+            if (SpotifyMessage == "connected") Snackbar.Add("Mit Spotify verbunden.", Severity.Success);
+            else Snackbar.Add(SpotifyMessage, Severity.Warning);
+        }
+    }
+
+    // A full page load: the login leaves the app for Spotify and comes back to /spotify/callback.
+    private void Connect() => Nav.NavigateTo("spotify/connect", forceLoad: true);
+
+    private async Task ToggleAdd()
+    {
+        _adding = !_adding;
+        if (!_adding || _available != null) return;
+        try
+        {
+            _available = await Spotify.MyPlaylistsAsync();
+        }
+        catch (SpotifyException ex)
+        {
+            _adding = false;
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+    }
+
+    private async Task Add(SpotifyPlaylistInfo info)
+    {
+        _busy = true;
+        try
+        {
+            var playlist = await Sync.AddAsync(info);
+            Snackbar.Add(playlist.SyncError ?? $"„{playlist.Name}“ hinzugefügt.", playlist.SyncError == null ? Severity.Success : Severity.Warning);
+            await ReloadAsync();
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private void SyncNow()
+    {
+        Sync.Request();
+        Snackbar.Add("Abgleich läuft.", Severity.Info);
+    }
+
+    private async Task Disconnect()
+    {
+        var ok = await Dialogs.ShowMessageBoxAsync("Spotify trennen",
+            "Die Anmeldung wird gelöscht. Die Playlists bleiben mit ihrem letzten Stand erhalten, werden aber nicht mehr abgeglichen.",
+            yesText: "Trennen", cancelText: "Abbrechen");
+        if (ok != true) return;
+        await Spotify.DisconnectAsync();
+        _available = null;
+        _adding = false;
+        await ReloadAsync();
+    }
+}
