@@ -50,7 +50,10 @@
                 <div style="min-width:0;max-width:40%">
                     <SongCard Song="SongInfo.From(track) with { LinkArtists = false }" ShowFields="false" />
                 </div>
-                <audio controls autoplay src="@($"api/audio/library/{track.Id}")" style="flex:1;min-width:0"></audio>
+                <audio controls autoplay src="@($"api/audio/library/{track.Id}")" style="flex:1;min-width:0"
+                       data-gain="@track.ReplayGainTrackGain?.ToString(System.Globalization.CultureInfo.InvariantCulture)"
+                       data-peak="@track.ReplayGainTrackPeak?.ToString(System.Globalization.CultureInfo.InvariantCulture)"
+                       onloadstart="mmApplyGain(this)" onplay="mmResumeGain()"></audio>
                 <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small" OnClick="Player.Stop" aria-label="Player schließen" />
             </MudPaper>
         }

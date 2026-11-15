@@ -333,6 +333,12 @@ public sealed class LibraryEntry
     /// <summary>File has an embedded cover.</summary>
     public bool HasCover { get; set; }
 
+    /// <summary>ReplayGain track gain in dB from the file's tags; null = not normalized yet.</summary>
+    public double? ReplayGainTrackGain { get; set; }
+
+    /// <summary>ReplayGain track peak (linear, 1.0 = full scale).</summary>
+    public double? ReplayGainTrackPeak { get; set; }
+
     /// <summary>Value of the MUSICMANAGER_RULES tag: rules version the file was tagged with.</summary>
     public string? RulesVersion { get; set; }
 

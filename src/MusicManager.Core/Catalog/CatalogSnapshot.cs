@@ -38,6 +38,9 @@ public sealed class CatalogSong
     public long Size { get; init; }
     public DateTime FileModifiedUtc { get; init; }
     public bool HasCover { get; init; }
+
+    /// <summary>ReplayGain values from the file's tags; null = not measured yet.</summary>
+    public Model.ReplayGain? ReplayGain { get; init; }
     public string? MbRecordingId { get; init; }
     public string? MbTrackId { get; init; }
     public string? Isrc { get; init; }
@@ -197,6 +200,7 @@ public sealed class CatalogSnapshot
                 DisplayAlbumArtist = displayAlbumArtist ?? UnknownArtist, AlbumArtists = albumArtists, Genres = e.Genres, Year = e.Year,
                 TrackNumber = e.TrackNumber, DiscNumber = e.DiscNumber, Duration = (int)Math.Round(e.DurationSeconds ?? 0),
                 BitrateKbps = e.BitrateKbps, Size = e.FileSize, FileModifiedUtc = e.FileModifiedUtc, HasCover = e.HasCover, MbRecordingId = e.MbRecordingId, MbTrackId = e.MbTrackId,
+                ReplayGain = e.ReplayGainTrackGain is { } gain ? new Model.ReplayGain(gain, e.ReplayGainTrackPeak ?? 1) : null,
                 Isrc = e.Isrc, AddedAt = e.AddedAt ?? new DateTimeOffset(DateTime.SpecifyKind(e.FileModifiedUtc, DateTimeKind.Utc)),
                 SearchText = CatalogIds.NormalizeName($"{title} {displayArtist} {string.Join(" ", trackArtists.Select(a => a.Name))} {e.Album}"),
             };

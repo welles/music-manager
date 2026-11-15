@@ -11,7 +11,7 @@ namespace MusicManager.Core.Services;
 /// (<c>MUSICMANAGER_TAGS_HASH</c>, <c>MUSICMANAGER_COVER_HASH</c>). A library scan hashes the file again: a
 /// different value means the tags (or the cover) were changed outside the tool. The file markers
 /// (song ID, added date, favorite, rating) are left out, since <see cref="Pipeline.FileMarkerSync"/> changes
-/// them on purpose.
+/// them on purpose, and so are the ReplayGain values, which are measured and written later on their own.
 /// </summary>
 public sealed record TagHashes(string Tags, string Cover)
 {
@@ -24,7 +24,7 @@ public sealed record TagHashes(string Tags, string Cover)
     public static readonly string[] TagNames = [TagsTag, CoverTag];
 
     private static readonly HashSet<string> Excluded =
-        new([.. FileMarkers.TagNames, .. TagNames], StringComparer.OrdinalIgnoreCase);
+        new([.. FileMarkers.TagNames, .. TagNames, .. ReplayGain.TagNames], StringComparer.OrdinalIgnoreCase);
 
     /// <summary>Hashes of the tags currently in <paramref name="apple"/> (in memory, before or after saving).</summary>
     public static TagHashes Compute(AppleTag apple)

@@ -47,6 +47,7 @@ public sealed class SubsonicMapper(UserDataSnapshot userData)
             Suffix = s.Suffix,
             Duration = s.Duration,
             BitRate = s.BitrateKbps,
+            ReplayGain = s.ReplayGain is { } rg ? new ReplayGainDto(rg.TrackGain, rg.TrackPeak) : null,
             Path = s.RelativePath,
             DiscNumber = s.DiscNumber,
             Created = Iso(s.AddedAt),

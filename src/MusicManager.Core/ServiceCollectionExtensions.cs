@@ -66,6 +66,7 @@ public static class ServiceCollectionExtensions
         services.AddHostedService(sp => sp.GetRequiredService<ArtistImageService>());
         services.AddSingleton<AlbumCoverService>();
         services.AddSingleton<ImageSquareService>();
+        services.AddSingleton<ReplayGainService>();
         services.AddSingleton<MatchingPipeline>();
         services.AddSingleton<ReviewService>();
 

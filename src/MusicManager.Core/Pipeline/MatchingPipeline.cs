@@ -748,7 +748,8 @@ public sealed partial class MatchingPipeline(
 
             await StepAsync(file, "Cover wird geladen, Tags werden geschrieben", ct);
             var cover = await GetCoverAsync(file, source, settings, ct);
-            TagIo.WriteM4a(tmp, file.FinalTags, cover.Embedded, SourceFor(file), await settingsService.GetRulesVersionAsync(ct));
+            TagIo.WriteM4a(tmp, file.FinalTags, cover.Embedded, SourceFor(file), await settingsService.GetRulesVersionAsync(ct),
+                await MeasureReplayGainAsync(file, tmp, settings, ct));
 
             await StepAsync(file, "Wird in die Bibliothek einsortiert", ct);
             // Keep the timestamp of the original file.
@@ -777,6 +778,29 @@ public sealed partial class MatchingPipeline(
         {
             if (tmp != null && File.Exists(tmp)) File.Delete(tmp);
             notifier.Notify();
+        }
+    }
+
+    /// <summary>
+    /// Loudness of the converted file as ReplayGain values (the audio itself stays as it is). It only refines
+    /// playback: when it cannot be measured, the song is filed without it and can be measured later.
+    /// </summary>
+    private async Task<ReplayGain?> MeasureReplayGainAsync(TrackFile file, string converted, AppSettings settings, CancellationToken ct)
+    {
+        if (!settings.WriteReplayGain) return null;
+        await StepAsync(file, "Lautstärke wird gemessen", ct);
+        try
+        {
+            var replayGain = await audio.MeasureReplayGainAsync(converted, ct);
+            AddEvent(file, replayGain != null
+                ? $"Lautstärke gemessen: ReplayGain {replayGain.GainText}"
+                : "Lautstärke nicht messbar (Stille?) – ohne ReplayGain einsortiert", replayGain != null ? EventLevel.Info : EventLevel.Warning);
+            return replayGain;
+        }
+        catch (Exception ex) when (!ct.IsCancellationRequested)
+        {
+            AddEvent(file, $"Lautstärke-Messung fehlgeschlagen: {ex.Message}", EventLevel.Warning);
+            return null;
         }
     }
 

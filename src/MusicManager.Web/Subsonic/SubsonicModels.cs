@@ -16,6 +16,9 @@ public sealed record ArtistRefDto(string Id, string Name);
 
 public sealed record GenreRefDto(string Name);
 
+/// <summary>OpenSubsonic replayGain: gain in dB, peak as a linear value.</summary>
+public sealed record ReplayGainDto(double TrackGain, double TrackPeak);
+
 public sealed class ItemDateDto
 {
     public int? Year { get; init; }
@@ -41,6 +44,7 @@ public sealed class SongDto
     public string? Suffix { get; init; }
     public int Duration { get; init; }
     public int? BitRate { get; init; }
+    public ReplayGainDto? ReplayGain { get; init; }
     public string? Path { get; init; }
     public bool IsVideo => false;
     public int? DiscNumber { get; init; }

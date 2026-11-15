@@ -206,14 +206,17 @@ public static class TagIo
     /// <see cref="TagFields.ForFinalTags"/>, so the before/after view shows exactly what is written.
     /// Multi-value fields (ARTISTS, GENRE, artist IDs …) are written as one atom with several values.
     /// </summary>
-    public static void WriteM4a(string path, TagSet t, byte[]? cover, string source, string? rulesVersion = null)
+    public static void WriteM4a(string path, TagSet t, byte[]? cover, string source, string? rulesVersion = null, ReplayGain? replayGain = null)
     {
         using var file = File.Create(path, "audio/mp4", ReadStyle.Average);
         var apple = (AppleTag)file.GetTag(TagTypes.Apple, true);
-        // Identity and user data (song ID, added date, rating, favorite) survive re-tagging.
+        // Identity and user data (song ID, added date, rating, favorite) survive re-tagging, and so does the
+        // measured loudness: the audio does not change with the tags.
         var markers = FileMarkers.FromTags(name => apple.GetDashBox(ITunesMean, name).NullIfEmpty());
+        replayGain ??= ReadReplayGain(apple);
         apple.Clear();
         SetMarkers(apple, markers);
+        if (replayGain != null) SetReplayGain(apple, replayGain);
         Tag tag = apple;
 
         foreach (var field in TagFields.ForFinalTags(t, cover != null ? "Front-Cover" : null, source, rulesVersion))
@@ -333,6 +336,35 @@ public static class TagIo
         file.Save();
         return hashes;
     }
+
+    /// <summary>
+    /// Writes only the ReplayGain values into an M4A file; all other tags and the stored hashes stay as they are
+    /// (the values are not part of the hash).
+    /// </summary>
+    public static void WriteReplayGain(string path, ReplayGain replayGain)
+    {
+        using var file = File.Create(path, "audio/mp4", ReadStyle.Average);
+        SetReplayGain((AppleTag)file.GetTag(TagTypes.Apple, true), replayGain);
+        file.Save();
+    }
+
+    /// <summary>ReplayGain values of a file's raw tags (any format, names without case); null without a track gain.</summary>
+    public static ReplayGain? ReadReplayGain(IReadOnlyList<TagField> fields) =>
+        ReplayGain.Parse(TagFields.Get(fields, ReplayGain.GainTag).FirstOrDefault(), TagFields.Get(fields, ReplayGain.PeakTag).FirstOrDefault());
+
+    private static ReplayGain? ReadReplayGain(AppleTag apple) =>
+        ReplayGain.Parse(DashBoxAnyCase(apple, ReplayGain.GainTag), DashBoxAnyCase(apple, ReplayGain.PeakTag));
+
+    private static void SetReplayGain(AppleTag apple, ReplayGain replayGain)
+    {
+        // Another tool may have written them in upper case: one spelling only.
+        foreach (var name in ReplayGain.TagNames) apple.SetDashBox(ITunesMean, name.ToUpperInvariant(), "");
+        apple.SetDashBox(ITunesMean, ReplayGain.GainTag, replayGain.GainText);
+        apple.SetDashBox(ITunesMean, ReplayGain.PeakTag, replayGain.PeakText);
+    }
+
+    private static string? DashBoxAnyCase(AppleTag apple, string name) =>
+        apple.GetDashBox(ITunesMean, name).NullIfEmpty() ?? apple.GetDashBox(ITunesMean, name.ToUpperInvariant()).NullIfEmpty();
 
     private static void SetMarkers(AppleTag apple, FileMarkers markers)
     {

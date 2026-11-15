@@ -268,6 +268,12 @@ namespace MusicManager.Core.Data.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
+                    b.Property<double?>("ReplayGainTrackGain")
+                        .HasColumnType("REAL");
+
+                    b.Property<double?>("ReplayGainTrackPeak")
+                        .HasColumnType("REAL");
+
                     b.Property<string>("RulesVersion")
                         .HasColumnType("TEXT");
 
