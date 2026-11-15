@@ -142,7 +142,8 @@ public sealed class SubsonicMapper(UserDataSnapshot userData)
         Duration = songs.Sum(s => s.Duration),
         Created = Iso(SmartPlaylists.Created)!,
         Changed = Iso(SmartPlaylists.Changed(now)),
-        CoverArt = songs.Select(s => s.CoverArt).FirstOrDefault(c => c != null),
+        // Its own fixed picture (getCoverArt with the playlist's ID).
+        CoverArt = p.Id,
         Readonly = true,
         ValidUntil = p.Shuffled ? Iso(now) : null,
         Entry = withEntries ? songs.Select(Song).ToList() : null,

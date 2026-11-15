@@ -172,8 +172,10 @@ Playlists kept by Music Manager come first in every client and are read-only the
   `submission=true`); songs that were only started and skipped stay in. Shuffled like "Alle".
 - **Favoriten** – starred songs, the most recently starred first.
 
-Each load of one of them writes a log line (`Smart playlist … loaded by …`). Playlists created in a
-client stay editable as before.
+Each has its own cover (`getCoverArt` with the playlist's ID; pictures in
+`src/MusicManager.Web/wwwroot/playlist-covers`, SVG sources in `docs/playlist-covers`). Each load of
+one of them writes a log line (`Smart playlist … loaded by …`). Playlists created in a client stay
+editable as before.
 
 Limits:
 

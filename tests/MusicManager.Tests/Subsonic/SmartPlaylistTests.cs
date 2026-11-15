@@ -117,4 +117,22 @@ public class SmartPlaylistTests
         Assert.Equal(50, response.GetProperty("error").GetProperty("code").GetInt32());
         Assert.Equal(30, SongIds(await PlaylistAsync(app, All)).Count);
     }
+
+    [Theory]
+    [InlineData(All)]
+    [InlineData(NeverPlayed)]
+    [InlineData(Favorites)]
+    public async Task EachHasItsOwnFixedCover(string id)
+    {
+        using var app = await StartAsync();
+
+        var playlist = await PlaylistAsync(app, id);
+        var cover = await app.CreateClient().GetAsync($"/rest/getCoverArt?apiKey={SubsonicTestHost.Key}&id={id}");
+
+        Assert.Equal(id, playlist.GetProperty("coverArt").GetString());
+        Assert.Equal(System.Net.HttpStatusCode.OK, cover.StatusCode);
+        Assert.Equal("image/png", cover.Content.Headers.ContentType?.MediaType);
+        var bytes = await cover.Content.ReadAsByteArrayAsync();
+        Assert.Equal(new byte[] { 0x89, 0x50, 0x4E, 0x47 }, bytes[..4]);
+    }
 }
