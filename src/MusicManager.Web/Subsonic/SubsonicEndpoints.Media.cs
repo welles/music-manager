@@ -28,7 +28,13 @@ public static partial class SubsonicEndpoints
         if (!File.Exists(path)) throw SubsonicException.NotFound("File");
         if (!download && Transcoding.Decide(song.Suffix, song.BitrateKbps, r.Get("format"), r.GetInt("maxBitRate")) is { } plan
             && Transcoded(r, path, song, plan) is { } transcoded)
+        {
+            var offset = r.GetInt("timeOffset") is > 0 and var o ? $" from {o} s" : "";
+            StreamMeter.Attach(r, song, $"{plan.Format.Name} {plan.Kbps}k{offset}");
             return transcoded;
+        }
+
+        StreamMeter.Attach(r, song, download ? "download" : $"original {song.Suffix}{(song.BitrateKbps is { } k ? $" {k}k" : "")}");
         return Results.File(path, SubsonicMapper.ContentType(path), download ? Path.GetFileName(path) : null, enableRangeProcessing: true);
     }
 
