@@ -15,26 +15,19 @@
         <MudLink Href="" Color="Color.Inherit" Underline="Underline.None" Class="d-flex align-center flex-shrink-0">
             @* On the purple light-mode bar the logo's own purple background would vanish. *@
             <img src="@(_dark ? "icons/icon.svg" : "icons/icon-foreground.svg")" alt="" width="28" height="28" class="mr-2" />
-            <MudText Typo="Typo.h6" Style="white-space:nowrap">Music Manager</MudText>
+            @* On a phone the logo alone stands for the app; the room goes to the page. *@
+            <MudText Typo="Typo.h6" Class="d-none d-sm-flex" Style="white-space:nowrap">Music Manager</MudText>
         </MudLink>
         @* Which build is running; links to its commit when known. *@
         <MudLink Href="@(AppVersion.Commit is { } sha ? $"https://github.com/welles/music-manager/commit/{sha}" : null)" Target="_blank"
-                 Color="Color.Inherit" Underline="Underline.None" Class="ml-3 d-none d-sm-flex flex-shrink-0">
+                 Color="Color.Inherit" Underline="Underline.None" Class="ml-3 d-none d-md-flex flex-shrink-0">
             <MudText Typo="Typo.caption" Class="mono" Style="opacity:.75;white-space:nowrap" title="Laufende Version">@AppVersion.Display</MudText>
         </MudLink>
         <MudSpacer />
-        @if (Notifier.CurrentActivity is { } activity)
+        @if (Notifier.CurrentActivity != null)
         {
-            @* min-width:0 lets the text shrink and end with an ellipsis instead of wrapping the title. *@
-            <div class="d-flex align-center mx-4" style="min-width:0;max-width:60%">
-                <MudProgressCircular Indeterminate="true" Size="Size.Small" Color="Color.Inherit" Class="mr-2 flex-shrink-0" />
-                <MudText Typo="Typo.body2" Style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="@activity">@activity</MudText>
-                @* Jobs still waiting behind the current one (e.g. files to write after a bulk takeover). *@
-                @if (Queue.Count > 0)
-                {
-                    <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="Color.Inherit" Class="ml-2 flex-shrink-0">noch @Queue.Count</MudChip>
-                }
-            </div>
+            @* Wide screens: in the bar. Below that it does not fit next to the title, see the strip below. *@
+            <div class="d-none d-md-flex align-center mx-4" style="min-width:0;max-width:60%">@Activity</div>
         }
         <MudToggleIconButton @bind-Toggled="_dark" Icon="@Icons.Material.Filled.DarkMode" ToggledIcon="@Icons.Material.Filled.LightMode" Color="Color.Inherit" />
     </MudAppBar>
@@ -42,6 +35,11 @@
         <NavMenu />
     </MudDrawer>
     <MudMainContent>
+        @if (Notifier.CurrentActivity != null)
+        {
+            @* Tablet and phone: the activity as a strip under the bar that stays while scrolling, with room for the text. *@
+            <div class="activity-strip d-flex d-md-none">@Activity</div>
+        }
         <MudContainer MaxWidth="MaxWidth.ExtraExtraLarge" Class="py-4">
             @Body
             @if (Player.Current != null)
@@ -72,6 +70,18 @@
 </div>
 
 @code {
+    /// <summary>What the pipeline is doing: spinner, text (ends with an ellipsis) and the number of waiting jobs.</summary>
+    private RenderFragment Activity => @<text>
+        <MudProgressCircular Indeterminate="true" Size="Size.Small" Color="Color.Inherit" Class="mr-2 flex-shrink-0" />
+        @* min-width:0 lets the text shrink and end with an ellipsis instead of wrapping. *@
+        <MudText Typo="Typo.body2" Class="activity-text" title="@Notifier.CurrentActivity">@Notifier.CurrentActivity</MudText>
+        @* Jobs still waiting behind the current one (e.g. files to write after a bulk takeover). *@
+        @if (Queue.Count > 0)
+        {
+            <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="Color.Inherit" Class="ml-2 flex-shrink-0">noch @Queue.Count</MudChip>
+        }
+    </text>;
+
     private bool _drawer = true;
     private bool _dark;
     private MudThemeProvider? _theme;
