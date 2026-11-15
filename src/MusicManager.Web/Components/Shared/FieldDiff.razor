@@ -10,14 +10,15 @@
     <MudSwitch @bind-Value="HideUnchanged" Color="Color.Primary" Label="Unveränderte ausblenden" />
 </MudStack>
 
-<MudSimpleTable Dense="true" Hover="true" Bordered="true">
+@* compare-table: fixed columns that fit a phone; there the "Änderung" column gives way to a coloured edge of the row. *@
+<MudSimpleTable Dense="true" Hover="true" Bordered="true" Class="compare-table field-diff">
     <thead>
-        <tr><th>Feld</th><th>Vorher (Datei)</th><th>Nachher (wird geschrieben)</th><th>Änderung</th></tr>
+        <tr><th>Feld</th><th>Vorher (Datei)</th><th>Nachher (wird geschrieben)</th><th class="diff-change">Änderung</th></tr>
     </thead>
     <tbody>
         @foreach (var row in Rows.Where(r => !HideUnchanged || r.Change != Change.Unchanged))
         {
-            <tr>
+            <tr class="@($"diff-{row.Change.ToString().ToLowerInvariant()}")">
                 <td class="mono">@row.Name</td>
                 <td><TagValues Field="row.Before" Removed="row.Change == Change.Removed" /></td>
                 <td>
@@ -30,7 +31,7 @@
                         <TagValues Field="row.After" />
                     }
                 </td>
-                <td>
+                <td class="diff-change">
                     @switch (row.Change)
                     {
                         case Change.Added:

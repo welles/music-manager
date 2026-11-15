@@ -51,15 +51,15 @@
 
                         <MudAlert Severity="Severity.Warning" Dense="true" Class="mb-3">@_match.Reason</MudAlert>
 
-                        <MudSimpleTable Dense="true" Bordered="true" Class="mb-3">
+                        <MudSimpleTable Dense="true" Bordered="true" Class="mb-3 compare-table">
                             <thead>
                                 <tr><th></th><th>Neu (Eingang)</th><th>Vorhanden (Bibliothek)</th></tr>
                             </thead>
                             <tbody>
                                 <tr>
                                     <td></td>
-                                    <td><MudImage Src="@($"api/files/{_file.Id}/cover?which=original")" Width="140" Height="140" ObjectFit="ObjectFit.Cover" Class="rounded" /></td>
-                                    <td><MudImage Src="@($"api/library/{_match.LibraryEntryId}/cover")" Width="140" Height="140" ObjectFit="ObjectFit.Cover" Class="rounded" /></td>
+                                    <td><img src="@($"api/files/{_file.Id}/cover?which=original")" alt="Cover neu" class="compare-cover rounded" /></td>
+                                    <td><img src="@($"api/library/{_match.LibraryEntryId}/cover")" alt="Cover vorhanden" class="compare-cover rounded" /></td>
                                 </tr>
                                 @CompareRow("Titel", t.Title, _match.Title)
                                 @CompareRow("Künstler", t.Artist, _match.Artist)
