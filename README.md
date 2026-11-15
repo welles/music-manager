@@ -138,10 +138,17 @@ service token:
 4. Under "Custom-Header schicken" add `CF-Access-Client-Id: <client id>` and
    `CF-Access-Client-Secret: <client secret>` of the service token.
 
+Transcoding: `stream` serves the original file unless the client asks for less. With `maxBitRate`
+below the file's bitrate or another `format` (`mp3`, `opus`, `aac`; `raw` = always the original)
+the song is encoded on the fly with ffmpeg and starts right away, which makes skipping much faster
+over a slow uplink. Without a format it becomes MP3; the bitrate never goes above the file's own.
+Seeking in a transcoded stream works through `timeOffset` (OpenSubsonic `transcodeOffset`).
+`download` always serves the original. In Symfonium set it per network in the media provider's
+transcoding settings, e.g. Opus 128 kbit/s on mobile data.
+
 Limits:
 
 - JSON only (no XML), API key authentication only (no username/password or token auth).
-- No transcoding: `stream` always serves the original file (`maxBitRate` and `format` are ignored).
 - No folder browsing (`getIndexes`, `getMusicDirectory`); browsing by tags only.
 - One user (the owner); there is no user management.
 - Casting (Chromecast/UPnP) does not work through Cloudflare Access: the cast device fetches the

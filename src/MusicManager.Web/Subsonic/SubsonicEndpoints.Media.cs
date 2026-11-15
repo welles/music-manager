@@ -13,7 +13,8 @@ public static partial class SubsonicEndpoints
 {
     private static void MapMedia()
     {
-        // No transcoding: maxBitRate and format are ignored, the original file is served (with ranges).
+        // The original file (with ranges), or transcoded on the fly when the client asks for a lower bitrate or
+        // another format (maxBitRate, format, timeOffset, estimateContentLength); download always gets the original.
         Add("stream", r => ServeSongAsync(r, download: false));
         Add("download", r => ServeSongAsync(r, download: true));
         Add("getCoverArt", GetCoverArtAsync);
@@ -25,7 +26,79 @@ public static partial class SubsonicEndpoints
         var song = catalog.Song(r.Require("id")) ?? throw SubsonicException.NotFound("Song");
         var path = r.Service<Storage>().LibraryPath(song.RelativePath);
         if (!File.Exists(path)) throw SubsonicException.NotFound("File");
+        if (!download && Transcoding.Decide(song.Suffix, song.BitrateKbps, r.Get("format"), r.GetInt("maxBitRate")) is { } plan
+            && Transcoded(r, path, song, plan) is { } transcoded)
+            return transcoded;
         return Results.File(path, SubsonicMapper.ContentType(path), download ? Path.GetFileName(path) : null, enableRangeProcessing: true);
+    }
+
+    /// <summary>
+    /// The song encoded while it is sent. No ranges (the size is not known in advance); a jump into the song comes as
+    /// <c>timeOffset</c> in seconds (OpenSubsonic "transcodeOffset"). With <c>estimateContentLength</c> the response
+    /// announces an estimated size and is padded or cut to exactly that, as some players need a length.
+    /// </summary>
+    /// <remarks>Null when ffmpeg cannot be started: then the original is served, music rather than an error.</remarks>
+    private static IResult? Transcoded(SubsonicRequest r, string path, CatalogSong song, TranscodePlan plan)
+    {
+        var offset = Math.Clamp(r.GetInt("timeOffset") ?? 0, 0, Math.Max(0, song.Duration - 1));
+        var audio = r.Service<AudioTools>();
+        if (audio.StartTranscode(path, plan, offset) is not { } ffmpeg) return null;
+
+        long? length = r.GetBool("estimateContentLength") == true ? Transcoding.EstimateBytes(plan, song.Duration, offset) : null;
+        r.Http.Response.Headers.AcceptRanges = "none";
+        if (length != null) r.Http.Response.ContentLength = length;
+        return Results.Stream(async output =>
+        {
+            if (length == null)
+            {
+                await audio.PumpAsync(ffmpeg, path, output, r.Aborted);
+                return;
+            }
+
+            var exact = new ExactLengthStream(output, length.Value);
+            await audio.PumpAsync(ffmpeg, path, exact, r.Aborted);
+            await exact.PadAsync(r.Aborted);
+        }, plan.Format.ContentType);
+    }
+
+    /// <summary>Passes on at most <c>length</c> bytes and fills up to it with zeros at the end (players skip those).</summary>
+    private sealed class ExactLengthStream(Stream inner, long length) : Stream
+    {
+        private long _written;
+
+        public override async ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken ct = default)
+        {
+            var take = (int)Math.Min(buffer.Length, length - _written);
+            if (take <= 0) return;
+            await inner.WriteAsync(buffer[..take], ct);
+            _written += take;
+        }
+
+        public async Task PadAsync(CancellationToken ct)
+        {
+            var zeros = new byte[16 * 1024];
+            while (_written < length)
+            {
+                var n = (int)Math.Min(zeros.Length, length - _written);
+                await inner.WriteAsync(zeros.AsMemory(0, n), ct);
+                _written += n;
+            }
+        }
+
+        public override Task WriteAsync(byte[] buffer, int offset, int count, CancellationToken ct) =>
+            WriteAsync(buffer.AsMemory(offset, count), ct).AsTask();
+
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+        public override void Flush() => inner.Flush();
+        public override Task FlushAsync(CancellationToken ct) => inner.FlushAsync(ct);
+        public override int Read(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+        public override void SetLength(long value) => throw new NotSupportedException();
+        public override bool CanRead => false;
+        public override bool CanSeek => false;
+        public override bool CanWrite => true;
+        public override long Length => throw new NotSupportedException();
+        public override long Position { get => _written; set => throw new NotSupportedException(); }
     }
 
     private static async Task<IResult> GetCoverArtAsync(SubsonicRequest r)

@@ -323,7 +323,7 @@ public class SubsonicStreamTests
         var entry = await app.EntryAsync("A/B/A - Song.m4a");
         Assert.NotNull(entry?.SongId);
 
-        var request = new HttpRequestMessage(HttpMethod.Get, $"/rest/stream.view?apiKey={SubsonicTestHost.Key}&id={entry.SongId}&maxBitRate=128&format=mp3");
+        var request = new HttpRequestMessage(HttpMethod.Get, $"/rest/stream.view?apiKey={SubsonicTestHost.Key}&id={entry.SongId}");
         request.Headers.Range = new RangeHeaderValue(10, 109);
         var response = await app.CreateClient().SendAsync(request);
         Assert.Equal(HttpStatusCode.PartialContent, response.StatusCode);
