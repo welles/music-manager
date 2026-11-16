@@ -69,6 +69,15 @@ public sealed class MusicManagerOptions
     public string? MusicFabApiKey { get; set; }
 
     /// <summary>
+    /// Client ID of a Cloudflare Access service token, sent as <c>CF-Access-Client-Id</c> when MusicFab.Manager is
+    /// reached through Cloudflare Access (e.g. <c>https://musicfab.example.com</c>); optional.
+    /// </summary>
+    public string? MusicFabAccessClientId { get; set; }
+
+    /// <summary>Client secret of that service token, sent as <c>CF-Access-Client-Secret</c>.</summary>
+    public string? MusicFabAccessClientSecret { get; set; }
+
+    /// <summary>
     /// Size limit of the cache of finished transcodes (<c>&lt;data&gt;/cache/transcodes</c>) in MB; 0 turns it off.
     /// At 128 kbit/s a song takes about 4 MB, so 2 GB hold some 500 songs.
     /// </summary>

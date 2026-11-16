@@ -32,6 +32,8 @@ public sealed class MusicFabRequestTests : IDisposable
         {
             b.UseSetting("MusicManager:MusicFabUrl", "http://musicfab:5810/");
             b.UseSetting("MusicManager:MusicFabApiKey", Key);
+            b.UseSetting("MusicManager:MusicFabAccessClientId", "access-id.access");
+            b.UseSetting("MusicManager:MusicFabAccessClientSecret", "access-secret");
             b.ConfigureTestServices(s => s.AddHttpClient<MusicFabClient>().ConfigurePrimaryHttpMessageHandler(() => _musicFab));
         });
     }
@@ -57,6 +59,7 @@ public sealed class MusicFabRequestTests : IDisposable
 
         Assert.Equal(Album, _musicFab.LastUrl);
         Assert.Equal(Key, _musicFab.LastKey);
+        Assert.Equal(("access-id.access", "access-secret"), _musicFab.LastAccess);
         var stored = await StoredAsync(request.Id);
         Assert.Equal(("Queued", Album, "Spotify-Playlist „Mix“"), (stored.State, stored.Url, stored.Origin));
         Assert.Equal(_musicFab.Jobs.Keys.Single(), stored.JobId);
@@ -121,6 +124,12 @@ public sealed class MusicFabRequestTests : IDisposable
         _musicFab.Key = "another-key";
         var key = await Assert.ThrowsAsync<MusicFabException>(() => Requests.RequestAsync(Album, null, CancellationToken.None));
         Assert.Contains("API-Key", key.Message);
+
+        // Cloudflare Access sends a client without a valid service token to its login
+        _musicFab.Key = Key;
+        _musicFab.AccessRefused = true;
+        var access = await Assert.ThrowsAsync<MusicFabException>(() => Requests.RequestAsync(Album, null, CancellationToken.None));
+        Assert.Contains("Service-Token", access.Message);
     }
 
     [Fact]
@@ -159,11 +168,16 @@ public sealed class MusicFabRequestTests : IDisposable
         public string Key = MusicFabRequestTests.Key;
         public string? LastUrl;
         public string? LastKey;
+        public (string?, string?) LastAccess;
+        public bool AccessRefused;
 
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
         {
             Assert.Equal("musicfab:5810", request.RequestUri!.Authority);
-            LastKey = request.Headers.TryGetValues("X-Api-Key", out var keys) ? keys.Single() : null;
+            LastAccess = (Header(request, "CF-Access-Client-Id"), Header(request, "CF-Access-Client-Secret"));
+            if (AccessRefused)
+                return new HttpResponseMessage(HttpStatusCode.Found) { Headers = { Location = new Uri("https://team.cloudflareaccess.com/cdn-cgi/access/login") } };
+            LastKey = Header(request, "X-Api-Key");
             if (LastKey != Key) return new HttpResponseMessage(HttpStatusCode.Unauthorized);
 
             var path = request.RequestUri.AbsolutePath;
@@ -188,6 +202,9 @@ public sealed class MusicFabRequestTests : IDisposable
 
             return Json(HttpStatusCode.OK, Dto(found));
         }
+
+        private static string? Header(HttpRequestMessage request, string name) =>
+            request.Headers.TryGetValues(name, out var values) ? values.Single() : null;
 
         // MusicFab.Manager leaves out null fields
         private static Dictionary<string, object> Dto(Job j)
