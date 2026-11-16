@@ -22,7 +22,7 @@
                     <CellTemplate><StatusChip Status="context.Item.Status" Reason="@context.Item.StatusReason" /></CellTemplate>
                 </PropertyColumn>
                 <PropertyColumn Property="x => x.Decision" Title="Entscheidung">
-                    <CellTemplate><DecisionChip Decision="context.Item.Decision" /></CellTemplate>
+                    <CellTemplate><DecisionChip Decision="context.Item.Decision" Source="@context.Item.ExternalSource" /></CellTemplate>
                 </PropertyColumn>
                 <TemplateColumn Title="Ergebnis" SortBy="x => x.TargetPath ?? x.StatusReason">
                     <CellTemplate><TrackSummary File="context.Item" Variant="TrackSummary.SummaryVariant.Result" /></CellTemplate>

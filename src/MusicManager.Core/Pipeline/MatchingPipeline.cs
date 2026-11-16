@@ -310,12 +310,12 @@ public sealed partial class MatchingPipeline(
 
         file.AcoustId ??= lookup?.BestAcoustId(ids.Select(i => i.Id).FirstOrDefault(), settings.AcoustIdMinScore);
 
-        // Spotify/Deezer links in the tags: exact track, its ISRC may lead to MusicBrainz.
+        // Spotify/Deezer/YouTube links in the tags: exact track, its ISRC may lead to MusicBrainz (not YouTube: no ISRC).
         file.ExternalMatches = [];
         if (ids.Count == 0)
         {
-            if (file.OriginalFields.Count > 0) await StepAsync(file, "Spotify-/Deezer-Links aus den Tags werden geprüft", ct);
-            var (linked, messages) = await external.FromLinksAsync(file.OriginalFields, ct);
+            if (file.OriginalFields.Count > 0) await StepAsync(file, "Spotify-/Deezer-/YouTube-Links aus den Tags werden geprüft", ct);
+            var (linked, messages) = await external.FromLinksAsync(file.OriginalFields, file.OriginalTags, settings, ct);
             foreach (var message in messages) AddEvent(file, message);
             file.ExternalMatches.AddRange(linked);
             ids.AddRange(await RecordingsByIsrcAsync(file, linked, ct));
@@ -368,7 +368,8 @@ public sealed partial class MatchingPipeline(
                 recordings.Add(rec);
         }
 
-        if (recordings.Count == 0 && file.ExternalMatches.Count == 0)
+        // A YouTube video is only how the uploader described it: Spotify/Deezer are still asked, their data is better.
+        if (recordings.Count == 0 && file.ExternalMatches.All(m => m.Source == "youtube"))
             recordings = await ExternalSearchAsync(file, settings, ct);
 
         return new Identification(recordings, false);
@@ -482,6 +483,7 @@ public sealed partial class MatchingPipeline(
     {
         "spotify" => "Spotify",
         "deezer" => "Deezer",
+        "youtube" => "YouTube",
         _ => source,
     };
 

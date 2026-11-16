@@ -30,7 +30,7 @@ public sealed class ReviewService(
         return file;
     }
 
-    /// <summary>Tags a Spotify/Deezer match would produce – nothing is saved.</summary>
+    /// <summary>Tags a Spotify/Deezer/YouTube match would produce – nothing is saved.</summary>
     public async Task<TrackFile> PreviewExternalAsync(int fileId, string matchKey, CancellationToken ct = default)
     {
         await using var db = await dbFactory.CreateDbContextAsync(ct);
@@ -142,7 +142,7 @@ public sealed class ReviewService(
     }
 
     /// <summary>
-    /// Takes the tags of a Spotify/Deezer match (the given one, or the best of each file) incl. cover.
+    /// Takes the tags of a Spotify/Deezer/YouTube match (the given one, or the best of each file) incl. cover.
     /// Returns files without a match.
     /// </summary>
     public Task<List<string>> ApplyExternalAsync(IReadOnlyList<int> fileIds, string? matchKey = null, CancellationToken ct = default) =>
@@ -200,7 +200,7 @@ public sealed class ReviewService(
                 var match = pick(file);
                 if (match == null)
                 {
-                    problems.Add($"{file.FileName}: kein Treffer aus Spotify/Deezer");
+                    problems.Add($"{file.FileName}: kein Vorschlag aus Spotify, Deezer oder YouTube");
                     continue;
                 }
 

@@ -98,6 +98,73 @@ public sealed class AiService(IOptions<MusicManagerOptions> options, ILogger<AiS
         };
     }
 
+    // --- YouTube video → tags -------------------------------------------------------------
+
+    private const string YouTubeSystemPrompt = """
+        You turn a YouTube video into music tags. The file was downloaded as audio from this video; YouTube has
+        no artist/title fields, only how the uploader described the video.
+
+        Work out from the video title, the channel name, the description and the upload date:
+        - artists: the main artist(s). The channel is often the artist (drop suffixes like " - Topic", "VEVO",
+          "Official"), but not for labels, event or media channels (e.g. "Boiler Room", "COLORS", "Majestic
+          Casual"): then the artist is in the title. "Artist - Title" and "Artist | Title" are common.
+        - featured: artists marked "feat.", "ft.", "featuring" or "with" – not part of the title.
+        - title: the clean song title. Remove video markers ("Official Video", "Lyrics", "HD", "4K", "Visualizer",
+          "Audio"), but keep what makes it another recording: Remix, Live, Bootleg, VIP, Edit, Mix, Session and
+          similar, written as "Title (X Remix)". For a DJ set or live session, the title is the event, e.g.
+          "Boiler Room: New York".
+        - album: only when the title or description names the release (an album, EP or "Provided to YouTube by"
+          block); otherwise empty.
+        - date: the release date if the description states it (YYYY-MM-DD, YYYY-MM or YYYY), else empty.
+        - Keep the original language and spelling of names; fix only obvious all-caps or all-lowercase writing of
+          the title when the description or the file tags show the usual spelling.
+        - The file's current tags were typed by hand and are a hint only; YouTube's data comes first.
+        - Do not invent anything. confidence is your confidence (0..1) that artists and title are right.
+        - notes: one short sentence in German on how you read the video.
+        """;
+
+    private static readonly Dictionary<string, JsonElement> YouTubeSchema = Schema(new
+    {
+        type = "object",
+        properties = new
+        {
+            artists = new { type = "array", items = new { type = "string" } },
+            featured = new { type = "array", items = new { type = "string" } },
+            title = new { type = "string" },
+            album = new { type = "string" },
+            date = new { type = "string" },
+            confidence = new { type = "number" },
+            notes = new { type = "string" },
+        },
+        required = new[] { "artists", "featured", "title", "album", "date", "confidence", "notes" },
+        additionalProperties = false,
+    });
+
+    /// <summary>Artist, title and album read from a YouTube video; null without AI or when it declines.</summary>
+    public async Task<YouTubeTags?> ReadYouTubeAsync(Services.YouTubeVideo video, TagSet? fileTags, AppSettings settings, CancellationToken ct)
+    {
+        var input = new
+        {
+            video_title = video.Title,
+            channel = video.Channel,
+            uploaded = video.PublishedAt,
+            description = video.Description.Length > 2000 ? video.Description[..2000] : video.Description,
+            file_tags = fileTags == null ? null : Describe(fileTags),
+        };
+
+        var json = await AskAsync(settings.AiSimpleModel, YouTubeSystemPrompt, JsonSerializer.Serialize(input, JsonOptions), YouTubeSchema, settings, ct);
+        if (json == null) return null;
+
+        var r = JsonSerializer.Deserialize<YouTubeResponse>(json, JsonOptions)!;
+        var artists = r.Artists.Where(a => !string.IsNullOrWhiteSpace(a)).Select(a => a.Trim()).ToList();
+        if (artists.Count == 0 || string.IsNullOrWhiteSpace(r.Title)) return null;
+        return new YouTubeTags(artists, r.Featured.Where(a => !string.IsNullOrWhiteSpace(a)).Select(a => a.Trim()).ToList(), r.Title.Trim(),
+            r.Album.NullIfEmptyString(), r.Date.NullIfEmptyString(), r.Confidence, r.Notes);
+    }
+
+    private sealed record YouTubeResponse(List<string> Artists, List<string> Featured, string Title, string Album, string Date, double Confidence,
+        string Notes);
+
     // --- Release decision ------------------------------------------------------------------
 
     private const string DecisionSystemPrompt = """
@@ -411,3 +478,6 @@ internal static class StringExtensions
 {
     public static string? NullIfEmptyString(this string? s) => string.IsNullOrWhiteSpace(s) ? null : s.Trim();
 }
+
+/// <summary>Tags the AI read from a YouTube video (<see cref="AiService.ReadYouTubeAsync"/>).</summary>
+public sealed record YouTubeTags(List<string> Artists, List<string> Featured, string Title, string? Album, string? Date, double Confidence, string Notes);

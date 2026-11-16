@@ -106,7 +106,7 @@ public sealed class TrackFile
     /// <summary>AI suggestion for cleaned tags / files not in MusicBrainz.</summary>
     public AiTagSuggestion? AiSuggestion { get; set; }
 
-    /// <summary>Hits from Spotify/Deezer (links in the tags or search) for files not in MusicBrainz.</summary>
+    /// <summary>Hits from Spotify/Deezer/YouTube (links in the tags or search) for files not in MusicBrainz.</summary>
     public List<ExternalMatch> ExternalMatches { get; set; } = [];
 
     /// <summary>Source of the applied external tags ("spotify", "deezer").</summary>

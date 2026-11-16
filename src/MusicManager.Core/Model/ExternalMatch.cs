@@ -3,7 +3,7 @@ namespace MusicManager.Core.Model;
 /// <summary>A track found in a source outside MusicBrainz (Spotify, Deezer).</summary>
 public sealed class ExternalMatch
 {
-    /// <summary>"spotify" or "deezer".</summary>
+    /// <summary>"spotify", "deezer" or "youtube".</summary>
     public required string Source { get; init; }
 
     public required string Id { get; init; }
@@ -33,7 +33,7 @@ public sealed class ExternalMatch
     public List<string> Genres { get; init; } = [];
     public string? CoverUrl { get; init; }
 
-    /// <summary>True if the track came from a Spotify/Deezer link in the file's tags (exact match).</summary>
+    /// <summary>True if the track came from a Spotify/Deezer/YouTube link in the file's tags (exact match).</summary>
     public bool FromTagLink { get; set; }
 
     /// <summary>Similarity to the file (title, artist, duration), 0..1.</summary>

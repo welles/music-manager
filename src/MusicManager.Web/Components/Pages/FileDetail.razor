@@ -17,7 +17,7 @@
 <PageHeader Title="@TrackSummary.TitleOf(_file)" UseHistory="true">
     <Badges>
     <StatusChip Status="_file.Status" />
-    <DecisionChip Decision="_file.Decision" />
+    <DecisionChip Decision="_file.Decision" Source="@_file.ExternalSource" />
     @if (_file.ManuallyTagged)
     {
         <MudChip T="string" Size="Size.Small" Color="Color.Secondary" Variant="Variant.Outlined">manuell getaggt</MudChip>
@@ -49,13 +49,13 @@
     <MudTabPanel Text="Kandidaten" BadgeData="@(CandidateRows.Count > 0 ? CandidateRows.Count : null)">
         @if (CandidateRows.Count == 0)
         {
-            <MudText>Keine Kandidaten von MusicBrainz, Spotify oder Deezer. Nutze „Release suchen“ oder „Manuell taggen“.</MudText>
+            <MudText>Keine Kandidaten von MusicBrainz, Spotify, Deezer oder YouTube. Nutze „Release suchen“ oder „Manuell taggen“.</MudText>
         }
         else
         {
             <MudText Typo="Typo.body2" Class="mb-2">
                 „Vorschau“ zeigt die Tags eines Kandidaten im Tab „Tags“, ohne etwas zu ändern; „Wählen“ übernimmt ihn.
-                Bei Spotify/Deezer werden Tags und Cover der Quelle mit den eigenen Regeln verwendet, die Datei gilt danach als manuell getaggt.
+                Bei Spotify, Deezer und YouTube werden Tags und Cover der Quelle mit den eigenen Regeln verwendet, die Datei gilt danach als manuell getaggt.
             </MudText>
             @foreach (var row in CandidateRows)
             {
@@ -201,7 +201,7 @@
 
     private sealed record CandidateRow(ReleaseCandidate? MusicBrainz, ExternalMatch? External);
 
-    /// <summary>MusicBrainz candidates first (by points), then Spotify/Deezer matches (by agreement).</summary>
+    /// <summary>MusicBrainz candidates first (by points), then Spotify/Deezer/YouTube matches (by agreement).</summary>
     private List<CandidateRow> CandidateRows => _file == null ? [] :
         _file.Candidates.Select(c => new CandidateRow(c, null))
             .Concat(_file.ExternalMatches.OrderByDescending(m => m.FromTagLink).ThenByDescending(m => m.Score).Select(m => new CandidateRow(null, m)))
