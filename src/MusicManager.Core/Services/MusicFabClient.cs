@@ -22,7 +22,9 @@ public sealed class MusicFabException(string message, HttpStatusCode? status = n
 
 /// <summary>
 /// MusicFab.Manager's REST API (<c>/api/downloads</c>, <c>X-Api-Key</c>): it opens a URL in MusicFab, selects all tracks
-/// and downloads them into the inbox. Without URL and key the client is off.
+/// and downloads them into the inbox. Without URL and key the client is off. Behind Cloudflare Access it sends the
+/// service token of <see cref="MusicManagerOptions.MusicFabAccessClientId"/>; redirects are not followed, since the only
+/// one on the API is Access sending an unknown client to its login.
 /// </summary>
 public sealed class MusicFabClient(HttpClient http, IOptions<MusicManagerOptions> options)
 {
@@ -77,6 +79,12 @@ public sealed class MusicFabClient(HttpClient http, IOptions<MusicManagerOptions
         if (!IsConfigured) throw new MusicFabException("MusicFab ist nicht eingerichtet (MusicManager__MusicFabUrl, MusicManager__MusicFabApiKey).");
         var request = new HttpRequestMessage(method, new Uri(options.Value.MusicFabUrl!.TrimEnd('/') + "/" + path));
         request.Headers.Add("X-Api-Key", options.Value.MusicFabApiKey);
+        if (!string.IsNullOrWhiteSpace(options.Value.MusicFabAccessClientId))
+        {
+            request.Headers.Add("CF-Access-Client-Id", options.Value.MusicFabAccessClientId);
+            request.Headers.Add("CF-Access-Client-Secret", options.Value.MusicFabAccessClientSecret);
+        }
+
         return request;
     }
 
@@ -95,9 +103,17 @@ public sealed class MusicFabClient(HttpClient http, IOptions<MusicManagerOptions
     private static async Task EnsureSuccessAsync(HttpResponseMessage response, CancellationToken ct)
     {
         if (response.IsSuccessStatusCode) return;
-        throw response.StatusCode == HttpStatusCode.Unauthorized
-            ? new MusicFabException("MusicFab lehnt den API-Key ab (MusicManager__MusicFabApiKey).", response.StatusCode)
-            : new MusicFabException($"MusicFab antwortet {(int)response.StatusCode}: {await ProblemAsync(response, ct)}", response.StatusCode);
+        throw response.StatusCode switch
+        {
+            HttpStatusCode.Unauthorized =>
+                new MusicFabException("MusicFab lehnt den API-Key ab (MusicManager__MusicFabApiKey).", response.StatusCode),
+            // MusicFab.Manager answers neither: Access sends unknown clients to its login or refuses a wrong token
+            HttpStatusCode.Forbidden or >= HttpStatusCode.Ambiguous and < HttpStatusCode.BadRequest =>
+                new MusicFabException(
+                    "Cloudflare Access lässt die Anfrage nicht durch: Service-Token fehlt oder ist falsch " +
+                    "(MusicManager__MusicFabAccessClientId, MusicManager__MusicFabAccessClientSecret).", response.StatusCode),
+            _ => new MusicFabException($"MusicFab antwortet {(int)response.StatusCode}: {await ProblemAsync(response, ct)}", response.StatusCode),
+        };
     }
 
     private static async Task<MusicFabJob> ReadJobAsync(HttpResponseMessage response, CancellationToken ct)

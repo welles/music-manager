@@ -25,6 +25,9 @@ services:
       # MusicFab.Manager (github.com/welles/fab-containers) – optional, requests downloads into the inbox
       MusicManager__MusicFabUrl: ${MUSICFAB_URL:-}
       MusicManager__MusicFabApiKey: ${MUSICFAB_API_KEY:-}
+      # Cloudflare Access service token, when MusicFab.Manager is reached through Access
+      MusicManager__MusicFabAccessClientId: ${MUSICFAB_ACCESS_CLIENT_ID:-}
+      MusicManager__MusicFabAccessClientSecret: ${MUSICFAB_ACCESS_CLIENT_SECRET:-}
     volumes:
       # Inbox for new files (subfolders = groups, e.g. musicfab/<album>)
       - ${INBOX_DIR:-./inbox}:/inbox

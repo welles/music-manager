@@ -98,6 +98,9 @@ folder (one folder per album or playlist), where they go through the pipeline li
   (`https://open.spotify.com/track/…`); that needs MusicFab logged in to Spotify.
 - The MusicFab container must mount this inbox as its `/output`, and the Music Manager must reach its
   port 5810.
+- Behind Cloudflare Access (e.g. `https://musicfab.example.com`), a service token whose policy lets it
+  through goes into `MusicManager__MusicFabAccessClientId` and `MusicManager__MusicFabAccessClientSecret`;
+  it is sent as `CF-Access-Client-Id`/`CF-Access-Client-Secret`.
 
 ### Data in the files
 

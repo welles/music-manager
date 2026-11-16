@@ -46,7 +46,8 @@ public static class ServiceCollectionExtensions
             c.DefaultRequestHeaders.UserAgent.ParseAdd(userAgent);
             c.Timeout = TimeSpan.FromSeconds(20);
         });
-        services.AddHttpClient<MusicFabClient>(c => c.Timeout = TimeSpan.FromSeconds(30));
+        services.AddHttpClient<MusicFabClient>(c => c.Timeout = TimeSpan.FromSeconds(30))
+            .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
         services.AddSingleton<GenreService>();
         services.AddSingleton<AudioTools>();
         services.AddSingleton<TranscodeCache>();
