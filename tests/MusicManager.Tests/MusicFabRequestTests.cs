@@ -130,6 +130,27 @@ public sealed class MusicFabRequestTests : IDisposable
         _musicFab.AccessRefused = true;
         var access = await Assert.ThrowsAsync<MusicFabException>(() => Requests.RequestAsync(Album, null, CancellationToken.None));
         Assert.Contains("Service-Token", access.Message);
+
+        // Another site at MusicFabUrl answers with a page instead of a job
+        _musicFab.AccessRefused = false;
+        _musicFab.Page = true;
+        var page = await Assert.ThrowsAsync<MusicFabException>(() => Requests.RequestAsync(Album, null, CancellationToken.None));
+        Assert.Contains("keine Auftragsdaten", page.Message);
+    }
+
+    [Fact]
+    public async Task AJobMusicFabFailsOnDoesNotHoldUpTheOthers()
+    {
+        var broken = await Requests.RequestAsync(Album, null, CancellationToken.None);
+        var fine = await Requests.RequestAsync("https://music.youtube.com/watch?v=jNQXAC9IVRw", null, CancellationToken.None);
+        _musicFab.Jobs[broken.JobId].Broken = true;
+        _musicFab.Jobs[fine.JobId].State = "Completed";
+
+        Assert.True(await Requests.RefreshAsync(CancellationToken.None));
+        Assert.Equal("Completed", (await StoredAsync(fine.Id)).State);
+        var waiting = await StoredAsync(broken.Id);
+        Assert.Equal("Queued", waiting.State);
+        Assert.Null(waiting.FinishedAt);
     }
 
     [Fact]
@@ -162,6 +183,7 @@ public sealed class MusicFabRequestTests : IDisposable
             public List<string> Files { get; set; } = [];
             public double? Progress { get; set; }
             public string? Error { get; set; }
+            public bool Broken { get; set; }
         }
 
         public readonly Dictionary<Guid, Job> Jobs = [];
@@ -170,6 +192,7 @@ public sealed class MusicFabRequestTests : IDisposable
         public string? LastKey;
         public (string?, string?) LastAccess;
         public bool AccessRefused;
+        public bool Page;
 
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
         {
@@ -179,6 +202,9 @@ public sealed class MusicFabRequestTests : IDisposable
                 return new HttpResponseMessage(HttpStatusCode.Found) { Headers = { Location = new Uri("https://team.cloudflareaccess.com/cdn-cgi/access/login") } };
             LastKey = Header(request, "X-Api-Key");
             if (LastKey != Key) return new HttpResponseMessage(HttpStatusCode.Unauthorized);
+
+            if (Page)
+                return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("<html>Login</html>", Encoding.UTF8, "text/html") };
 
             var path = request.RequestUri.AbsolutePath;
             if (request.Method == HttpMethod.Post && path == "/api/downloads")
@@ -194,6 +220,7 @@ public sealed class MusicFabRequestTests : IDisposable
 
             var id = Guid.Parse(path.Split('/').Last());
             if (!Jobs.TryGetValue(id, out var found)) return new HttpResponseMessage(HttpStatusCode.NotFound);
+            if (found.Broken) return new HttpResponseMessage(HttpStatusCode.InternalServerError);
             if (request.Method == HttpMethod.Delete)
             {
                 if (found.State != "Queued") return Json(HttpStatusCode.Conflict, $"only queued jobs can be cancelled, this one is {found.State}");

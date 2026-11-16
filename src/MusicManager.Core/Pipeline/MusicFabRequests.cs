@@ -96,7 +96,18 @@ public sealed class MusicFabRequests(
         var open = (await db.MusicFabRequests.ToListAsync(ct)).Where(r => !r.IsFinished).ToList();
         foreach (var request in open)
         {
-            var job = await musicFab.GetAsync(request.JobId, ct);
+            MusicFabJob? job;
+            try
+            {
+                job = await musicFab.GetAsync(request.JobId, ct);
+            }
+            catch (MusicFabException ex) when (ex.Status != null)
+            {
+                // MusicFab answered, but not for this job: the others still get updated, this one is asked again next time
+                logger.LogWarning("Updating MusicFab job {JobId} failed: {Message}", request.JobId, ex.Message);
+                continue;
+            }
+
             if (job == null)
             {
                 // MusicFab.Manager lost its database, or the job was removed there

@@ -116,11 +116,20 @@ public sealed class MusicFabClient(HttpClient http, IOptions<MusicManagerOptions
         };
     }
 
+    // Anything but a job (another site's page at MusicFabUrl) is a refusal the UI can show
     private static async Task<MusicFabJob> ReadJobAsync(HttpResponseMessage response, CancellationToken ct)
     {
-        await using var stream = await response.Content.ReadAsStreamAsync(ct);
-        using var doc = await JsonDocument.ParseAsync(stream, cancellationToken: ct);
-        return Parse(doc.RootElement);
+        try
+        {
+            await using var stream = await response.Content.ReadAsStreamAsync(ct);
+            using var doc = await JsonDocument.ParseAsync(stream, cancellationToken: ct);
+            return Parse(doc.RootElement);
+        }
+        catch (Exception ex) when (ex is JsonException or KeyNotFoundException or InvalidOperationException or FormatException)
+        {
+            throw new MusicFabException(
+                $"MusicFab antwortet unerwartet (keine Auftragsdaten, stimmt MusicManager__MusicFabUrl?): {ex.Message}", response.StatusCode);
+        }
     }
 
     // Validation problems ({"errors": {"url": ["…"]}}), plain text (409) or nothing
