@@ -46,6 +46,7 @@ public static class ServiceCollectionExtensions
             c.DefaultRequestHeaders.UserAgent.ParseAdd(userAgent);
             c.Timeout = TimeSpan.FromSeconds(20);
         });
+        services.AddHttpClient<MusicFabClient>(c => c.Timeout = TimeSpan.FromSeconds(30));
         services.AddSingleton<GenreService>();
         services.AddSingleton<AudioTools>();
         services.AddSingleton<TranscodeCache>();
@@ -82,6 +83,8 @@ public static class ServiceCollectionExtensions
         services.AddHostedService(sp => sp.GetRequiredService<InboxScanner>());
         services.AddSingleton<SpotifyPlaylistSync>();
         services.AddHostedService(sp => sp.GetRequiredService<SpotifyPlaylistSync>());
+        services.AddSingleton<MusicFabRequests>();
+        services.AddHostedService(sp => sp.GetRequiredService<MusicFabRequests>());
         services.AddSingleton<LibraryIndexer>();
         services.AddHostedService(sp => sp.GetRequiredService<LibraryIndexer>());
         services.AddHostedService<PipelineWorker>();

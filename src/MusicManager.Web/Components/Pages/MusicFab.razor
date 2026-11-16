@@ -1,0 +1,153 @@
+@page "/musicfab"
+@inherits LivePage
+@using MusicManager.Core.Services
+@inject IDbContextFactory<AppDbContext> DbFactory
+@inject MusicFabRequests Requests
+@inject ISnackbar Snackbar
+
+<PageTitle>MusicFab – Music Manager</PageTitle>
+
+<PageHeader Title="MusicFab" />
+
+@if (!Requests.IsConfigured)
+{
+    <MudAlert Severity="Severity.Info" Class="mb-4">
+        MusicFab ist nicht verbunden. Dafür <code>MusicManager__MusicFabUrl</code> (z. B. <code>http://musicfab:5810</code>) und
+        <code>MusicManager__MusicFabApiKey</code> (der <code>FAB_API_KEY</code> des MusicFab-Containers) setzen.
+    </MudAlert>
+    return;
+}
+
+<MudPaper Outlined="true" Class="pa-3 mb-4">
+    <MudText Typo="Typo.body2" Class="mb-2">
+        MusicFab lädt Titel, Alben und Playlists (z. B. von YouTube Music) in den Eingang unter <code>musicfab/</code>;
+        von dort laufen sie durch die Pipeline wie jede andere Datei.
+    </MudText>
+    <div class="d-flex align-center flex-wrap" style="gap:8px">
+        <MudTextField @bind-Value="_url" Label="Adresse" Placeholder="https://music.youtube.com/playlist?list=…" Variant="Variant.Outlined"
+                      Margin="Margin.Dense" Immediate="true" Style="min-width:260px" Class="flex-grow-1 mt-0"
+                      OnKeyUp="@(e => e.Key == "Enter" ? Request() : Task.CompletedTask)" />
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Download"
+                   Disabled="@(_busy || string.IsNullOrWhiteSpace(_url))" OnClick="Request">Laden</MudButton>
+    </div>
+</MudPaper>
+
+@if (_requests.Count == 0)
+{
+    <MudText Typo="Typo.body2" Class="mud-text-secondary">Noch nichts angefordert.</MudText>
+}
+
+<div class="card-list">
+    @foreach (var r in _requests)
+    {
+        <MudPaper Outlined="true" Class="pa-3" @key="r.Id">
+            <div class="d-flex align-start" style="gap:8px">
+                <div style="min-width:0;flex:1">
+                    <MudText Typo="Typo.subtitle2" Style="overflow-wrap:anywhere">@(r.Title ?? r.Url)</MudText>
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary d-block" Style="overflow-wrap:anywhere">
+                        <MudLink Href="@r.Url" Target="_blank" Typo="Typo.caption">@r.Url</MudLink>
+                        @if (r.Origin != null) { <span> · @r.Origin</span> }
+                    </MudText>
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary d-block">
+                        @r.CreatedAt.ToLocalTime().ToString("g")
+                        @if (r.Tracks is { } tracks) { <span> · @tracks Titel</span> }
+                        @if (r.Files > 0) { <span> · @r.Files @(r.Files == 1 ? "Datei" : "Dateien")</span> }
+                        @if (r.InboxFolder != null) { <span> · Eingang: <code>@r.InboxFolder</code></span> }
+                    </MudText>
+                    @if (!r.IsFinished && r.Progress is { } progress)
+                    {
+                        <MudProgressLinear Value="progress" Color="Color.Primary" Class="mt-2" />
+                    }
+                    @if (r.Error != null)
+                    {
+                        <MudText Typo="Typo.caption" Color="Color.Error" Class="d-block mt-1">@r.Error</MudText>
+                    }
+                </div>
+                <MudChip T="string" Size="Size.Small" Color="@StateColor(r.State)" Variant="Variant.Outlined" Style="flex-shrink:0">@StateText(r.State)</MudChip>
+                @if (r.State == "Queued")
+                {
+                    <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small" aria-label="Abbrechen" OnClick="() => Cancel(r)" />
+                }
+                else if (r.IsFinished)
+                {
+                    <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" aria-label="Aus der Liste entfernen" OnClick="() => Remove(r)" />
+                }
+            </div>
+        </MudPaper>
+    }
+</div>
+
+@code {
+    private List<MusicFabRequest> _requests = [];
+    private string? _url;
+    private bool _busy;
+
+    protected override async Task ReloadAsync()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        _requests = await db.MusicFabRequests.AsNoTracking().OrderByDescending(r => r.CreatedAt).Take(200).ToListAsync();
+    }
+
+    private async Task Request()
+    {
+        if (string.IsNullOrWhiteSpace(_url) || _busy) return;
+        _busy = true;
+        try
+        {
+            await Requests.RequestAsync(_url, null, CancellationToken.None);
+            _url = null;
+            await ReloadAsync();
+        }
+        catch (MusicFabException ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task Cancel(MusicFabRequest r)
+    {
+        try
+        {
+            if (!await Requests.CancelAsync(r.Id, CancellationToken.None))
+                Snackbar.Add("MusicFab hat schon angefangen; abbrechen geht nur vorher.", Severity.Warning);
+        }
+        catch (MusicFabException ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+
+        await ReloadAsync();
+    }
+
+    private async Task Remove(MusicFabRequest r)
+    {
+        await Requests.RemoveAsync(r.Id, CancellationToken.None);
+        await ReloadAsync();
+    }
+
+    private static string StateText(string state) => state switch
+    {
+        "Queued" => "wartet",
+        "Opening" => "öffnet",
+        "Analyzing" => "analysiert",
+        "Selecting" => "wählt aus",
+        "Downloading" => "lädt",
+        "Completed" => "fertig",
+        "Failed" => "fehlgeschlagen",
+        "Cancelled" => "abgebrochen",
+        "Lost" => "unbekannt",
+        _ => state,
+    };
+
+    private static Color StateColor(string state) => state switch
+    {
+        "Completed" => Color.Success,
+        "Failed" or "Lost" => Color.Error,
+        "Queued" or "Cancelled" => Color.Default,
+        _ => Color.Info,
+    };
+}

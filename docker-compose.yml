@@ -22,6 +22,9 @@ services:
       MusicManager__SubsonicApiKey: ${SUBSONIC_API_KEY:-}
       # Last.fm API key (https://www.last.fm/api/account/create) – optional genre fallback
       MusicManager__LastFmApiKey: ${LASTFM_API_KEY:-}
+      # MusicFab.Manager (github.com/welles/fab-containers) – optional, requests downloads into the inbox
+      MusicManager__MusicFabUrl: ${MUSICFAB_URL:-}
+      MusicManager__MusicFabApiKey: ${MUSICFAB_API_KEY:-}
     volumes:
       # Inbox for new files (subfolders = groups, e.g. musicfab/<album>)
       - ${INBOX_DIR:-./inbox}:/inbox

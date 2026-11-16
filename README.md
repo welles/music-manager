@@ -73,6 +73,7 @@ docker compose up -d
 | `MusicManager__MusicBrainzServer` | Optional own MusicBrainz mirror                           |
 | `MusicManager__SubsonicApiKey`    | API key for the Subsonic API (optional; without it the API is off) |
 | `MusicManager__LastFmApiKey`      | Last.fm API key (optional, https://www.last.fm/api/account/create) – genre fallback |
+| `MusicManager__MusicFabUrl`, `MusicManager__MusicFabApiKey` | MusicFab.Manager (optional, see [MusicFab](#musicfab)) |
 | `MusicManager__TranscodeCacheMb`  | Size limit of the transcode cache in MB (default 2048, 0 = off) |
 | `MusicManager__InboxPath` …       | Override the container paths (default `/inbox`, `/music`, `/trash`, `/data`) |
 
@@ -81,6 +82,22 @@ to the owner of the music share.
 
 The app has no login of its own. Run it behind the Cloudflare Tunnel and protect it
 with Cloudflare Access. Forwarded headers are honored.
+
+### MusicFab
+
+With `MusicManager__MusicFabUrl` (e.g. `http://musicfab:5810`) and `MusicManager__MusicFabApiKey`
+(its `FAB_API_KEY`), tracks, albums and playlists can be requested from **MusicFab.Manager**, the
+manager in the MusicFab container of [fab-containers](https://github.com/welles/fab-containers).
+It opens the URL in MusicFab, selects all tracks and downloads them into this inbox's `musicfab/`
+folder (one folder per album or playlist), where they go through the pipeline like any other file.
+
+- The **MusicFab** page takes a URL (e.g. `https://music.youtube.com/playlist?list=…`) and lists the
+  requests with their state, progress, errors and the inbox folder they arrive in. While one runs,
+  its state is fetched every 10 seconds.
+- A Spotify playlist page offers the download for each **missing** track
+  (`https://open.spotify.com/track/…`); that needs MusicFab logged in to Spotify.
+- The MusicFab container must mount this inbox as its `/output`, and the Music Manager must reach its
+  port 5810.
 
 ### Data in the files
 

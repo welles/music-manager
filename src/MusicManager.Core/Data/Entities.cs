@@ -569,3 +569,36 @@ public sealed class SpotifyPlaylistTrack
     public string? ImageUrl { get; set; }
 }
 
+
+/// <summary>
+/// A track, album or playlist requested from MusicFab (MusicFab.Manager's job <see cref="JobId"/>), mirrored for the
+/// MusicFab page. MusicFab downloads into the inbox's <c>musicfab/</c> folder; from there the files go through the
+/// pipeline like any other.
+/// </summary>
+public sealed class MusicFabRequest
+{
+    public int Id { get; set; }
+    public Guid JobId { get; set; }
+    public required string Url { get; set; }
+
+    /// <summary>Where the request came from, e.g. the Spotify playlist of a missing track; null when entered by hand.</summary>
+    public string? Origin { get; set; }
+
+    /// <summary>MusicFab.Manager's job state: Queued, Opening, Analyzing, Selecting, Downloading, Completed, Failed, Cancelled.</summary>
+    public required string State { get; set; }
+
+    public string? Title { get; set; }
+    public int? Tracks { get; set; }
+    public int Files { get; set; }
+    public double? Progress { get; set; }
+    public string? Error { get; set; }
+
+    /// <summary>The inbox group the files arrive in, e.g. <c>musicfab/Album - Action Cuts</c>, once MusicFab names files.</summary>
+    public string? InboxFolder { get; set; }
+
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+    public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
+    public DateTimeOffset? FinishedAt { get; set; }
+
+    public bool IsFinished => State is "Completed" or "Failed" or "Cancelled" or "Lost";
+}

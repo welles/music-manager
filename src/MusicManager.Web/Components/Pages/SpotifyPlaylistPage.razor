@@ -1,5 +1,6 @@
 @page "/playlists/spotify/{Id:int}"
 @inherits LivePage
+@using MusicManager.Core.Services
 @using MusicManager.Core.Catalog
 @inject IDbContextFactory<AppDbContext> DbFactory
 @inject MediaCatalog Catalog
@@ -8,6 +9,8 @@
 @inject PlayerService Player
 @inject IDialogService Dialogs
 @inject NavigationManager Nav
+@inject MusicFabRequests MusicFab
+@inject ISnackbar Snackbar
 
 <PageTitle>@(_playlist?.Name ?? "Spotify-Playlist") – Music Manager</PageTitle>
 
@@ -82,6 +85,13 @@
                 else
                 {
                     <MudChip T="string" Size="Size.Small" Variant="Variant.Text" Style="flex-shrink:0">fehlt</MudChip>
+                    @if (MusicFab.IsConfigured && row.SpotifyTrackId is { } spotifyId)
+                    {
+                        <MudTooltip Text="Mit MusicFab laden">
+                            <MudIconButton Icon="@Icons.Material.Filled.Download" Size="Size.Small" aria-label="Mit MusicFab laden"
+                                           Disabled="_requested.Contains(spotifyId)" OnClick="() => RequestFromMusicFab(spotifyId)" />
+                        </MudTooltip>
+                    }
                 }
             </div>
         </MudPaper>
@@ -93,7 +103,9 @@
 
     private enum Show { All, Present, Missing }
 
-    private sealed record Row(int Position, SongInfo Song, LibraryTrack? Track);
+    private sealed record Row(int Position, SongInfo Song, LibraryTrack? Track, string? SpotifyTrackId = null);
+
+    private readonly HashSet<string> _requested = [];
 
     private SpotifyPlaylist? _playlist;
     private List<Row> _rows = [];
@@ -127,8 +139,24 @@
             {
                 Title = t.Title, Artist = string.Join(", ", t.Artists), Artists = t.Artists, Album = t.Album,
                 Duration = SongInfo.FormatLength(t.DurationMs / 1000.0), CoverUrl = t.ImageUrl,
-            }, null);
+            }, null, t.SpotifyTrackId);
         }).ToList();
+    }
+
+    /// <summary>A missing track: MusicFab downloads it from Spotify into the inbox (MusicFab must be logged in to Spotify).</summary>
+    private async Task RequestFromMusicFab(string spotifyTrackId)
+    {
+        _requested.Add(spotifyTrackId);
+        try
+        {
+            await MusicFab.RequestAsync($"https://open.spotify.com/track/{spotifyTrackId}", $"Spotify-Playlist „{_playlist!.Name}“", CancellationToken.None);
+            Snackbar.Add("An MusicFab übergeben; der Stand steht unter „MusicFab“.", Severity.Success);
+        }
+        catch (MusicFabException ex)
+        {
+            _requested.Remove(spotifyTrackId);
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
     }
 
     private async Task Remove()
