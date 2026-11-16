@@ -368,8 +368,7 @@ public sealed partial class MatchingPipeline(
                 recordings.Add(rec);
         }
 
-        // A YouTube video is only how the uploader described it: Spotify/Deezer are still asked, their data is better.
-        if (recordings.Count == 0 && file.ExternalMatches.All(m => m.Source == "youtube"))
+        if (recordings.Count == 0 && !HasLinkedTrack(file))
             recordings = await ExternalSearchAsync(file, settings, ct);
 
         return new Identification(recordings, false);
@@ -427,10 +426,16 @@ public sealed partial class MatchingPipeline(
 
     /// <summary>
     /// Whether an uncertain file also gets the Spotify/Deezer search: not when its MusicBrainz tags assigned it,
-    /// the scoring is certain, or it already has external matches (from links in its tags).
+    /// the scoring is certain, or it already has a Spotify/Deezer track (from a link in its tags).
     /// </summary>
     internal static bool ShouldSearchExternally(bool assignedByTags, ScoreResult result, TrackFile file) =>
-        !assignedByTags && !result.IsCertain && file.ExternalMatches.Count == 0;
+        !assignedByTags && !result.IsCertain && !HasLinkedTrack(file);
+
+    /// <summary>
+    /// A Spotify/Deezer track is already known. A YouTube video does not count: it is only how the uploader described it,
+    /// so Spotify and Deezer are still asked – their data is better.
+    /// </summary>
+    internal static bool HasLinkedTrack(TrackFile file) => file.ExternalMatches.Any(m => m.Source != "youtube");
 
     /// <summary>Recordings of <paramref name="found"/> not among <paramref name="known"/> (each once).</summary>
     internal static List<RecordingMatch> NewRecordings(IEnumerable<RecordingMatch> found, IEnumerable<RecordingMatch> known)

@@ -36,6 +36,15 @@ public class UncertainMatchTests
         Assert.False(MatchingPipeline.ShouldSearchExternally(assignedByTags: false, Result(certain: false), File(externalMatches: 1)));
 
     [Fact]
+    public void AYouTubeSuggestionDoesNotStopTheSearch()
+    {
+        var file = File();
+        file.ExternalMatches.Add(new ExternalMatch { Source = "youtube", Id = "ntsGK2tlnYY", Title = "T", FromTagLink = true });
+
+        Assert.True(MatchingPipeline.ShouldSearchExternally(assignedByTags: false, Result(certain: false), file));
+    }
+
+    [Fact]
     public void OnlyNewRecordingsAreAddedOnce()
     {
         var known = new List<RecordingMatch> { Rec("crush-remix") };
