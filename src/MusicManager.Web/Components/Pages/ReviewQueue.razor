@@ -88,7 +88,7 @@
             <MudSpacer />
             <MudButtonGroup Variant="Variant.Outlined" Size="Size.Small">
                 <MudButton StartIcon="@Icons.Material.Filled.Search" Disabled="_selected.Count == 0" OnClick="SearchRelease">Release zuweisen</MudButton>
-                <MudButton StartIcon="@Icons.Material.Filled.TravelExplore" Disabled="!_selected.Any(f => f.ExternalMatches.Count > 0)" OnClick="ApplyExternal">Spotify/Deezer übernehmen</MudButton>
+                <MudButton StartIcon="@Icons.Material.Filled.TravelExplore" Disabled="!_selected.Any(f => f.ExternalMatches.Count > 0)" OnClick="ApplyExternal">Vorschlag übernehmen</MudButton>
                 <MudButton StartIcon="@Icons.Material.Filled.Edit" Disabled="_selected.Count == 0" OnClick="ManualTag">Manuell taggen</MudButton>
                 <MudButton StartIcon="@Icons.Material.Filled.Replay" Disabled="_selected.Count == 0" OnClick="Retry">Erneut verarbeiten</MudButton>
                 <MudButton StartIcon="@Icons.Material.Filled.Delete" Color="Color.Error" Disabled="_selected.Count == 0" OnClick="Discard">Verwerfen</MudButton>
@@ -177,7 +177,7 @@
         var ids = _selected.Where(f => f.ExternalMatches.Count > 0).Select(f => f.Id).ToList();
         var problems = await Review.ApplyExternalAsync(ids);
         foreach (var p in problems) Snackbar.Add(p, Severity.Warning);
-        Snackbar.Add($"{ids.Count - problems.Count} Datei(en) mit dem besten Spotify/Deezer-Treffer getaggt – werden geschrieben.", Severity.Success);
+        Snackbar.Add($"{ids.Count - problems.Count} Datei(en) mit dem besten Vorschlag (Spotify, Deezer oder YouTube) getaggt – werden geschrieben.", Severity.Success);
         _selected.Clear();
     }
 

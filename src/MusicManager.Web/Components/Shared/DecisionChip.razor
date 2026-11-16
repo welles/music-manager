@@ -6,13 +6,16 @@
 @code {
     [Parameter] public DecisionSource Decision { get; set; }
 
+    /// <summary>For <see cref="DecisionSource.External"/>: "spotify", "deezer" or "youtube" (TrackFile.ExternalSource).</summary>
+    [Parameter] public string? Source { get; set; }
+
     private string Label => Decision switch
     {
         DecisionSource.Automatic => "Automatisch",
         DecisionSource.Ai => "KI",
         DecisionSource.Manual => "Manuell gewählt",
         DecisionSource.ManualTags => "Manuell getaggt",
-        DecisionSource.External => "Spotify/Deezer",
+        DecisionSource.External => Source != null ? MatchingPipeline.SourceName(Source) : "Externe Quelle",
         _ => "",
     };
 

@@ -9,7 +9,7 @@
             <MudCheckBox T="bool" Value="Selected" ValueChanged="SelectedChanged" Dense="true" Size="Size.Small" Class="ml-n2" aria-label="Auswählen" />
         }
         <StatusChip Status="File.Status" Reason="@File.StatusReason" />
-        <DecisionChip Decision="File.Decision" />
+        <DecisionChip Decision="File.Decision" Source="@File.ExternalSource" />
         <span class="file-card-time">@File.UpdatedAt.ToLocalTime().ToString("g")</span>
     </div>
 

@@ -19,6 +19,12 @@ streams straight from Music Manager.
    already assigned keep their release. Otherwise the fingerprint goes to AcoustID,
    with a MusicBrainz text search as fallback. Every file gets an AcoustID, even
    when it was already assigned.
+   Files MusicBrainz does not know get suggestions from Spotify and Deezer (links in
+   the tags, else a search). A **YouTube link** in the tags (e.g. `PURL`/`COMMENT` from
+   yt-dlp, issue #31) is read via the YouTube Data API: Claude works out artist, title
+   and album from the video title, channel and description, the upload date becomes the
+   date, and the thumbnail, cut square, the cover. Without an album it is filed as a
+   single. The suggestion is taken over in the review like the Spotify/Deezer ones.
 4. **Release selection**: every release of the matching recordings is scored (old
    tags incl. their date, exact album name, release type, group context, date, country, format, length). Close calls
    go to Claude, then to the review queue.
@@ -63,6 +69,7 @@ docker compose up -d
 | `MusicManager__AnthropicApiKey`   | Claude API key (optional, enables the AI features)        |
 | `MusicManager__MusicBrainzContact`| Contact in the MusicBrainz User-Agent                     |
 | `MusicManager__SpotifyClientId`, `MusicManager__SpotifyClientSecret` | Spotify app for the fallback search (optional; Deezer needs no key) |
+| `MusicManager__YouTubeApiKey`     | YouTube Data API v3 key (optional): YouTube links in the tags become a tag suggestion (needs the AI) |
 | `MusicManager__MusicBrainzServer` | Optional own MusicBrainz mirror                           |
 | `MusicManager__SubsonicApiKey`    | API key for the Subsonic API (optional; without it the API is off) |
 | `MusicManager__LastFmApiKey`      | Last.fm API key (optional, https://www.last.fm/api/account/create) – genre fallback |

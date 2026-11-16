@@ -32,6 +32,12 @@ public sealed class MusicManagerOptions
     public string? SpotifyClientSecret { get; set; }
 
     /// <summary>
+    /// YouTube Data API key (Google Cloud, "YouTube Data API v3"); optional. With it, YouTube links in a file's tags
+    /// become a tag suggestion (the AI splits video title, channel and description into artist, title and album).
+    /// </summary>
+    public string? YouTubeApiKey { get; set; }
+
+    /// <summary>
     /// Address Spotify sends the login back to; must be registered with the app in the Spotify dashboard. Empty = worked
     /// out from the request (<c>https://&lt;host&gt;/spotify/callback</c>).
     /// </summary>

@@ -29,6 +29,7 @@ public static class ServiceCollectionExtensions
         });
 
         services.AddHttpClient<SpotifyClient>(c => c.Timeout = TimeSpan.FromSeconds(20));
+        services.AddHttpClient<YouTubeClient>(c => c.Timeout = TimeSpan.FromSeconds(20));
         // One instance: it keeps the login states and the access token.
         services.AddHttpClient(nameof(SpotifyUserClient), c => c.Timeout = TimeSpan.FromSeconds(30));
         services.AddSingleton(sp => ActivatorUtilities.CreateInstance<SpotifyUserClient>(sp,

@@ -222,13 +222,94 @@ public sealed class DeezerClient(HttpClient http, ILogger<DeezerClient> logger)
     }
 }
 
+/// <summary>What YouTube says about a video: no artist/title fields, only how the uploader described it.</summary>
+public sealed record YouTubeVideo(string Id, string Title, string Channel, string? PublishedAt, string Description, double? DurationSeconds,
+    string? ThumbnailUrl);
+
+/// <summary>YouTube Data API v3 (API key): one video by its ID, for a YouTube link in a file's tags.</summary>
+public sealed class YouTubeClient(HttpClient http, IOptions<MusicManagerOptions> options)
+{
+    public bool IsConfigured => !string.IsNullOrWhiteSpace(options.Value.YouTubeApiKey);
+
+    /// <summary>The video, or null when YouTube does not know it (deleted, private).</summary>
+    public async Task<YouTubeVideo?> GetVideoAsync(string id, CancellationToken ct)
+    {
+        var url = $"https://www.googleapis.com/youtube/v3/videos?part=snippet,contentDetails&id={Uri.EscapeDataString(id)}" +
+                  $"&key={Uri.EscapeDataString(options.Value.YouTubeApiKey ?? "")}";
+        using var response = await http.GetAsync(url, ct);
+        if (!response.IsSuccessStatusCode)
+        {
+            // Google explains the problem (key invalid, API not enabled, quota) in error.message.
+            var body = await response.Content.ReadAsStringAsync(ct);
+            string? message = null;
+            try
+            {
+                using var error = JsonDocument.Parse(body);
+                message = error.RootElement.GetProperty("error").GetProperty("message").GetString();
+            }
+            catch (Exception e) when (e is JsonException or KeyNotFoundException or InvalidOperationException)
+            {
+            }
+
+            throw new HttpRequestException($"YouTube antwortet {(int)response.StatusCode}: {message ?? response.ReasonPhrase}");
+        }
+
+        using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync(ct));
+        var items = doc.RootElement.GetProperty("items");
+        if (items.GetArrayLength() == 0) return null;
+        var item = items[0];
+        var snippet = item.GetProperty("snippet");
+        string? Text(JsonElement e, string name) => e.TryGetProperty(name, out var v) ? v.GetString() : null;
+
+        string? thumbnail = null;
+        if (snippet.TryGetProperty("thumbnails", out var thumbs))
+        {
+            foreach (var size in new[] { "maxres", "standard", "high", "medium", "default" })
+            {
+                if (thumbs.TryGetProperty(size, out var t) && Text(t, "url") is { } u)
+                {
+                    thumbnail = u;
+                    break;
+                }
+            }
+        }
+
+        return new YouTubeVideo(id, Text(snippet, "title") ?? "", Text(snippet, "channelTitle") ?? "", Text(snippet, "publishedAt"),
+            Text(snippet, "description") ?? "",
+            item.TryGetProperty("contentDetails", out var details) && Text(details, "duration") is { } d ? ParseDuration(d) : null,
+            thumbnail);
+    }
+
+    /// <summary>ISO 8601 duration as YouTube gives it ("PT1H26M30S") in seconds.</summary>
+    public static double? ParseDuration(string iso)
+    {
+        try
+        {
+            return System.Xml.XmlConvert.ToTimeSpan(iso).TotalSeconds;
+        }
+        catch (FormatException)
+        {
+            return null;
+        }
+    }
+}
+
 /// <summary>Searches the configured external sources and rates their hits against the file.</summary>
-public sealed class ExternalSourceService(SpotifyClient spotify, DeezerClient deezer, ILogger<ExternalSourceService> logger)
+public sealed class ExternalSourceService(
+    SpotifyClient spotify,
+    DeezerClient deezer,
+    YouTubeClient youtube,
+    Ai.AiService ai,
+    ILogger<ExternalSourceService> logger)
 {
     public bool SpotifyConfigured => spotify.IsConfigured;
 
-    /// <summary>Loads the tracks linked in the file's tags; they count as exact matches.</summary>
-    public async Task<(List<ExternalMatch> Matches, List<string> Messages)> FromLinksAsync(IEnumerable<TagField> fields, CancellationToken ct)
+    /// <summary>
+    /// Loads the tracks linked in the file's tags; they count as exact matches. A YouTube video has no track data,
+    /// so the AI reads artist, title and album from its title, channel and description (<paramref name="fileTags"/> as a hint).
+    /// </summary>
+    public async Task<(List<ExternalMatch> Matches, List<string> Messages)> FromLinksAsync(IEnumerable<TagField> fields, TagSet? fileTags,
+        AppSettings settings, CancellationToken ct)
     {
         var matches = new List<ExternalMatch>();
         var messages = new List<string>();
@@ -236,6 +317,14 @@ public sealed class ExternalSourceService(SpotifyClient spotify, DeezerClient de
         {
             try
             {
+                if (link.Source == "youtube")
+                {
+                    var (video, message) = await FromYouTubeAsync(link, fileTags, settings, ct);
+                    messages.Add(message);
+                    if (video != null) matches.Add(video);
+                    continue;
+                }
+
                 var match = link.Source == "spotify" ? await spotify.GetTrackAsync(link.Id, ct) : await deezer.GetTrackAsync(link.Id, ct);
                 if (match == null)
                 {
@@ -256,6 +345,45 @@ public sealed class ExternalSourceService(SpotifyClient spotify, DeezerClient de
 
         return (matches, messages);
     }
+
+    private async Task<(ExternalMatch? Match, string Message)> FromYouTubeAsync(ExternalLinks.Link link, TagSet? fileTags, AppSettings settings,
+        CancellationToken ct)
+    {
+        if (!youtube.IsConfigured)
+            return (null, $"YouTube-Link in {link.Field} – ohne YouTube-API-Schlüssel nicht abrufbar");
+        if (!ai.IsConfigured)
+            return (null, $"YouTube-Link in {link.Field} – ohne KI lassen sich Künstler und Titel nicht aus dem Video lesen");
+
+        var video = await youtube.GetVideoAsync(link.Id, ct);
+        if (video == null) return (null, $"YouTube-Video in {link.Field} nicht gefunden ({link.Id}), gelöscht oder privat");
+
+        var tags = await ai.ReadYouTubeAsync(video, fileTags, settings, ct);
+        if (tags == null) return (null, $"YouTube-Video \"{video.Title}\" ({video.Channel}): KI konnte Künstler und Titel nicht bestimmen");
+
+        var match = ToMatch(video, tags);
+        return (match, $"YouTube-Video \"{video.Title}\" ({video.Channel}) → {string.Join(", ", match.Artists)} – {match.Title} " +
+                       $"(KI {tags.Confidence:P0}: {tags.Notes})");
+    }
+
+    /// <summary>A YouTube video as a suggestion: no album named = a single named after the title; uploaded = released.</summary>
+    public static ExternalMatch ToMatch(YouTubeVideo video, Ai.YouTubeTags tags) => new()
+    {
+        Source = "youtube",
+        Id = video.Id,
+        Url = $"https://www.youtube.com/watch?v={video.Id}",
+        Title = tags.Title,
+        Artists = tags.Artists,
+        FeaturedArtists = tags.Featured,
+        Album = tags.Album ?? tags.Title,
+        AlbumArtists = tags.Artists,
+        AlbumType = tags.Album == null ? "single" : null,
+        ReleaseDate = tags.Date ?? (video.PublishedAt is { Length: >= 10 } p ? p[..10] : null),
+        DurationSeconds = video.DurationSeconds,
+        CoverUrl = video.ThumbnailUrl,
+        // The video is certain, how it was read is not: a perfect Spotify/Deezer hit (1.0) ranks above it.
+        Score = 0.99,
+        FromTagLink = true,
+    };
 
     public async Task<(List<ExternalMatch> Matches, List<string> Messages)> SearchAsync(TagSet tags, double? duration, AppSettings settings,
         CancellationToken ct)
@@ -332,7 +460,7 @@ public sealed class ExternalSourceService(SpotifyClient spotify, DeezerClient de
     }
 }
 
-/// <summary>Spotify/Deezer track links found in a file's tags (e.g. written by spotDL into the comment).</summary>
+/// <summary>Spotify/Deezer track and YouTube video links found in a file's tags (e.g. written by spotDL or yt-dlp).</summary>
 public static partial class ExternalLinks
 {
     public sealed record Link(string Source, string Id, string Field);
@@ -348,6 +476,8 @@ public static partial class ExternalLinks
                     links.Add(new Link("spotify", m.Groups["id"].Value, field.Name));
                 foreach (System.Text.RegularExpressions.Match m in DeezerLink().Matches(value))
                     links.Add(new Link("deezer", m.Groups["id"].Value, field.Name));
+                foreach (System.Text.RegularExpressions.Match m in YouTubeLink().Matches(value))
+                    links.Add(new Link("youtube", m.Groups["id"].Value, field.Name));
             }
         }
 
@@ -359,4 +489,8 @@ public static partial class ExternalLinks
 
     [System.Text.RegularExpressions.GeneratedRegex(@"deezer\.com/(?:[a-z]{2}/)?track/(?<id>\d+)")]
     private static partial System.Text.RegularExpressions.Regex DeezerLink();
+
+    // youtube.com/watch?v=…, music.youtube.com/watch?v=…, youtu.be/…, youtube.com/shorts/… – the ID is 11 characters.
+    [System.Text.RegularExpressions.GeneratedRegex(@"(?:youtube\.com/(?:watch\?(?:[^\s#]*?&)?v=|shorts/|embed/|live/)|youtu\.be/)(?<id>[A-Za-z0-9_-]{11})(?![A-Za-z0-9_-])")]
+    private static partial System.Text.RegularExpressions.Regex YouTubeLink();
 }
