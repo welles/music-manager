@@ -59,6 +59,16 @@ public sealed class MusicManagerOptions
     public string? LastFmApiKey { get; set; }
 
     /// <summary>
+    /// MusicFab.Manager (the manager in the MusicFab container, github.com/welles/fab-containers), e.g.
+    /// <c>http://musicfab:5810</c>; optional. With it and <see cref="MusicFabApiKey"/>, tracks, albums and playlists
+    /// can be requested from MusicFab, which downloads them into the inbox's <c>musicfab/</c> folder.
+    /// </summary>
+    public string? MusicFabUrl { get; set; }
+
+    /// <summary>API key of MusicFab.Manager (its <c>FAB_API_KEY</c>).</summary>
+    public string? MusicFabApiKey { get; set; }
+
+    /// <summary>
     /// Size limit of the cache of finished transcodes (<c>&lt;data&gt;/cache/transcodes</c>) in MB; 0 turns it off.
     /// At 128 kbit/s a song takes about 4 MB, so 2 GB hold some 500 songs.
     /// </summary>
