@@ -75,7 +75,9 @@ jobs:
   # After the image of a push to main is published: the owner's NixOS
   # configuration (welles/nixos-config) sets the music_manager stack to
   # ghcr.io/welles/music-manager:sha-<this commit> (its workflow
-  # update-music-manager.yml), so the next deploy brings this version. Needs the
+  # update-music-manager.yml), so the next deploy brings this version. It gets
+  # the full SHA (to check that it is newer than the current tag) and shortens
+  # it to 7 characters itself, matching the short tag of type=sha above. Needs the
   # secret NIXOS_CONFIG_DISPATCH_TOKEN: a fine-grained token for
   # welles/nixos-config only, with "Actions: read and write" (starting a
   # workflow; it cannot change code). Skipped without it.
