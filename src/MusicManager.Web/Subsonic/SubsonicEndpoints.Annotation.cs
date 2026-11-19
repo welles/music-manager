@@ -17,7 +17,8 @@ public static partial class SubsonicEndpoints
         {
             var removed = await r.Service<UserDataStore>().UnstarAsync(StarIds(r), r.Aborted);
             // Starred and unstarred again right away: the player has no other way to flag a song (issue #18).
-            await r.Service<SongReportService>().ReportQuickUnstarsAsync(removed, DateTimeOffset.UtcNow, r.Aborted);
+            // Not cancelled with the request: the star is already gone, a repeated unstar could not report it again.
+            await r.Service<SongReportService>().ReportQuickUnstarsAsync(removed, DateTimeOffset.UtcNow, CancellationToken.None);
             return Ok();
         });
 
