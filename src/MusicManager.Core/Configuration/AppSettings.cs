@@ -96,6 +96,12 @@ public sealed class AppSettings
     /// <summary>Song ID, added date, favorite and rating are mirrored into the library files (M4A written by this tool).</summary>
     public bool WriteMarkersToFiles { get; set; } = true;
 
+    /// <summary>
+    /// A song that is starred and unstarred again within this many seconds (Subsonic API, e.g. Symfonium in Android
+    /// Auto) is reported for a later check. 0 turns it off.
+    /// </summary>
+    public int ReportUnstarSeconds { get; set; } = 10;
+
     /// <summary>Playlists are kept as M3U8 files in the library's "Playlists" folder; edits made there are taken over.</summary>
     public bool PlaylistFiles { get; set; } = true;
 

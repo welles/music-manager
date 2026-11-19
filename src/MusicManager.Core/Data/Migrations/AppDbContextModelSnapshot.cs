@@ -503,6 +503,44 @@ namespace MusicManager.Core.Data.Migrations
                     b.ToTable("Settings");
                 });
 
+            modelBuilder.Entity("MusicManager.Core.Data.SongReport", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Artist")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Count")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("LastReportedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Note")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("ReportedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("ResolvedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("SongId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Title")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SongId", "ResolvedAt");
+
+                    b.ToTable("SongReports");
+                });
+
             modelBuilder.Entity("MusicManager.Core.Data.SourceProfile", b =>
                 {
                     b.Property<int>("Id")

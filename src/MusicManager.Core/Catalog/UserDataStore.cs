@@ -106,11 +106,18 @@ public sealed class UserDataStore(IDbContextFactory<AppDbContext> dbFactory)
         await db.SaveChangesAsync(ct);
     }, ct, ids);
 
-    public Task UnstarAsync(IEnumerable<string> ids, CancellationToken ct = default) => WriteAsync(async db =>
+    /// <summary>Removes the stars; returns the removed ones with their date (a quick unstar is a report, see <see cref="SongReportService"/>).</summary>
+    public async Task<IReadOnlyList<Star>> UnstarAsync(IEnumerable<string> ids, CancellationToken ct = default)
     {
         var list = ids.Distinct(StringComparer.Ordinal).ToList();
-        await db.Stars.Where(s => list.Contains(s.ItemId)).ExecuteDeleteAsync(ct);
-    }, ct, ids);
+        List<Star> removed = [];
+        await WriteAsync(async db =>
+        {
+            removed = await db.Stars.AsNoTracking().Where(s => list.Contains(s.ItemId)).ToListAsync(ct);
+            await db.Stars.Where(s => list.Contains(s.ItemId)).ExecuteDeleteAsync(ct);
+        }, ct, list);
+        return removed;
+    }
 
     /// <summary>Sets the rating (1..5); 0 removes it.</summary>
     public Task SetRatingAsync(string id, int rating, CancellationToken ct = default)

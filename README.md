@@ -141,6 +141,15 @@ were filed earlier, Settings → Metadaten → "Fehlende Album-Cover nachladen" 
 Art Archive; for albums without a MusicBrainz release or without a cover there, Deezer (1000 px) and Spotify
 (640 px) are searched. Albums found nowhere keep their embedded cover.
 
+### Reporting songs from the car
+
+Symfonium in Android Auto has no button to flag a song, so a quick favorite does it: star a song and unstar it
+again within 10 seconds, and it is reported for a later check (e.g. an unwanted version or a glitch in the audio).
+The favorite itself is gone again. The **Meldungen** page lists the reports with the song, a note field and links
+to edit or re-tag it; "Erledigt" closes a report, and reporting the same song again while it is open counts up.
+Only a fresh star counts: unstarring an older favorite is no report. The window is set under Settings → Metadaten
+→ "Melden per Favorit (s)" (0 = off). Reports are kept in the database only.
+
 ### App and notifications
 
 The web app can be installed as a PWA (HTTPS required, e.g. through the tunnel). Under

@@ -1,0 +1,149 @@
+@page "/meldungen"
+@inherits LivePage
+@using MusicManager.Core.Catalog
+@inject SongReportService Reports
+@inject LibraryCatalog Catalog
+@inject SettingsService SettingsService
+@inject PlayerService Player
+@inject NavigationManager Nav
+@inject IDialogService Dialogs
+
+<PageTitle>Meldungen – Music Manager</PageTitle>
+
+<PageHeader Title="Meldungen" />
+
+<MudText Typo="Typo.body2" Class="mb-3 mud-text-secondary">
+    @if (_window > 0)
+    {
+        <span>Ein Titel, der im Player (z. B. Symfonium in Android Auto) als Favorit markiert und innerhalb von @_window Sekunden wieder entfernt wird,
+            landet hier zur späteren Prüfung. Der Favorit selbst bleibt entfernt.</span>
+    }
+    else
+    {
+        <span>Melden per Favorit ist aus (Einstellungen → Metadaten → „Melden per Favorit (s)“).</span>
+    }
+</MudText>
+
+<MudTabs Outlined="true" Border="true" TabPanelsClass="pa-4">
+    <MudTabPanel Text="Offen" BadgeData="@(Open.Count > 0 ? Open.Count : null)">
+        @if (Open.Count == 0)
+        {
+            <MudAlert Severity="Severity.Success" Variant="Variant.Outlined">Keine offenen Meldungen.</MudAlert>
+        }
+        <div class="card-list">
+            @foreach (var r in Open)
+            {
+                @Card(r)
+            }
+        </div>
+    </MudTabPanel>
+    <MudTabPanel Text="Erledigt">
+        @if (Done.Count == 0)
+        {
+            <MudText Typo="Typo.body2" Class="mud-text-secondary">Noch nichts erledigt.</MudText>
+        }
+        <div class="card-list">
+            @foreach (var r in Done)
+            {
+                @Card(r)
+            }
+        </div>
+    </MudTabPanel>
+</MudTabs>
+
+@code {
+    private List<SongReport> _reports = [];
+    private Dictionary<string, LibraryTrack> _tracks = new(StringComparer.Ordinal);
+    private int _window;
+
+    private List<SongReport> Open => _reports.Where(r => r.ResolvedAt == null).ToList();
+    private List<SongReport> Done => _reports.Where(r => r.ResolvedAt != null).ToList();
+
+    protected override async Task ReloadAsync()
+    {
+        _reports = await Reports.GetAsync();
+        var ids = _reports.Select(r => r.SongId).ToHashSet(StringComparer.Ordinal);
+        _tracks = (await Catalog.GetTracksAsync()).Where(t => t.SongId != null && ids.Contains(t.SongId))
+            .GroupBy(t => t.SongId!, StringComparer.Ordinal).ToDictionary(g => g.Key, g => g.First(), StringComparer.Ordinal);
+        _window = (await SettingsService.GetAsync()).ReportUnstarSeconds;
+    }
+
+    private RenderFragment Card(SongReport r) => __builder =>
+    {
+        var track = _tracks.GetValueOrDefault(r.SongId);
+        <MudPaper Outlined="true" Class="pa-3" @key="r.Id">
+            <div class="d-flex align-start" style="gap:4px">
+                <div style="min-width:0;flex:1">
+                    @if (track != null)
+                    {
+                        <SongCard Song="SongInfo.From(track) with { Genres = [] }" />
+                    }
+                    else
+                    {
+                        <SongCard Song="Missing(r)" />
+                    }
+                </div>
+                @if (track != null)
+                {
+                    <MudIconButton Icon="@Icons.Material.Filled.PlayArrow" Size="Size.Small" OnClick="() => Player.Play(track)" aria-label="Abspielen" />
+                }
+            </div>
+            <MudText Typo="Typo.caption" Class="mud-text-secondary d-block mt-1">
+                Gemeldet @r.ReportedAt.ToLocalTime().ToString("g")
+                @if (r.Count > 1)
+                {
+                    <span> · @(r.Count)× gemeldet, zuletzt @r.LastReportedAt.ToLocalTime().ToString("g")</span>
+                }
+                @if (r.ResolvedAt is { } resolved)
+                {
+                    <span> · erledigt @resolved.ToLocalTime().ToString("g")</span>
+                }
+            </MudText>
+            <MudTextField T="string" Value="r.Note" ValueChanged="note => SetNote(r, note)" Placeholder="Notiz (z. B. falsche Version, Aussetzer bei 2:10)"
+                          Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2" DebounceInterval="800" />
+            <div class="d-flex flex-wrap align-center mt-2" style="gap:8px">
+                @if (track != null)
+                {
+                    <MudButton Variant="Variant.Outlined" Size="Size.Small" StartIcon="@Icons.Material.Filled.Edit"
+                               Href="@($"bibliothek/bearbeiten?ids={track.Id}")">Bearbeiten</MudButton>
+                    <MudButton Variant="Variant.Outlined" Size="Size.Small" StartIcon="@Icons.Material.Filled.AutoFixHigh"
+                               Href="@($"bibliothek/neu-taggen?ids={track.Id}")">Neu taggen</MudButton>
+                }
+                <MudSpacer />
+                @if (r.ResolvedAt == null)
+                {
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small" StartIcon="@Icons.Material.Filled.Check"
+                               OnClick="() => SetResolved(r, true)">Erledigt</MudButton>
+                }
+                else
+                {
+                    <MudButton Variant="Variant.Outlined" Size="Size.Small" StartIcon="@Icons.Material.Filled.Undo"
+                               OnClick="() => SetResolved(r, false)">Wieder öffnen</MudButton>
+                }
+                <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" aria-label="Meldung löschen" OnClick="() => Delete(r)" />
+            </div>
+        </MudPaper>
+    };
+
+    /// <summary>The song is not in the library (any more): title and artist as they were when it was reported.</summary>
+    private static SongInfo Missing(SongReport r) => new() { Title = r.Title, Artist = r.Artist, Extra = [("Bibliothek", "nicht mehr vorhanden")] };
+
+    private async Task SetResolved(SongReport r, bool resolved)
+    {
+        await Reports.SetResolvedAsync(r.Id, resolved);
+        await ReloadAsync();
+    }
+
+    private async Task SetNote(SongReport r, string? note)
+    {
+        r.Note = note;
+        await Reports.SetNoteAsync(r.Id, note);
+    }
+
+    private async Task Delete(SongReport r)
+    {
+        if (await Dialogs.ShowMessageBoxAsync("Meldung löschen", $"Die Meldung zu „{r.Title ?? r.SongId}“ löschen?", yesText: "Löschen", cancelText: "Abbrechen") != true) return;
+        await Reports.DeleteAsync(r.Id);
+        await ReloadAsync();
+    }
+}
