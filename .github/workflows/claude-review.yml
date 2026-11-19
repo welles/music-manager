@@ -19,3 +19,6 @@ jobs:
       ANTHROPIC_REVIEW_KEY: ${{ secrets.ANTHROPIC_REVIEW_KEY }}
       REVIEWER_APP_CLIENT_ID: ${{ secrets.REVIEWER_APP_CLIENT_ID }}
       REVIEWER_APP_KEY: ${{ secrets.REVIEWER_APP_KEY }}
+    with:
+      # PRs opened by Claude sessions of the Claude Remote Manager (its GitHub App)
+      allowed-bots: welles-claude-remote-manager[bot]
