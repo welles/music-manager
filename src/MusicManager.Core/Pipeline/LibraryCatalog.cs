@@ -7,6 +7,9 @@ namespace MusicManager.Core.Pipeline;
 public sealed class LibraryTrack
 {
     public int Id { get; init; }
+
+    /// <summary>Public song ID ("tr-…") of the Subsonic API.</summary>
+    public string? SongId { get; init; }
     public required string RelativePath { get; init; }
     public string? Title { get; init; }
     public string? Artist { get; init; }
@@ -89,7 +92,7 @@ public sealed class LibraryCatalog(IDbContextFactory<AppDbContext> dbFactory)
         await using var db = await dbFactory.CreateDbContextAsync(ct);
         return await db.Library.AsNoTracking().Select(e => new LibraryTrack
         {
-            Id = e.Id, RelativePath = e.RelativePath, Title = e.Title, Artist = e.Artist, Artists = e.Artists, Album = e.Album,
+            Id = e.Id, SongId = e.SongId, RelativePath = e.RelativePath, Title = e.Title, Artist = e.Artist, Artists = e.Artists, Album = e.Album,
             AlbumArtist = e.AlbumArtist, AlbumArtists = e.AlbumArtists, Genres = e.Genres, Year = e.Year, TrackNumber = e.TrackNumber,
             DiscNumber = e.DiscNumber, DurationSeconds = e.DurationSeconds, Codec = e.Codec, BitrateKbps = e.BitrateKbps,
             FileSize = e.FileSize, HasCover = e.HasCover, ReplayGainTrackGain = e.ReplayGainTrackGain, ReplayGainTrackPeak = e.ReplayGainTrackPeak, MbRecordingId = e.MbRecordingId, MbReleaseId = e.MbReleaseId,

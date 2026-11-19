@@ -15,7 +15,9 @@ public static partial class SubsonicEndpoints
 
         Add("unstar", async r =>
         {
-            await r.Service<UserDataStore>().UnstarAsync(StarIds(r), r.Aborted);
+            var removed = await r.Service<UserDataStore>().UnstarAsync(StarIds(r), r.Aborted);
+            // Starred and unstarred again right away: the player has no other way to flag a song (issue #18).
+            await r.Service<SongReportService>().ReportQuickUnstarsAsync(removed, DateTimeOffset.UtcNow, r.Aborted);
             return Ok();
         });
 

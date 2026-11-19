@@ -602,3 +602,32 @@ public sealed class MusicFabRequest
 
     public bool IsFinished => State is "Completed" or "Failed" or "Cancelled" or "Lost";
 }
+
+/// <summary>
+/// A library song marked for a later check (issue #18). A player without own buttons (Symfonium in Android Auto)
+/// reports a song by starring it and unstarring it again within a few seconds. One open report per song; a
+/// further report of the same song counts up.
+/// </summary>
+public sealed class SongReport
+{
+    public int Id { get; set; }
+
+    /// <summary>Public song ID ("tr-…"); stays valid when the file is re-tagged, moved or replaced.</summary>
+    public required string SongId { get; set; }
+
+    /// <summary>Title and artist when it was reported, shown when the song is no longer in the library.</summary>
+    public string? Title { get; set; }
+
+    public string? Artist { get; set; }
+
+    public DateTimeOffset ReportedAt { get; set; } = DateTimeOffset.UtcNow;
+    public DateTimeOffset LastReportedAt { get; set; } = DateTimeOffset.UtcNow;
+
+    /// <summary>How often the song was reported while the report was open.</summary>
+    public int Count { get; set; } = 1;
+
+    public string? Note { get; set; }
+
+    /// <summary>When it was marked as done; null = open.</summary>
+    public DateTimeOffset? ResolvedAt { get; set; }
+}
