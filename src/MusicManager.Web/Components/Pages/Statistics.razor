@@ -1,0 +1,362 @@
+@page "/statistik"
+@inherits LivePage
+@using System.Globalization
+@using MusicManager.Core.Catalog
+@inject PlayHistoryService History
+@inject MediaCatalog MediaCatalog
+
+<PageTitle>Statistik – Music Manager</PageTitle>
+
+<PageHeader Title="Statistik" />
+
+@* Filters in one row above everything they apply to. *@
+<div class="d-flex flex-wrap align-center mb-3" style="gap:12px">
+    <MudToggleGroup T="string" Value="_period" ValueChanged="SetPeriod" SelectionMode="SelectionMode.SingleSelection" Color="Color.Primary"
+                    Size="Size.Small" Outlined="true">
+        @foreach (var (key, label, _) in Periods)
+        {
+            <MudToggleItem Value="key" Text="@label" />
+        }
+    </MudToggleGroup>
+    @if (_report?.FirstEvent is { } first)
+    {
+        <MudText Typo="Typo.caption" Class="mud-text-secondary">Aufgezeichnet seit @first.ToLocalTime().ToString("d. MMMM yyyy", German)</MudText>
+    }
+</div>
+
+@if (_report == null)
+{
+    <MudProgressLinear Indeterminate="true" />
+}
+else if (_report.FirstEvent == null)
+{
+    <MudAlert Severity="Severity.Info" Variant="Variant.Outlined">
+        Noch nichts aufgezeichnet. Sobald ein Player (z. B. Symfonium) über die Subsonic-API Titel abspielt, überspringt oder als Favorit
+        markiert, erscheint es hier. Wiedergaben von vor dieser Version zählen nur in den Wiedergabezahlen der Titel, nicht im Verlauf.
+    </MudAlert>
+}
+else
+{
+    var r = _report;
+    <MudGrid Spacing="2" Class="mb-3">
+        @Tile("Wiedergaben", r.Plays.ToString("N0"), $"{r.Songs:N0} verschiedene Titel")
+        @Tile("Übersprungen", r.Skips.ToString("N0"), r.SkipRate is { } rate ? $"{rate:P0} der gestarteten Titel" : "–")
+        @Tile("Hörzeit", FormatDuration(r.ListeningTime), r.Plays > 0 ? $"Ø {FormatDuration(r.ListeningTime / Math.Max(1, Days(r)))} pro Tag" : "–")
+        @Tile("Neue Favoriten", r.Starred.ToString("N0"), null)
+        @Tile("Gemeldet", r.Reported.ToString("N0"), null, r.Reported > 0 ? "meldungen" : null)
+    </MudGrid>
+
+    @if (!r.HasStarts)
+    {
+        <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Dense="true" Class="mb-3">
+            Kein Player hat bisher gemeldet, welcher Titel gerade startet („Now Playing“). Ohne das lassen sich übersprungene Titel nicht erkennen.
+        </MudAlert>
+    }
+
+    <MudPaper Outlined="true" Class="@($"pa-3 mb-3 stats-colors{(Dark ? " stats-dark" : "")}")">
+        <div class="d-flex flex-wrap align-center mb-2" style="gap:12px">
+            <MudText Typo="Typo.subtitle1">@ChartTitle(r.BucketSize)</MudText>
+            <MudSpacer />
+            @* Legend: identity never by color alone. *@
+            <span class="stats-legend"><span class="stats-swatch stats-played"></span>Gespielt</span>
+            <span class="stats-legend"><span class="stats-swatch stats-skipped"></span>Übersprungen</span>
+        </div>
+        @Chart(r)
+    </MudPaper>
+
+    <MudGrid Spacing="2" Class="mb-3">
+        <MudItem xs="12" md="4">
+            <MudPaper Outlined="true" Class="pa-3" Style="height:100%">
+                <MudText Typo="Typo.subtitle1" Class="mb-2">Meistgespielt</MudText>
+                @SongList(r.TopPlayed, s => $"{s.Plays}×", "Noch nichts gespielt.")
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12" md="4">
+            <MudPaper Outlined="true" Class="pa-3" Style="height:100%">
+                <MudText Typo="Typo.subtitle1" Class="mb-2">Oft übersprungen</MudText>
+                @SongList(r.TopSkipped, s => $"{s.Skips}× übersprungen" + (s.Plays > 0 ? $", {s.Plays}× gespielt" : ""), "Nichts übersprungen.")
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12" md="4">
+            <MudPaper Outlined="true" Class="pa-3" Style="height:100%">
+                <MudText Typo="Typo.subtitle1" Class="mb-2">Künstler</MudText>
+                @if (r.TopArtists.Count == 0)
+                {
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary">Noch nichts gespielt.</MudText>
+                }
+                <ol class="stats-rank">
+                    @foreach (var a in r.TopArtists)
+                    {
+                        <li>
+                            <MudLink Href="@TrackGrid.ArtistHref(a.Name)" Typo="Typo.body2" Underline="Underline.Hover" Class="stats-rank-name">@a.Name</MudLink>
+                            <span class="stats-rank-count">@(a.Plays)×@(a.Skips > 0 ? $" · {a.Skips}× übersprungen" : "")</span>
+                        </li>
+                    }
+                </ol>
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+
+    <MudPaper Outlined="true" Class="pa-3">
+        <div class="d-flex flex-wrap align-center mb-2" style="gap:12px">
+            <MudText Typo="Typo.subtitle1">Verlauf</MudText>
+            <MudSpacer />
+            <MudChipSet T="HistoryKind" SelectionMode="SelectionMode.MultiSelection" SelectedValues="_kinds" SelectedValuesChanged="SetKinds"
+                        CheckMark="true" Size="Size.Small" Variant="Variant.Outlined">
+                @foreach (var k in Kinds)
+                {
+                    <MudChip Value="k" Text="@KindLabel(k)" />
+                }
+            </MudChipSet>
+        </div>
+        @{
+            var entries = Filtered.ToList();
+        }
+        @if (entries.Count == 0)
+        {
+            <MudText Typo="Typo.body2" Class="mud-text-secondary">Keine Einträge in diesem Zeitraum.</MudText>
+        }
+        <div class="stats-history">
+            @foreach (var day in entries.Take(_shown).GroupBy(e => e.At.LocalDateTime.Date))
+            {
+                <div class="stats-day">@DayLabel(day.Key)</div>
+                @foreach (var e in day)
+                {
+                    @Entry(e)
+                }
+            }
+        </div>
+        @if (entries.Count > _shown)
+        {
+            <div class="d-flex justify-center mt-2">
+                <MudButton Variant="Variant.Outlined" Size="Size.Small" OnClick="() => _shown += PageSize">
+                    Mehr anzeigen (@(entries.Count - _shown) weitere)
+                </MudButton>
+            </div>
+        }
+    </MudPaper>
+}
+
+@code {
+    [CascadingParameter(Name = "DarkMode")] public bool Dark { get; set; }
+
+    private const int PageSize = 100;
+
+    private static readonly (string Key, string Label, int? Days)[] Periods =
+        [("7", "7 Tage", 7), ("30", "30 Tage", 30), ("365", "1 Jahr", 365), ("alle", "Gesamt", null)];
+
+    private static readonly HistoryKind[] Kinds =
+        [HistoryKind.Played, HistoryKind.Skipped, HistoryKind.Starred, HistoryKind.Unstarred, HistoryKind.Reported];
+
+    private string _period = "30";
+    private PlayHistoryReport? _report;
+    private CatalogSnapshot? _catalog;
+    private IReadOnlyCollection<HistoryKind> _kinds = [];
+    private int _shown = PageSize;
+
+    private IEnumerable<HistoryEntry> Filtered =>
+        _report == null ? [] : _kinds.Count == 0 ? _report.Entries : _report.Entries.Where(e => _kinds.Contains(e.Kind));
+
+    protected override async Task ReloadAsync()
+    {
+        var days = Periods.First(p => p.Key == _period).Days;
+        var now = DateTimeOffset.Now;
+        // Whole days: the first bar is a full day like the others.
+        DateTimeOffset? from = days is { } d ? new DateTimeOffset(now.LocalDateTime.Date.AddDays(1 - d)) : null;
+        _catalog = await MediaCatalog.GetAsync();
+        _report = await History.GetReportAsync(from, now);
+    }
+
+    private async Task SetPeriod(string period)
+    {
+        _period = period;
+        _shown = PageSize;
+        await ReloadAsync();
+    }
+
+    private void SetKinds(IReadOnlyCollection<HistoryKind>? kinds)
+    {
+        _kinds = kinds ?? [];
+        _shown = PageSize;
+    }
+
+    /// <summary>Days covered by the report (at least one), for the daily average.</summary>
+    private static int Days(PlayHistoryReport r) => r.Buckets.Count == 0 ? 1
+        : Math.Max(1, (int)Math.Ceiling((DateTime.Now - r.Buckets[0].Start).TotalDays));
+
+    private RenderFragment Tile(string label, string value, string? sub, string? href = null) => __builder =>
+    {
+        <MudItem xs="6" sm="4" md="2">
+            <MudPaper Outlined="true" Class="pa-3" Style="height:100%">
+                <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                    @if (href != null)
+                    {
+                        <MudLink Href="@href" Typo="Typo.inherit" Color="Color.Inherit">@label</MudLink>
+                    }
+                    else
+                    {
+                        @label
+                    }
+                </MudText>
+                <MudText Typo="Typo.h5">@value</MudText>
+                @if (sub != null)
+                {
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary">@sub</MudText>
+                }
+            </MudPaper>
+        </MudItem>
+    };
+
+    /// <summary>
+    /// Stacked bars (played below, skipped on top) per day/week/month. Plain HTML so it follows the width; each bar has its
+    /// numbers as a tooltip, with a hit area over the whole column.
+    /// </summary>
+    private RenderFragment Chart(PlayHistoryReport r) => __builder =>
+    {
+        var max = Math.Max(1, r.Buckets.Max(b => b.Plays + b.Skips));
+        var top = NiceMax(max);
+        <div class="stats-chart" role="img" aria-label="@($"{ChartTitle(r.BucketSize)}: {r.Plays} gespielt, {r.Skips} übersprungen")">
+            <div class="stats-axis">
+                <span>@top</span>
+                <span>@(top / 2)</span>
+                <span>0</span>
+            </div>
+            <div class="stats-plot">
+                <div class="stats-grid" style="top:0"></div>
+                <div class="stats-grid" style="top:50%"></div>
+                <div class="stats-bars" style="gap:@(r.Buckets.Count > 40 ? 1 : 2)px">
+                    @foreach (var b in r.Buckets)
+                    {
+                        <div class="stats-col" title="@($"{BucketLabel(b.Start, r.BucketSize)}\n{b.Plays} gespielt\n{b.Skips} übersprungen")">
+                            @if (b.Skips > 0)
+                            {
+                                <div class="stats-seg stats-skipped" style="height:@Pct(b.Skips, top)"></div>
+                            }
+                            @if (b.Plays > 0)
+                            {
+                                <div class="stats-seg stats-played" style="height:@Pct(b.Plays, top)"></div>
+                            }
+                        </div>
+                    }
+                </div>
+            </div>
+            <div></div>
+            <div class="stats-xlabels">
+                @foreach (var i in XLabelIndexes(r.Buckets.Count))
+                {
+                    <span style="left:@(((i + 0.5) / r.Buckets.Count * 100).ToString("0.##", CultureInfo.InvariantCulture))%">
+                        @AxisLabel(r.Buckets[i].Start, r.BucketSize)
+                    </span>
+                }
+            </div>
+        </div>
+    };
+
+    private static string Pct(int value, int top) => (value * 100.0 / top).ToString("0.##", CultureInfo.InvariantCulture) + "%";
+
+    /// <summary>Top of the axis: twice a round number (1, 2, 5 × 10ⁿ), so the middle line is round as well.</summary>
+    private static int NiceMax(int max)
+    {
+        var half = (max + 1) / 2;
+        for (var p = 1; ; p *= 10)
+            foreach (var m in new[] { 1, 2, 5 })
+                if (m * p >= half)
+                    return 2 * m * p;
+    }
+
+    /// <summary>First, last and up to three in between, so the labels never collide.</summary>
+    private static IEnumerable<int> XLabelIndexes(int count)
+    {
+        if (count <= 0) return [];
+        if (count <= 8) return Enumerable.Range(0, count);
+        return new[] { 0, count / 4, count / 2, count * 3 / 4, count - 1 }.Distinct();
+    }
+
+    private static string ChartTitle(BucketSize size) => size switch
+    {
+        BucketSize.Day => "Pro Tag",
+        BucketSize.Week => "Pro Woche",
+        _ => "Pro Monat",
+    };
+
+    private static string AxisLabel(DateTime start, BucketSize size) => size switch
+    {
+        BucketSize.Month => start.ToString("MMM yy", German),
+        _ => start.ToString("dd.MM.", German),
+    };
+
+    private static string BucketLabel(DateTime start, BucketSize size) => size switch
+    {
+        BucketSize.Day => start.ToString("dddd, d. MMMM yyyy", German),
+        BucketSize.Week => $"Woche ab {start.ToString("d. MMMM yyyy", German)}",
+        _ => start.ToString("MMMM yyyy", German),
+    };
+
+    private static readonly CultureInfo German = CultureInfo.GetCultureInfo("de-DE");
+
+    private static string DayLabel(DateTime day) =>
+        day == DateTime.Today ? "Heute" : day == DateTime.Today.AddDays(-1) ? "Gestern" : day.ToString("dddd, d. MMMM yyyy", German);
+
+    private static string FormatDuration(TimeSpan t) =>
+        t.TotalHours >= 1 ? $"{(int)t.TotalHours} h {t.Minutes} min" : $"{t.Minutes} min";
+
+    private RenderFragment SongList(IReadOnlyList<SongCount> songs, Func<SongCount, string> count, string empty) => __builder =>
+    {
+        if (songs.Count == 0)
+        {
+            <MudText Typo="Typo.body2" Class="mud-text-secondary">@empty</MudText>
+            return;
+        }
+
+        <ol class="stats-rank">
+            @foreach (var s in songs)
+            {
+                <li>
+                    <div class="stats-rank-name"><SongCard Song="Song(s.SongId, s.Title, s.Artist)" ShowFields="false" CoverSizeOverride="36" /></div>
+                    <span class="stats-rank-count">@count(s)</span>
+                </li>
+            }
+        </ol>
+    };
+
+    private RenderFragment Entry(HistoryEntry e) => __builder =>
+    {
+        var (icon, color) = KindIcon(e.Kind);
+        <div class="stats-entry">
+            <span class="stats-time">@e.At.ToLocalTime().ToString("HH:mm")</span>
+            <MudTooltip Text="@KindLabel(e.Kind)">
+                <MudIcon Icon="@icon" Color="color" Size="Size.Small" aria-label="@KindLabel(e.Kind)" />
+            </MudTooltip>
+            <div style="min-width:0;flex:1">
+                <SongCard Song="Song(e.SongId, e.Title, e.Artist)" ShowFields="false" CoverSizeOverride="36" />
+            </div>
+            <span class="stats-entry-meta">@KindLabel(e.Kind)@(e.Client != null ? $" · {e.Client}" : "")</span>
+        </div>
+    };
+
+    /// <summary>The song as it is in the library, else title and artist as they were back then.</summary>
+    private SongInfo Song(string id, string? title, string? artist) =>
+        _catalog?.Song(id) is { } s ? SongInfo.From(s) : new SongInfo { Title = title ?? id, Artist = artist };
+
+    private static string KindLabel(HistoryKind k) => k switch
+    {
+        HistoryKind.Played => "Gespielt",
+        HistoryKind.Skipped => "Übersprungen",
+        HistoryKind.Playing => "Läuft",
+        HistoryKind.Starred => "Favorit",
+        HistoryKind.Unstarred => "Favorit entfernt",
+        HistoryKind.Reported => "Gemeldet",
+        _ => k.ToString(),
+    };
+
+    private static (string Icon, Color Color) KindIcon(HistoryKind k) => k switch
+    {
+        HistoryKind.Played => (Icons.Material.Filled.PlayArrow, Color.Default),
+        HistoryKind.Skipped => (Icons.Material.Filled.SkipNext, Color.Default),
+        HistoryKind.Playing => (Icons.Material.Filled.GraphicEq, Color.Primary),
+        HistoryKind.Starred => (Icons.Material.Filled.Favorite, Color.Default),
+        HistoryKind.Unstarred => (Icons.Material.Filled.HeartBroken, Color.Default),
+        HistoryKind.Reported => (Icons.Material.Filled.Flag, Color.Default),
+        _ => (Icons.Material.Filled.Circle, Color.Default),
+    };
+}

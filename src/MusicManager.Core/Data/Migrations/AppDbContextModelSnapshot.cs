@@ -368,6 +368,40 @@ namespace MusicManager.Core.Data.Migrations
                     b.ToTable("MusicFabRequests");
                 });
 
+            modelBuilder.Entity("MusicManager.Core.Data.PlayEvent", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Artist")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("At")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Client")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Kind")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("SongId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Title")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("At");
+
+                    b.HasIndex("SongId", "At");
+
+                    b.ToTable("PlayEvents");
+                });
+
             modelBuilder.Entity("MusicManager.Core.Data.PlayStat", b =>
                 {
                     b.Property<string>("SongId")

@@ -28,6 +28,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
     public DbSet<SpotifyPlaylistTrack> SpotifyPlaylistTracks => Set<SpotifyPlaylistTrack>();
     public DbSet<MusicFabRequest> MusicFabRequests => Set<MusicFabRequest>();
     public DbSet<SongReport> SongReports => Set<SongReport>();
+    public DbSet<PlayEvent> PlayEvents => Set<PlayEvent>();
 
     protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
     {
@@ -107,6 +108,11 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
         });
 
         b.Entity<SongReport>(e => e.HasIndex(x => new { x.SongId, x.ResolvedAt }));
+        b.Entity<PlayEvent>(e =>
+        {
+            e.HasIndex(x => x.At);
+            e.HasIndex(x => new { x.SongId, x.At });
+        });
 
         b.Entity<FileEvent>(e => e.Property(x => x.Level).HasConversion<string>());
         b.Entity<ArtistRule>(e => e.Property(x => x.Kind).HasConversion<string>());

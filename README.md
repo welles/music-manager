@@ -110,7 +110,7 @@ and playlists on), the date they were added (`MUSICMANAGER_ADDED`), the favorite
 and the rating (`RATING`, 1–5), plus the origin of the tags and genres. The database mirrors them into the
 files a few seconds after a change. If the database is lost, a scan restores song IDs, added dates,
 favorites and ratings from the files; a file moved or renamed outside the tool keeps its ID. Play counts,
-the inbox history and settings stay in the database (a play would otherwise rewrite the file).
+the play history, the inbox history and settings stay in the database (a play would otherwise rewrite the file).
 
 Tags edited with another tool are noticed: when the app writes a file, it stores a hash of the tags it
 wrote (`MUSICMANAGER_TAGS_HASH`, without the song markers above) and one of the cover
@@ -149,6 +149,22 @@ The favorite itself is gone again. The **Meldungen** page lists the reports with
 to edit or re-tag it; "Erledigt" closes a report, and reporting the same song again while it is open counts up.
 Only a fresh star counts: unstarring an older favorite is no report. The window is set under Settings → Metadaten
 → "Melden per Favorit (s)" (0 = off). Reports are kept in the database only.
+
+### Statistics and history
+
+The **Statistik** page (issue #20) shows, for the last 7 or 30 days, one year or everything: plays, skipped
+songs and the skip rate, listening time, new favorites and reports. It also has a chart per day, week or month, the
+most played and most skipped songs, the artists (each artist of "A feat. B" counts), and the history itself, grouped
+by day and filterable by kind. The data comes from the Subsonic API: `scrobble` with `submission=false` ("now
+playing") is a start, with `submission=true` a play, and `star`/`unstar` (a quick unstar as a report).
+
+A **skip** is a start that got no play: no play of that song from shortly before the start until its length plus
+15 minutes after it. It only counts once the same player started another song or that time is over; until then it
+shows as "Läuft". Skips are worked out each time the page loads, so a play that arrives late (an offline player
+sends its scrobbles later) still turns the skip into a play. A repeated "now playing" of the song that is running
+(e.g. after a pause) is not a new start. Without "now playing" from the player, no skip can be seen; the page says
+so. The history starts with this version; earlier plays only count in the play counts of the songs. It is kept in
+the database only.
 
 ### App and notifications
 
