@@ -96,15 +96,21 @@ public sealed class UserDataStore(IDbContextFactory<AppDbContext> dbFactory)
     /// <summary>Raised after favorites or ratings changed, with the affected item IDs (songs are mirrored into their files).</summary>
     public event Action<IReadOnlyCollection<string>>? MarksChanged;
 
-    /// <summary>Stars the items; items that are already starred keep their date.</summary>
-    public Task StarAsync(IEnumerable<string> ids, CancellationToken ct = default) => WriteAsync(async db =>
+    /// <summary>Stars the items; items that are already starred keep their date. Returns the newly starred ones.</summary>
+    public async Task<IReadOnlyList<string>> StarAsync(IEnumerable<string> ids, CancellationToken ct = default)
     {
         var wanted = ids.Distinct(StringComparer.Ordinal).ToList();
-        var existing = await db.Stars.Where(s => wanted.Contains(s.ItemId)).Select(s => s.ItemId).ToListAsync(ct);
-        var now = DateTimeOffset.UtcNow;
-        db.Stars.AddRange(wanted.Except(existing, StringComparer.Ordinal).Select(id => new Star { ItemId = id, StarredAt = now }));
-        await db.SaveChangesAsync(ct);
-    }, ct, ids);
+        List<string> added = [];
+        await WriteAsync(async db =>
+        {
+            var existing = await db.Stars.Where(s => wanted.Contains(s.ItemId)).Select(s => s.ItemId).ToListAsync(ct);
+            var now = DateTimeOffset.UtcNow;
+            added = wanted.Except(existing, StringComparer.Ordinal).ToList();
+            db.Stars.AddRange(added.Select(id => new Star { ItemId = id, StarredAt = now }));
+            await db.SaveChangesAsync(ct);
+        }, ct, wanted);
+        return added;
+    }
 
     /// <summary>Removes the stars; returns the removed ones with their date (a quick unstar is a report, see <see cref="SongReportService"/>).</summary>
     public async Task<IReadOnlyList<Star>> UnstarAsync(IEnumerable<string> ids, CancellationToken ct = default)

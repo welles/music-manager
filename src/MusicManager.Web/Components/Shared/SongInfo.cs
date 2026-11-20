@@ -109,6 +109,18 @@ public sealed record SongInfo
         CoverUrl = $"api/library/{t.Id}/cover",
     };
 
+    /// <summary>A song of the Subsonic catalog (statistics, history).</summary>
+    public static SongInfo From(Core.Catalog.CatalogSong s) => new()
+    {
+        Title = s.Title,
+        Artist = s.DisplayArtist,
+        Artists = s.Artists.Select(a => a.Name).ToList(),
+        LinkArtists = true,
+        Album = s.Album.Name,
+        Duration = FormatLength(s.Duration),
+        CoverUrl = $"api/library/{s.EntryId}/cover",
+    };
+
     public static SongInfo From(LibraryEntry e) => new()
     {
         Title = e.Title ?? System.IO.Path.GetFileName(e.RelativePath),

@@ -631,3 +631,47 @@ public sealed class SongReport
     /// <summary>When it was marked as done; null = open.</summary>
     public DateTimeOffset? ResolvedAt { get; set; }
 }
+
+/// <summary>What happened to a song in a player (issue #20).</summary>
+public enum PlayEventKind
+{
+    /// <summary>The player started the song ("now playing", <c>scrobble</c> with <c>submission=false</c>).</summary>
+    Started = 0,
+
+    /// <summary>The player counted the song as played (<c>scrobble</c> with <c>submission=true</c>).</summary>
+    Played = 1,
+
+    /// <summary>The song was starred.</summary>
+    Starred = 2,
+
+    /// <summary>The star was removed.</summary>
+    Unstarred = 3,
+
+    /// <summary>Starred and unstarred again right away: reported for a later check (issue #18).</summary>
+    Reported = 4,
+}
+
+/// <summary>
+/// One entry of the play history (issue #20): a song started, played, starred, unstarred or reported in a player.
+/// A skip is not stored as such: it is a start without a play shortly after (see <see cref="Catalog.PlayHistoryService"/>).
+/// </summary>
+public sealed class PlayEvent
+{
+    public long Id { get; set; }
+
+    /// <summary>Public song ID ("tr-…"); stays valid when the file is re-tagged, moved or replaced.</summary>
+    public required string SongId { get; set; }
+
+    public PlayEventKind Kind { get; set; }
+
+    /// <summary>When it happened; for plays the time the player reported (scrobbles may arrive late).</summary>
+    public DateTimeOffset At { get; set; } = DateTimeOffset.UtcNow;
+
+    /// <summary>Client name of the Subsonic request (<c>c</c>, e.g. "Symfonium").</summary>
+    public string? Client { get; set; }
+
+    /// <summary>Title and artist at that time, shown when the song is no longer in the library.</summary>
+    public string? Title { get; set; }
+
+    public string? Artist { get; set; }
+}

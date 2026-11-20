@@ -42,7 +42,7 @@
         }
         @* --player-space: room the player bar takes at the bottom, for pages that fill the window (Duplikate). *@
         <MudContainer MaxWidth="MaxWidth.ExtraExtraLarge" Class="py-4" Style="@(Player.Current != null ? "--player-space:96px" : null)">
-            @Body
+            <CascadingValue Value="_dark" Name="DarkMode">@Body</CascadingValue>
             @if (Player.Current != null)
             {
                 <div style="height:96px"></div>

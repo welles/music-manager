@@ -1,4 +1,5 @@
 using MusicManager.Core.Catalog;
+using MusicManager.Core.Data;
 
 namespace MusicManager.Web.Subsonic;
 
@@ -9,16 +10,23 @@ public static partial class SubsonicEndpoints
     {
         Add("star", async r =>
         {
-            await r.Service<UserDataStore>().StarAsync(StarIds(r), r.Aborted);
+            var added = await r.Service<UserDataStore>().StarAsync(StarIds(r), r.Aborted);
+            // Not cancelled with the request: the star is already set, a repeated star would not record it again.
+            await r.Service<PlayHistoryService>().RecordAsync(PlayEventKind.Starred, added, DateTimeOffset.UtcNow, r.Get("c"), CancellationToken.None);
             return Ok();
         });
 
         Add("unstar", async r =>
         {
             var removed = await r.Service<UserDataStore>().UnstarAsync(StarIds(r), r.Aborted);
+            var now = DateTimeOffset.UtcNow;
             // Starred and unstarred again right away: the player has no other way to flag a song (issue #18).
             // Not cancelled with the request: the star is already gone, a repeated unstar could not report it again.
-            await r.Service<SongReportService>().ReportQuickUnstarsAsync(removed, DateTimeOffset.UtcNow, CancellationToken.None);
+            var reported = await r.Service<SongReportService>().ReportQuickUnstarsAsync(removed, now, CancellationToken.None);
+            var history = r.Service<PlayHistoryService>();
+            await history.RecordAsync(PlayEventKind.Reported, reported, now, r.Get("c"), CancellationToken.None);
+            await history.RecordAsync(PlayEventKind.Unstarred, removed.Select(s => s.ItemId).Except(reported, StringComparer.Ordinal), now,
+                r.Get("c"), CancellationToken.None);
             return Ok();
         });
 
@@ -41,10 +49,15 @@ public static partial class SubsonicEndpoints
             }
 
             var times = r.GetLongs("time");
-            // "Now playing" only needs to be accepted; nothing shows it.
-            if (r.GetBool("submission") == false) return Ok();
-
             var now = DateTimeOffset.UtcNow;
+            var history = r.Service<PlayHistoryService>();
+            // "Now playing": a start in the history; one without a play shortly after is a skip (issue #20).
+            if (r.GetBool("submission") == false)
+            {
+                await history.RecordAsync(PlayEventKind.Started, ids, now, r.Get("c"), r.Aborted);
+                return Ok();
+            }
+
             var plays = ids.Select((id, i) =>
             {
                 // One time per ID; a single time applies to all of them.
@@ -52,6 +65,8 @@ public static partial class SubsonicEndpoints
                 return (id, ms is > 0 ? DateTimeOffset.FromUnixTimeMilliseconds(Math.Min(ms.Value, now.ToUnixTimeMilliseconds())) : now);
             }).ToList();
             await r.Service<UserDataStore>().ScrobbleAsync(plays, r.Aborted);
+            // Counted already: a repeated scrobble would count it twice, so the history is written in any case.
+            await history.RecordAsync(PlayEventKind.Played, plays, r.Get("c"), CancellationToken.None);
             return Ok();
         });
 

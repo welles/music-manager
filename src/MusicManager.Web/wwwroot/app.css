@@ -625,3 +625,182 @@
 .spotify-missing {
     opacity: 0.45;
 }
+
+/* Statistik (issue #20): stacked bars per day/week/month, ranks and history. Series colors are the first two
+   categorical slots (blue, orange), stepped for the light and the dark surface. */
+.stats-colors {
+    --stats-played: #2a78d6;
+    --stats-skipped: #eb6834;
+}
+
+.stats-chart {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    grid-template-rows: 180px auto;
+    column-gap: 8px;
+}
+
+.stats-dark {
+    --stats-played: #3987e5;
+    --stats-skipped: #d95926;
+}
+
+.stats-axis {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    align-items: flex-end;
+    font-size: .75rem;
+    color: var(--mud-palette-text-secondary);
+    margin: -.5em 0;
+}
+
+.stats-plot {
+    position: relative;
+    border-bottom: 1px solid var(--mud-palette-lines-default);
+}
+
+.stats-grid {
+    position: absolute;
+    left: 0;
+    right: 0;
+    border-top: 1px dashed var(--mud-palette-lines-default);
+    opacity: .6;
+}
+
+.stats-bars {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: stretch;
+}
+
+.stats-col {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    gap: 2px;
+    max-width: 48px;
+    margin: 0 auto;
+}
+
+.stats-col:hover {
+    background: var(--mud-palette-action-default-hover);
+}
+
+.stats-seg {
+    width: 100%;
+}
+
+/* Rounded end only at the top of the stack. */
+.stats-seg:first-child {
+    border-radius: 4px 4px 0 0;
+}
+
+.stats-played {
+    background: var(--stats-played);
+}
+
+.stats-skipped {
+    background: var(--stats-skipped);
+}
+
+.stats-xlabels {
+    position: relative;
+    height: 1.5em;
+    font-size: .75rem;
+    color: var(--mud-palette-text-secondary);
+}
+
+.stats-xlabels span {
+    position: absolute;
+    top: 4px;
+    transform: translateX(-50%);
+    white-space: nowrap;
+}
+
+.stats-xlabels span:first-child {
+    transform: none;
+    left: 0 !important;
+}
+
+.stats-xlabels span:last-child:not(:first-child) {
+    transform: none;
+    left: auto !important;
+    right: 0;
+}
+
+.stats-legend {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: .875rem;
+    color: var(--mud-palette-text-secondary);
+}
+
+.stats-swatch {
+    width: 12px;
+    height: 12px;
+    border-radius: 3px;
+}
+
+.stats-rank {
+    margin: 0;
+    padding-left: 0;
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.stats-rank li {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.stats-rank-name {
+    flex: 1;
+    min-width: 0;
+}
+
+.stats-rank-count,
+.stats-entry-meta,
+.stats-time {
+    font-size: .8125rem;
+    color: var(--mud-palette-text-secondary);
+    white-space: nowrap;
+}
+
+.stats-time {
+    font-variant-numeric: tabular-nums;
+    width: 3em;
+}
+
+.stats-day {
+    font-size: .8125rem;
+    font-weight: 500;
+    color: var(--mud-palette-text-secondary);
+    padding: 12px 0 4px;
+    border-bottom: 1px solid var(--mud-palette-lines-default);
+    margin-bottom: 4px;
+}
+
+.stats-day:first-child {
+    padding-top: 0;
+}
+
+.stats-entry {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 3px 0;
+}
+
+@media (max-width: 599px) {
+    .stats-entry-meta {
+        display: none;
+    }
+}
