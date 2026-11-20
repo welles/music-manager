@@ -141,5 +141,22 @@ public class PlayHistoryTests
         Assert.Equal(4, report.Buckets.Sum(b => b.Plays));
         Assert.Equal(report.Buckets.Select(b => b.Start).Distinct().Count(), report.Buckets.Count);
         Assert.Equal(now.LocalDateTime.Date, report.Buckets[^1].Start);
+        Assert.Equal(7, report.Days);
+    }
+
+    [Fact]
+    public async Task DaysCountFromThePeriodNotFromTheFirstBucket()
+    {
+        using var app = await StartAsync();
+        var now = DateTimeOffset.UtcNow;
+        // A Wednesday a year ago: the first weekly bar starts on the Monday before it.
+        var from = now.AddDays(-365);
+        while (from.LocalDateTime.DayOfWeek != DayOfWeek.Wednesday) from = from.AddDays(1);
+        var report = await app.Get<PlayHistoryService>().GetReportAsync(from, now);
+
+        Assert.Equal(BucketSize.Week, report.BucketSize);
+        Assert.True(report.Buckets[0].Start < from.LocalDateTime.Date);
+        Assert.Equal(from, report.From);
+        Assert.Equal((int)Math.Ceiling((now - from).TotalDays), report.Days);
     }
 }
