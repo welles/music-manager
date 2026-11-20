@@ -443,6 +443,70 @@
     line-height: 1.35;
 }
 
+/* ---- Duplicates page: list and comparison. Below 960 px one above the other, scrolling with the page. ---- */
+.dup-split {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 24px;
+}
+
+.dup-alerts {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.dup-alerts > * {
+    flex: 1 1 280px;
+    min-width: 0;
+}
+
+/* Desktop: the page fills the window below the app bar and only the list and the comparison scroll, each on its own
+   (the comparison only when the window is too low for it). Header, tabs and filter stay. Only while the split view
+   is shown: the library check and the empty state scroll as usual. */
+@media (min-width: 960px) and (min-height: 600px) {
+    .dup-page:has(.dup-split) {
+        display: flex;
+        flex-direction: column;
+        /* Window minus the dense app bar (3/4 of --mud-appbar-height), the container's py-4 and the player bar. */
+        height: calc(100dvh - var(--mud-appbar-height) * 3 / 4 - 32px - var(--player-space, 0px));
+    }
+
+    .dup-page:has(.dup-split) > .mud-tabs,
+    .dup-page:has(.dup-split) .mud-tabs-panels,
+    .dup-page:has(.dup-split) .mud-tab-panel-active {
+        display: flex;
+        flex-direction: column;
+        flex: 1 1 auto;
+        min-height: 0;
+    }
+
+    .dup-page .dup-split {
+        flex: 1 1 auto;
+        min-height: 0;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+    }
+
+    .dup-list {
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+    }
+
+    .dup-list-items {
+        flex: 1 1 auto;
+        min-height: 0;
+        overflow-y: auto;
+        overscroll-behavior: contain;
+    }
+
+    .dup-detail {
+        min-height: 0;
+        overflow-y: auto;
+        overscroll-behavior: contain;
+    }
+}
+
 /* ---- Side-by-side comparison (duplicates): label column plus two equal columns that always fit the screen. ---- */
 .compare-table table {
     table-layout: fixed;
@@ -459,13 +523,31 @@
     overflow-wrap: anywhere;
 }
 
+/* Column head: cover with the column name beside it (below it in a narrow column). */
+.compare-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 12px;
+}
+
 .compare-cover {
     display: block;
-    width: 140px;
+    flex-shrink: 0;
+    width: 80px;
     max-width: 100%;
     aspect-ratio: 1 / 1;
     height: auto;
     object-fit: cover;
+}
+
+/* Rows a little lower than MudBlazor's dense rows, so the whole comparison fits a 1080p window. */
+@media (min-width: 600px) {
+    .compare-table th,
+    .compare-table td {
+        padding-top: 4px !important;
+        padding-bottom: 4px !important;
+    }
 }
 
 @media (max-width: 599.98px) {

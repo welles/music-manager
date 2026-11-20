@@ -40,7 +40,8 @@
             @* Tablet and phone: the activity as a strip under the bar that stays while scrolling, with room for the text. *@
             <div class="activity-strip d-flex d-md-none">@Activity</div>
         }
-        <MudContainer MaxWidth="MaxWidth.ExtraExtraLarge" Class="py-4">
+        @* --player-space: room the player bar takes at the bottom, for pages that fill the window (Duplikate). *@
+        <MudContainer MaxWidth="MaxWidth.ExtraExtraLarge" Class="py-4" Style="@(Player.Current != null ? "--player-space:96px" : null)">
             @Body
             @if (Player.Current != null)
             {

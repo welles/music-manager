@@ -7,29 +7,29 @@
     <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap">
         <MudIconButton Icon="@(_state.Playing ? Icons.Material.Filled.Pause : Icons.Material.Filled.PlayArrow)" Color="Color.Primary"
                        Variant="Variant.Filled" OnClick="PlayPause" aria-label="Abspielen/Pause" />
-        <MudToggleGroup T="string" Value="_state.Active" ValueChanged="Toggle" SelectionMode="SelectionMode.SingleSelection" Color="Color.Primary">
-            <MudToggleItem Value="@("a")" Text="@($"A · {LabelA}")" />
-            <MudToggleItem Value="@("b")" Text="@($"B · {LabelB}")" />
-        </MudToggleGroup>
+        @* The hint is a tooltip rather than a line of its own: the duplicate comparison has to fit a 1080p window. *@
+        <MudTooltip Text="Beim Umschalten spielt die andere Version an derselben Stelle weiter.">
+            <MudToggleGroup T="string" Value="_state.Active" ValueChanged="Toggle" SelectionMode="SelectionMode.SingleSelection" Color="Color.Primary">
+                <MudToggleItem Value="@("a")" Text="@($"A · {LabelA}")" />
+                <MudToggleItem Value="@("b")" Text="@($"B · {LabelB}")" />
+            </MudToggleGroup>
+        </MudTooltip>
         <MudText Typo="Typo.body2" Class="mono">@Length(_state.Time) / @Length(_state.Duration)</MudText>
         <MudSpacer />
+        @if (_measuring)
+        {
+            <MudText Typo="Typo.caption" Style="opacity:.7">Lautheit wird gemessen …</MudText>
+        }
+        else if (_loudness is { } l)
+        {
+            <MudText Typo="Typo.caption" Style="opacity:.7">Lautheit: A @Lufs(l.A), B @Lufs(l.B)</MudText>
+        }
         @if (MeasureLoudness != null)
         {
             <MudSwitch T="bool" Value="_match" ValueChanged="SetMatch" Color="Color.Primary" Label="Lautstärke angleichen" />
         }
     </MudStack>
     <MudSlider T="double" Value="_state.Time" ValueChanged="Seek" Min="0" Max="@Math.Max(1, _state.Duration)" Step="0.5" Immediate="false" />
-    <MudText Typo="Typo.caption" Style="opacity:.7">
-        Beim Umschalten spielt die andere Version an derselben Stelle weiter.
-        @if (_measuring)
-        {
-            <span> Lautheit wird gemessen …</span>
-        }
-        else if (_loudness is { } l)
-        {
-            <span> Lautheit: A @Lufs(l.A), B @Lufs(l.B).</span>
-        }
-    </MudText>
 </MudPaper>
 
 @code {
