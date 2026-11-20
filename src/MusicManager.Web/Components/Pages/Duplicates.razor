@@ -11,6 +11,9 @@
 
 <PageTitle>Duplikate – Music Manager</PageTitle>
 
+@* On a desktop the page fills the window and only the list and the comparison scroll, each on its own: the comparison
+   stays in view while going through the list (see .dup-page in app.css). *@
+<div class="dup-page">
 <PageHeader Title="Duplikate" />
 
 <MudTabs Outlined="true" Border="true" TabPanelsClass="pa-4">
@@ -21,33 +24,34 @@
         }
         else
         {
-            @if (SameAudio.State.Running)
-            {
-                <MudText Typo="Typo.body2" Class="mb-2">
-                    Audio wird verglichen: @SameAudio.State.Done von @SameAudio.State.Total
-                </MudText>
-                <MudProgressLinear Value="@(SameAudio.State.Total == 0 ? 0 : 100.0 * SameAudio.State.Done / SameAudio.State.Total)" Class="mb-3" />
-            }
+            <div class="dup-split">
+                @* Filter and progress above the list they belong to; the comparison starts at the top. *@
+                <div class="dup-list">
+                    @if (SameAudio.State.Running)
+                    {
+                        <MudText Typo="Typo.body2" Class="mb-2">
+                            Audio wird verglichen: @SameAudio.State.Done von @SameAudio.State.Total
+                        </MudText>
+                        <MudProgressLinear Value="@(SameAudio.State.Total == 0 ? 0 : 100.0 * SameAudio.State.Done / SameAudio.State.Total)" Class="mb-3" />
+                    }
 
-            <div class="d-flex flex-wrap align-center mb-3" style="gap:8px">
-                <MudChipSet T="Show" SelectedValue="_show" SelectedValueChanged="SetShow" SelectionMode="SelectionMode.SingleSelection" CheckMark="true"
-                            Size="Size.Small">
-                    <MudChip T="Show" Value="Show.All" Text="@($"Alle ({_files.Count})")" Variant="Variant.Outlined" />
-                    <MudChip T="Show" Value="Show.Same" Text="@($"Gleiche Aufnahme ({SameFiles.Count})")" Variant="Variant.Outlined" />
-                    <MudChip T="Show" Value="Show.Check" Text="@($"Zu prüfen ({_files.Count - SameFiles.Count})")" Variant="Variant.Outlined" />
-                </MudChipSet>
-                @if (_show == Show.Same && SameFiles.Count > 0)
-                {
-                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small" StartIcon="@Icons.Material.Filled.DeleteSweep"
-                               OnClick="DiscardSame" Disabled="_busy">
-                        Alle @SameFiles.Count neuen Dateien verwerfen
-                    </MudButton>
-                }
-            </div>
+                    <div class="d-flex flex-wrap align-center mb-3" style="gap:8px">
+                        <MudChipSet T="Show" SelectedValue="_show" SelectedValueChanged="SetShow" SelectionMode="SelectionMode.SingleSelection" CheckMark="true"
+                                    Size="Size.Small">
+                            <MudChip T="Show" Value="Show.All" Text="@($"Alle ({_files.Count})")" Variant="Variant.Outlined" />
+                            <MudChip T="Show" Value="Show.Same" Text="@($"Gleiche Aufnahme ({SameFiles.Count})")" Variant="Variant.Outlined" />
+                            <MudChip T="Show" Value="Show.Check" Text="@($"Zu prüfen ({_files.Count - SameFiles.Count})")" Variant="Variant.Outlined" />
+                        </MudChipSet>
+                        @if (_show == Show.Same && SameFiles.Count > 0)
+                        {
+                            <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small" StartIcon="@Icons.Material.Filled.DeleteSweep"
+                                       OnClick="DiscardSame" Disabled="_busy">
+                                Alle @SameFiles.Count neuen Dateien verwerfen
+                            </MudButton>
+                        }
+                    </div>
 
-            <MudGrid>
-                <MudItem xs="12" md="4">
-                    <MudPaper Outlined="true">
+                    <MudPaper Outlined="true" Class="dup-list-items">
                         @if (!Visible.Any())
                         {
                             <MudText Typo="Typo.body2" Class="pa-3" Style="opacity:.7">Nichts in dieser Ansicht.</MudText>
@@ -69,9 +73,9 @@
                             }
                         </MudList>
                     </MudPaper>
-                </MudItem>
+                </div>
 
-                <MudItem xs="12" md="8">
+                <div class="dup-detail">
                     @if (_file != null && _match != null)
                     {
                         var t = _file.FinalTags ?? new TagSet();
@@ -86,22 +90,34 @@
                             </MudChipSet>
                         }
 
-                        <MudAlert Severity="Severity.Warning" Dense="true" Class="mb-2">@_match.Reason</MudAlert>
-                        <MudAlert Severity="@(_match.SameAudio switch { true => Severity.Success, false => Severity.Error, _ => Severity.Info })"
-                                  Dense="true" Class="mb-3">
-                            @(_match.AudioCheck ?? "Audio noch nicht verglichen")
-                        </MudAlert>
+                        @* Side by side where there is room: one above the other they would cost height the comparison needs. *@
+                        <div class="dup-alerts mb-3">
+                            <MudAlert Severity="Severity.Warning" Dense="true">@_match.Reason</MudAlert>
+                            <MudAlert Severity="@(_match.SameAudio switch { true => Severity.Success, false => Severity.Error, _ => Severity.Info })" Dense="true">
+                                @(_match.AudioCheck ?? "Audio noch nicht verglichen")
+                            </MudAlert>
+                        </div>
 
                         <MudSimpleTable Dense="true" Bordered="true" Class="mb-3 compare-table">
                             <thead>
-                                <tr><th></th><th>Neu (Eingang)</th><th>Vorhanden (Bibliothek)</th></tr>
+                                @* The covers sit in the column heads instead of a row of their own. *@
+                                <tr>
+                                    <th></th>
+                                    <th>
+                                        <div class="compare-head">
+                                            <img src="@($"api/files/{_file.Id}/cover?which=original")" alt="Cover neu" class="compare-cover rounded" />
+                                            <span>Neu (Eingang)</span>
+                                        </div>
+                                    </th>
+                                    <th>
+                                        <div class="compare-head">
+                                            <img src="@($"api/library/{_match.LibraryEntryId}/cover")" alt="Cover vorhanden" class="compare-cover rounded" />
+                                            <span>Vorhanden (Bibliothek)</span>
+                                        </div>
+                                    </th>
+                                </tr>
                             </thead>
                             <tbody>
-                                <tr>
-                                    <td></td>
-                                    <td><img src="@($"api/files/{_file.Id}/cover?which=original")" alt="Cover neu" class="compare-cover rounded" /></td>
-                                    <td><img src="@($"api/library/{_match.LibraryEntryId}/cover")" alt="Cover vorhanden" class="compare-cover rounded" /></td>
-                                </tr>
                                 @CompareRow("Titel", t.Title, _match.Title)
                                 @CompareRow("Künstler", t.Artist, _match.Artist)
                                 @CompareRow("Album", t.Album, _match.Album)
@@ -127,21 +143,25 @@
                         <AbPlayer @ref="_player" UrlA="@($"api/audio/file/{_file.Id}")" UrlB="@($"api/audio/library/{_match.LibraryEntryId}")"
                                   MeasureLoudness="MeasureLoudness" />
 
-                        <MudStack Row="true" Wrap="Wrap.Wrap" Spacing="2" Class="my-3">
-                            <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.SwapHoriz" OnClick="KeepNew" Disabled="_busy">
-                                Neue behalten (ersetzt vorhandene)
-                            </MudButton>
-                            <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Inventory2" OnClick="KeepExisting" Disabled="_busy">
-                                Vorhandene behalten
-                            </MudButton>
-                            <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.LibraryAdd" OnClick="KeepBoth" Disabled="_busy">
-                                Beide behalten
-                            </MudButton>
+                        @* What each choice does is in the tooltips (and the confirmation of "Neue behalten"): a paragraph
+                           below the buttons would push the comparison past the window. *@
+                        <MudStack Row="true" Wrap="Wrap.Wrap" Spacing="2" Class="mt-3">
+                            <MudTooltip Text="Die vorhandene Datei kommt in den Papierkorb. Die neue übernimmt ihre Song-ID: Wiedergabezähler, Favoriten und Playlist-Einträge bleiben erhalten.">
+                                <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.SwapHoriz" OnClick="KeepNew" Disabled="_busy">
+                                    Neue behalten (ersetzt vorhandene)
+                                </MudButton>
+                            </MudTooltip>
+                            <MudTooltip Text="Die neue Datei kommt in den Papierkorb.">
+                                <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Inventory2" OnClick="KeepExisting" Disabled="_busy">
+                                    Vorhandene behalten
+                                </MudButton>
+                            </MudTooltip>
+                            <MudTooltip Text="Die neue Datei wird zusätzlich einsortiert.">
+                                <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.LibraryAdd" OnClick="KeepBoth" Disabled="_busy">
+                                    Beide behalten
+                                </MudButton>
+                            </MudTooltip>
                         </MudStack>
-                        <MudText Typo="Typo.caption" Style="opacity:.7">
-                            Ersetzte oder verworfene Dateien landen im Papierkorb. „Neue behalten“ übernimmt die Song-ID der vorhandenen Datei,
-                            Wiedergabezähler, Favoriten und Playlist-Einträge bleiben also erhalten.
-                        </MudText>
 
                         @if (_file.Duplicates.Any(d => d.Kind == DuplicateKind.OtherVersion))
                         {
@@ -152,8 +172,8 @@
                             }
                         }
                     }
-                </MudItem>
-            </MudGrid>
+                </div>
+            </div>
         }
     </MudTabPanel>
 
@@ -161,6 +181,7 @@
         <LibraryDuplicates />
     </MudTabPanel>
 </MudTabs>
+</div>
 
 @code {
     private List<TrackFile> _files = [];
