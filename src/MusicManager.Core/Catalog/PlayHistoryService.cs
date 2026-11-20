@@ -63,6 +63,12 @@ public sealed record PlayHistoryReport
 
     /// <summary>The first event at all; null while the history is empty.</summary>
     public DateTimeOffset? FirstEvent { get; init; }
+
+    /// <summary>Start of the period (the first bucket may begin earlier: weeks on Monday, months on the 1st).</summary>
+    public DateTimeOffset From { get; init; }
+
+    /// <summary>Days covered (at least one), for the daily average.</summary>
+    public int Days { get; init; } = 1;
 }
 
 /// <summary>
@@ -207,6 +213,8 @@ public sealed class PlayHistoryService(IDbContextFactory<AppDbContext> dbFactory
             ListeningTime = TimeSpan.FromSeconds(played.Sum(e => catalog.Song(e.SongId)?.Duration ?? 0)),
             Songs = playsBySong.Count,
             HasStarts = startsByClient.Count > 0,
+            From = from,
+            Days = Math.Max(1, (int)Math.Ceiling((now - from).TotalDays)),
             BucketSize = size,
             Buckets = Buckets(from, now, size, played, skipped),
             TopPlayed = playsBySong.Keys.Select(Count).OrderByDescending(s => s.Plays).ThenBy(s => s.Skips)

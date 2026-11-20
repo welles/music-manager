@@ -41,7 +41,7 @@ else
     <MudGrid Spacing="2" Class="mb-3">
         @Tile("Wiedergaben", r.Plays.ToString("N0"), $"{r.Songs:N0} verschiedene Titel")
         @Tile("Übersprungen", r.Skips.ToString("N0"), r.SkipRate is { } rate ? $"{rate:P0} der gestarteten Titel" : "–")
-        @Tile("Hörzeit", FormatDuration(r.ListeningTime), r.Plays > 0 ? $"Ø {FormatDuration(r.ListeningTime / Math.Max(1, Days(r)))} pro Tag" : "–")
+        @Tile("Hörzeit", FormatDuration(r.ListeningTime), r.Plays > 0 ? $"Ø {FormatDuration(r.ListeningTime / r.Days)} pro Tag" : "–")
         @Tile("Neue Favoriten", r.Starred.ToString("N0"), null)
         @Tile("Gemeldet", r.Reported.ToString("N0"), null, r.Reported > 0 ? "meldungen" : null)
     </MudGrid>
@@ -179,10 +179,6 @@ else
         _kinds = kinds ?? [];
         _shown = PageSize;
     }
-
-    /// <summary>Days covered by the report (at least one), for the daily average.</summary>
-    private static int Days(PlayHistoryReport r) => r.Buckets.Count == 0 ? 1
-        : Math.Max(1, (int)Math.Ceiling((DateTime.Now - r.Buckets[0].Start).TotalDays));
 
     private RenderFragment Tile(string label, string value, string? sub, string? href = null) => __builder =>
     {
