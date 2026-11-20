@@ -24,7 +24,7 @@
     @foreach (var (playlist, count) in _smart)
     {
         <MudPaper Outlined="true" Class="playlist-card">
-            <img src="@($"playlist-covers/{playlist.Id[SmartPlaylists.Prefix.Length..]}.png")" alt="" class="square-media rounded" />
+            <img src="@($"playlist-covers/{playlist.Id[SmartPlaylists.Prefix.Length..]}.png")" alt="" class="square-media rounded" loading="lazy" decoding="async" />
             <div class="playlist-card-body">
                 <div class="song-title">@playlist.Name</div>
                 <MudText Typo="Typo.caption" Class="d-block">@count Titel</MudText>
@@ -126,7 +126,7 @@ else if (_account == null)
                     var readable = p.Id == SpotifyUserClient.LikedSongsId || SpotifyPlaylistSync.Readable(p, _account!.UserId);
                     var added = _playlists.Any(x => x.Playlist.SpotifyId == p.Id);
                     <div class="d-flex align-center" style="gap:12px; @(readable ? "" : "opacity:.55")">
-                        <img src="@(p.Id == SpotifyUserClient.LikedSongsId ? "playlist-covers/spotify-liked.png" : p.ImageUrl ?? SongCard.Placeholder)" alt="" width="48" height="48" class="rounded" style="object-fit:cover;flex-shrink:0" />
+                        <img src="@(p.Id == SpotifyUserClient.LikedSongsId ? "playlist-covers/spotify-liked.png" : p.ImageUrl ?? SongCard.Placeholder)" alt="" width="48" height="48" class="rounded" loading="lazy" decoding="async" style="object-fit:cover;flex-shrink:0" />
                         <div style="min-width:0;flex:1">
                             <div class="song-title">@p.Name</div>
                             <MudText Typo="Typo.caption">
@@ -161,7 +161,7 @@ else if (_account == null)
     @foreach (var (playlist, matched) in _playlists)
     {
         <MudPaper Outlined="true" Class="playlist-card cursor-pointer" @onclick="@(() => Nav.NavigateTo($"playlists/spotify/{playlist.Id}"))">
-            <img src="@($"api/playlists/spotify/{playlist.Id}/cover?v={playlist.SyncedAt?.UtcTicks}")" alt="" class="square-media rounded" />
+            <img src="@($"api/playlists/spotify/{playlist.Id}/cover?v={playlist.SyncedAt?.UtcTicks}")" alt="" class="square-media rounded" loading="lazy" decoding="async" />
             <div class="playlist-card-body">
                 <div class="song-title">@playlist.Name</div>
                 <MudText Typo="Typo.caption" Class="d-block">@matched von @playlist.Tracks.Count vorhanden</MudText>
