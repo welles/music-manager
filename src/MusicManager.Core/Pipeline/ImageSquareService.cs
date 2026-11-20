@@ -8,16 +8,19 @@ using MusicManager.Core.Services;
 namespace MusicManager.Core.Pipeline;
 
 /// <summary>State of the run that cuts existing images to squares.</summary>
-/// <param name="Phase">What is being worked on ("Album-Cover", "Künstlerbilder", "Eingebettete Cover").</param>
+/// <param name="Phase">What is being worked on ("Album-Cover", "Künstlerbilder", "Eingebettete Cover", "Vorschaubilder").</param>
 /// <param name="Squared">Images that were not square and were cut.</param>
 /// <param name="Skipped">Song files changed on disk since the last scan; left for the next run.</param>
-public sealed record ImageSquareState(bool Running, string? Phase, int Progress, int Total, int Squared, int Skipped, int Failed);
+/// <param name="ThumbnailProgress">Pictures of the last phase ("Vorschaubilder") done, of <paramref name="ThumbnailTotal"/>.</param>
+public sealed record ImageSquareState(bool Running, string? Phase, int Progress, int Total, int Squared, int Skipped, int Failed,
+    int ThumbnailProgress = 0, int ThumbnailTotal = 0);
 
 /// <summary>
 /// Album and artist images are square: new ones are cut when they are fetched (<see cref="AudioTools.SquareImageAsync"/>).
 /// This cuts the ones that exist already, on request: the cover files in the album folders (incl. own images;
 /// the originals go to the trash), the cached artist images and the covers embedded in the library's M4A files.
-/// Square images stay untouched.
+/// Square images stay untouched. Then it makes the scaled-down copies the pages show (<see cref="ThumbnailCache"/>), so
+/// the grids and song lists do not have to wait for ffmpeg the first time; they are made on demand otherwise.
 /// </summary>
 public sealed class ImageSquareService(
     IDbContextFactory<AppDbContext> dbFactory,
@@ -25,14 +28,16 @@ public sealed class ImageSquareService(
     Storage storage,
     IOptions<MusicManagerOptions> options,
     LibraryIndexer indexer,
+    ThumbnailCache thumbnails,
     PipelineNotifier notifier,
     ILogger<ImageSquareService> logger)
 {
     private readonly SemaphoreSlim _lock = new(1, 1);
     private string? _phase;
-    private int _progress, _total, _squared, _skipped, _failed;
+    private int _progress, _total, _squared, _skipped, _failed, _thumbnailProgress, _thumbnailTotal;
 
-    public ImageSquareState State => new(_lock.CurrentCount == 0, _phase, _progress, _total, _squared, _skipped, _failed);
+    public ImageSquareState State =>
+        new(_lock.CurrentCount == 0, _phase, _progress, _total, _squared, _skipped, _failed, _thumbnailProgress, _thumbnailTotal);
 
     /// <summary>Starts a run in the background; false when one is already running.</summary>
     public bool Start()
@@ -60,7 +65,7 @@ public sealed class ImageSquareService(
 
     internal async Task RunAsync(CancellationToken ct)
     {
-        _progress = _squared = _skipped = _failed = 0;
+        _progress = _squared = _skipped = _failed = _thumbnailProgress = _thumbnailTotal = 0;
         var folderCovers = Directory.Exists(storage.LibraryRoot)
             ? Directory.EnumerateFiles(storage.LibraryRoot, "*", SearchOption.AllDirectories)
                 .Where(f => AlbumCoverService.IsCoverFile(Path.GetFileName(f))).ToList()
@@ -87,9 +92,61 @@ public sealed class ImageSquareService(
         foreach (var path in artistImages) await ImageFileAsync(path, null, ct);
         _phase = "Eingebettete Cover";
         await EmbeddedCoversAsync(songs, ct);
+        await ThumbnailsAsync(artistImages, ct);
 
-        logger.LogInformation("Square images: {Squared} cut, {Skipped} skipped, {Failed} failed, {Total} checked",
-            _squared, _skipped, _failed, _total);
+        logger.LogInformation("Square images: {Squared} cut, {Skipped} skipped, {Failed} failed, {Total} checked, {Thumbnails} thumbnails checked",
+            _squared, _skipped, _failed, _total, _thumbnailTotal);
+    }
+
+    /// <summary>
+    /// The scaled-down copies the pages ask for: blurred preview and tile of every album cover (the embedded cover of the
+    /// album's cover song, as the library pages show it) and artist image, and the small cover of every song. Existing
+    /// ones are only checked, so a second run is quick.
+    /// </summary>
+    private async Task ThumbnailsAsync(List<string> artistImages, CancellationToken ct)
+    {
+        _phase = "Vorschaubilder";
+        thumbnails.RemoveLeftovers();
+        List<LibraryTrack> withCover;
+        await using (var db = await dbFactory.CreateDbContextAsync(ct))
+        {
+            withCover = await db.Library.AsNoTracking().Where(e => e.HasCover)
+                .Select(e => new LibraryTrack
+                {
+                    Id = e.Id, RelativePath = e.RelativePath, Album = e.Album, Artist = e.Artist, Artists = e.Artists,
+                    AlbumArtist = e.AlbumArtist, AlbumArtists = e.AlbumArtists, HasCover = true,
+                }).ToListAsync(ct);
+        }
+
+        var albumCovers = LibraryCatalog.Albums(withCover).Select(a => a.CoverTrackId).ToHashSet();
+        var jobs = new List<(string Source, int Size, bool Embedded)>();
+        foreach (var track in withCover)
+        {
+            var path = storage.LibraryPath(track.RelativePath);
+            jobs.Add((path, ThumbnailCache.SongSize, true));
+            if (!albumCovers.Contains(track.Id)) continue;
+            jobs.Add((path, ThumbnailCache.PreviewSize, true));
+            jobs.Add((path, ThumbnailCache.TileSize, true));
+        }
+
+        foreach (var image in artistImages)
+        {
+            jobs.Add((image, ThumbnailCache.PreviewSize, false));
+            jobs.Add((image, ThumbnailCache.TileSize, false));
+        }
+
+        _thumbnailTotal = jobs.Count;
+        notifier.Notify();
+        await Parallel.ForEachAsync(jobs, new ParallelOptions { MaxDegreeOfParallelism = ThumbnailCache.Parallelism, CancellationToken = ct },
+            async (job, token) =>
+            {
+                if (job.Embedded)
+                    await thumbnails.GetAsync(job.Source, job.Size, () => Task.FromResult(File.Exists(job.Source) ? TagIo.ReadEmbeddedCover(job.Source) : null), token);
+                else
+                    await thumbnails.GetAsync(job.Source, job.Size, token);
+                var done = Interlocked.Increment(ref _thumbnailProgress);
+                if (done % 50 == 0 || done == _thumbnailTotal) notifier.Notify();
+            });
     }
 
     /// <summary>Folder in the trash for the originals of cut cover files.</summary>

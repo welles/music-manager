@@ -15,7 +15,7 @@
 
 <MudPaper Outlined="true" Class="pa-3 mb-4">
     <div class="d-flex align-center" style="gap:16px">
-        <MudImage Src="@($"api/library/{(_tracks.FirstOrDefault(t => t.HasCover) ?? _tracks.FirstOrDefault())?.Id}/cover")" Width="180" Height="180" ObjectFit="ObjectFit.Cover" Class="rounded" />
+        <CoverImage Src="@($"api/library/{(_tracks.FirstOrDefault(t => t.HasCover) ?? _tracks.FirstOrDefault())?.Id}/cover")" Alt="Cover" Original="true" Eager="true" Class="rounded" Style="width:180px" />
         <div>
             <MudText Typo="Typo.h5">@Album</MudText>
             <MudLink Href="@TrackGrid.ArtistHref(Artist ?? "")" Typo="Typo.subtitle1">@Artist</MudLink>

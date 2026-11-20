@@ -105,9 +105,14 @@
             <MudItem xs="12">
                 <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Spacing="3">
                     <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Crop" OnClick="CutImagesToSquares" Disabled="_square.Running">
-                        Bilder quadratisch zuschneiden
+                        Bilder zuschneiden und Vorschaubilder erzeugen
                     </MudButton>
-                    @if (_square.Running)
+                    @if (_square.Running && _square.ThumbnailTotal > 0)
+                    {
+                        <MudProgressLinear Value="_square.ThumbnailProgress" Max="Math.Max(_square.ThumbnailTotal, 1)" Color="Color.Primary" Style="max-width:240px" />
+                        <MudText Typo="Typo.body2">@_square.Phase: @_square.ThumbnailProgress von @_square.ThumbnailTotal geprüft (@_square.Squared Bilder zugeschnitten)</MudText>
+                    }
+                    else if (_square.Running)
                     {
                         <MudProgressLinear Value="_square.Progress" Max="Math.Max(_square.Total, 1)" Color="Color.Primary" Style="max-width:240px" />
                         <MudText Typo="Typo.body2">@_square.Phase: @_square.Progress von @_square.Total Bildern geprüft, @_square.Squared zugeschnitten</MudText>
@@ -115,13 +120,13 @@
                     else if (_squareStarted)
                     {
                         <MudText Typo="Typo.body2">
-                            @_square.Total Bilder geprüft, @_square.Squared zugeschnitten@(_square.Skipped > 0 ? $", {_square.Skipped} geänderte Dateien übersprungen" : "")@(_square.Failed > 0 ? $", {_square.Failed} fehlgeschlagen" : "")
+                            @_square.Total Bilder geprüft, @_square.Squared zugeschnitten@(_square.Skipped > 0 ? $", {_square.Skipped} geänderte Dateien übersprungen" : "")@(_square.Failed > 0 ? $", {_square.Failed} fehlgeschlagen" : ""), @_square.ThumbnailTotal Vorschaubilder bereit
                         </MudText>
                     }
                     else
                     {
                         <MudText Typo="Typo.body2" Color="Color.Secondary">
-                            Neue Album- und Künstlerbilder werden immer mittig quadratisch zugeschnitten. Das holt es für vorhandene nach: Cover-Dateien in den Album-Ordnern (auch eigene), Künstlerbilder und die in die Lieder eingebetteten Cover.
+                            Neue Album- und Künstlerbilder werden immer mittig quadratisch zugeschnitten. Das holt es für vorhandene nach: Cover-Dateien in den Album-Ordnern (auch eigene), Künstlerbilder und die in die Lieder eingebetteten Cover. Danach werden die verkleinerten Vorschaubilder für Kacheln und Listen vorab erzeugt (nur im Cache, die Bibliothek bleibt dabei unberührt), damit die Seiten beim ersten Öffnen nicht auf sie warten.
                         </MudText>
                     }
                 </MudStack>
@@ -335,8 +340,8 @@
 
     private async Task CutImagesToSquares()
     {
-        var ok = await Dialogs.ShowMessageBoxAsync("Bilder quadratisch zuschneiden",
-            "Alle nicht quadratischen Album-Cover, Künstlerbilder und eingebetteten Cover mittig auf ein Quadrat zuschneiden? Die Bilder werden dabei überschrieben; die Lieddateien bekommen ein neues eingebettetes Cover.",
+        var ok = await Dialogs.ShowMessageBoxAsync("Bilder zuschneiden und Vorschaubilder erzeugen",
+            "Alle nicht quadratischen Album-Cover, Künstlerbilder und eingebetteten Cover mittig auf ein Quadrat zuschneiden? Die Bilder werden dabei überschrieben; die Lieddateien bekommen ein neues eingebettetes Cover. Danach werden die Vorschaubilder für Kacheln und Listen erzeugt.",
             yesText: "Zuschneiden", cancelText: "Abbrechen");
         if (ok != true) return;
         if (SquareImages.Start()) _squareStarted = true;

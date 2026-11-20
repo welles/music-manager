@@ -51,6 +51,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<GenreService>();
         services.AddSingleton<AudioTools>();
         services.AddSingleton<TranscodeCache>();
+        services.AddSingleton<ThumbnailCache>();
         services.AddSingleton<AiService>();
         services.AddSingleton<SettingsService>();
         services.AddSingleton<DatabaseInitializer>();

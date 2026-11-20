@@ -161,7 +161,7 @@ else if (_account == null)
     @foreach (var (playlist, matched) in _playlists)
     {
         <MudPaper Outlined="true" Class="playlist-card cursor-pointer" @onclick="@(() => Nav.NavigateTo($"playlists/spotify/{playlist.Id}"))">
-            <img src="@($"api/playlists/spotify/{playlist.Id}/cover?v={playlist.SyncedAt?.UtcTicks}")" alt="" class="square-media rounded" loading="lazy" decoding="async" />
+            <CoverImage Src="@($"api/playlists/spotify/{playlist.Id}/cover?v={playlist.SyncedAt?.UtcTicks}")" Alt="@playlist.Name" Class="rounded" />
             <div class="playlist-card-body">
                 <div class="song-title">@playlist.Name</div>
                 <MudText Typo="Typo.caption" Class="d-block">@matched von @playlist.Tracks.Count vorhanden</MudText>

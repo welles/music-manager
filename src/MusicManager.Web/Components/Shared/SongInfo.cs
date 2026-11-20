@@ -1,6 +1,7 @@
 using MusicManager.Core.Data;
 using MusicManager.Core.Model;
 using MusicManager.Core.Pipeline;
+using MusicManager.Core.Services;
 
 namespace MusicManager.Web.Components.Shared;
 
@@ -91,6 +92,9 @@ public sealed record SongInfo
         Isrc = t.Isrc,
     };
 
+    /// <summary>Cover of a library song, scaled down for the song lists (see <see cref="ThumbnailCache.SongSize"/>).</summary>
+    public static string LibraryCover(int entryId) => $"api/library/{entryId}/cover?size={ThumbnailCache.SongSize}";
+
     public static SongInfo From(LibraryTrack t) => new()
     {
         Title = t.Title ?? System.IO.Path.GetFileName(t.RelativePath),
@@ -106,7 +110,7 @@ public sealed record SongInfo
         Genres = t.Genres,
         Format = FormatAudio(t.Codec, t.BitrateKbps),
         Path = t.RelativePath,
-        CoverUrl = $"api/library/{t.Id}/cover",
+        CoverUrl = LibraryCover(t.Id),
     };
 
     public static SongInfo From(LibraryEntry e) => new()
@@ -122,7 +126,7 @@ public sealed record SongInfo
         Isrc = e.Isrc,
         Format = FormatAudio(e.Codec, e.BitrateKbps),
         Path = e.RelativePath,
-        CoverUrl = $"api/library/{e.Id}/cover",
+        CoverUrl = LibraryCover(e.Id),
     };
 
     public static SongInfo From(DuplicateMatch m) => new()
@@ -136,7 +140,7 @@ public sealed record SongInfo
         Duration = FormatLength(m.DurationSeconds),
         Format = FormatAudio(m.Codec, m.BitrateKbps),
         Path = m.RelativePath,
-        CoverUrl = $"api/library/{m.LibraryEntryId}/cover",
+        CoverUrl = LibraryCover(m.LibraryEntryId),
     };
 
     /// <summary>A MusicBrainz candidate; the cover comes from the Cover Art Archive (release, then release group).</summary>

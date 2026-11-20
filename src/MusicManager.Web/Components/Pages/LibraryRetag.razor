@@ -70,7 +70,7 @@
                     <div class="d-flex align-center" style="gap:8px">
                         <MudCheckBox T="bool" Value="!_deselected.Contains(p.EntryId)" ValueChanged="@(v => Toggle(p, v))" Size="Size.Small"
                                      @onclick:stopPropagation="true" />
-                        <SongCard Song="@(SongInfo.From(p.NewTags) with { CoverUrl = $"api/library/{p.EntryId}/cover", Path = p.RelativePath + (p.PathChanged ? $"  →  {p.NewRelativePath}" : "") })" />
+                        <SongCard Song="@(SongInfo.From(p.NewTags) with { CoverUrl = SongInfo.LibraryCover(p.EntryId), Path = p.RelativePath + (p.PathChanged ? $"  →  {p.NewRelativePath}" : "") })" />
                         <MudSpacer />
                         @if (p.EditedOutside)
                         {
