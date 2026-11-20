@@ -1,8 +1,4 @@
-using System.Security.Cryptography;
-using System.Text;
-using Microsoft.Extensions.Options;
 using MusicManager.Core.Catalog;
-using MusicManager.Core.Configuration;
 using MusicManager.Core.Pipeline;
 using MusicManager.Core.Services;
 
@@ -158,42 +154,26 @@ public static partial class SubsonicEndpoints
     private static async Task<IResult> GetCoverArtAsync(SubsonicRequest r)
     {
         var id = r.Require("id");
-        var requested = r.GetInt("size");
-        int? size = requested > 0 ? Math.Min(requested.Value, 2000) : null;
+        var size = ThumbnailCache.Normalize(r.GetInt("size"));
         var catalog = await Catalog(r);
         var storage = r.Service<Storage>();
 
-        // Source image and a stamp that changes whenever the image may have changed (cache key).
-        Func<Task<byte[]?>>? load = null;
-        string? stamp = null;
+        // The source: an image file, or a song file with an embedded cover (also the key of the scaled copies).
+        string? source = null;
+        var embedded = false;
         if (SmartPlaylists.Find(id) is { } smart)
         {
             // Fixed pictures shipped with the app (sources in docs/playlist-covers), not the cover of a changing first song.
-            var file = Path.Combine(r.Service<IWebHostEnvironment>().WebRootPath, "playlist-covers", $"{smart.Id[SmartPlaylists.Prefix.Length..]}.png");
-            if (File.Exists(file))
-            {
-                var info = new FileInfo(file);
-                stamp = $"{file}|{info.Length}|{info.LastWriteTimeUtc.Ticks}";
-                load = async () => await File.ReadAllBytesAsync(file, r.Aborted);
-            }
+            source = Path.Combine(r.Service<IWebHostEnvironment>().WebRootPath, "playlist-covers", $"{smart.Id[SmartPlaylists.Prefix.Length..]}.png");
         }
         else if (SpotifyPlaylistIds.Parse(id) is { } spotifyId)
         {
             // The playlist's own picture from Spotify with a Spotify badge; without one, a generic Spotify cover.
-            var file = await SpotifyCovers.PathAsync(r.Http.RequestServices, spotifyId, r.Aborted);
-            var info = new FileInfo(file);
-            stamp = $"{file}|{info.Length}|{info.LastWriteTimeUtc.Ticks}";
-            load = async () => File.Exists(file) ? await File.ReadAllBytesAsync(file, r.Aborted) : null;
+            source = await SpotifyCovers.PathAsync(r.Http.RequestServices, spotifyId, r.Aborted);
         }
         else if (id.StartsWith(CatalogIds.ArtistPrefix, StringComparison.Ordinal) && catalog.Artist(id) is { } artist)
         {
-            var file = await r.Service<ArtistImageService>().GetImagePathAsync(artist.Name, artist.MbArtistId, r.Aborted);
-            if (file != null)
-            {
-                var info = new FileInfo(file);
-                stamp = $"{file}|{info.Length}|{info.LastWriteTimeUtc.Ticks}";
-                load = async () => await File.ReadAllBytesAsync(file, r.Aborted);
-            }
+            source = await r.Service<ArtistImageService>().GetImagePathAsync(artist.Name, artist.MbArtistId, r.Aborted);
         }
         else
         {
@@ -204,42 +184,26 @@ public static partial class SubsonicEndpoints
 
             // A cover file in the album's own folder (usually larger) goes before the embedded cover.
             if (album?.Folder is { } folder && AlbumCoverService.Find(storage.LibraryPath(folder)) is { } coverFile)
-            {
-                var info = new FileInfo(coverFile);
-                stamp = $"{coverFile}|{info.Length}|{info.LastWriteTimeUtc.Ticks}";
-                load = async () => File.Exists(coverFile) ? await File.ReadAllBytesAsync(coverFile, r.Aborted) : null;
-            }
+                source = coverFile;
             else if (song != null)
             {
-                var path = storage.LibraryPath(song.RelativePath);
-                stamp = $"{song.RelativePath}|{song.Size}|{song.FileModifiedUtc.Ticks}";
-                load = () => Task.FromResult(File.Exists(path) ? TagIo.ReadEmbeddedCover(path) : null);
+                source = storage.LibraryPath(song.RelativePath);
+                embedded = true;
             }
         }
 
-        if (load == null) throw SubsonicException.NotFound("Cover art");
+        if (source == null || !File.Exists(source)) throw SubsonicException.NotFound("Cover art");
         r.Http.Response.Headers.CacheControl = "private, max-age=3600";
+        var file = source;
+        async Task<byte[]?> Load() =>
+            !File.Exists(file) ? null : embedded ? TagIo.ReadEmbeddedCover(file) : await File.ReadAllBytesAsync(file);
 
-        if (size == null)
-        {
-            var original = await load() ?? throw SubsonicException.NotFound("Cover art");
-            return Results.File(original, ImageType(original));
-        }
+        if (size != null && await r.Service<ThumbnailCache>().GetAsync(source, size.Value, Load, r.Aborted) is { } thumbnail)
+            return Results.File(thumbnail, "image/jpeg");
 
-        var cacheDir = Path.Combine(Path.GetFullPath(r.Service<IOptions<MusicManagerOptions>>().Value.DataPath), "cache", "covers");
-        var key = Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes($"{id}|{stamp}|{size}")))[..32];
-        var cached = Path.Combine(cacheDir, $"{key}.jpg");
-        if (File.Exists(cached)) return Results.File(cached, "image/jpeg");
-
-        var image = await load() ?? throw SubsonicException.NotFound("Cover art");
-        var scaled = await r.Service<AudioTools>().ResizeImageAsync(image, size.Value, r.Aborted);
-        if (scaled == null) return Results.File(image, ImageType(image));
-
-        Directory.CreateDirectory(cacheDir);
-        var tmp = $"{cached}.{Guid.NewGuid():N}.tmp";
-        await File.WriteAllBytesAsync(tmp, scaled, r.Aborted);
-        File.Move(tmp, cached, overwrite: true);
-        return Results.File(scaled, "image/jpeg");
+        // The original, also when it could not be scaled.
+        var original = await Load() ?? throw SubsonicException.NotFound("Cover art");
+        return Results.File(original, ImageType(original));
     }
 
     private static string ImageType(byte[] data) => data.Length > 3 && data[0] == 0x89 && data[1] == 0x50 ? "image/png" : "image/jpeg";

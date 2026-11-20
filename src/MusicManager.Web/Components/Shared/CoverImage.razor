@@ -1,0 +1,39 @@
+@using MusicManager.Core.Services
+@*
+    A square picture (album cover, artist image, playlist cover) that sharpens step by step: a tiny blurred preview
+    first, then the tile size, then (with Original) the full picture. Each step lies over the one before and fades in
+    once it is loaded, so a slow step never hides a faster one. Below the fold, nothing loads until it scrolls near.
+*@
+<div @key="Src" class="cover-image @Class" style="@Style" role="img" aria-label="@Alt">
+    <img class="cover-image-preview" onload="this.classList.add('loaded')" src="@Sized(ThumbnailCache.PreviewSize)" alt="" aria-hidden="true"
+         loading="@Loading" decoding="async" />
+    <img class="cover-image-step" onload="this.classList.add('loaded')" src="@Sized(ThumbnailCache.TileSize)" alt="" aria-hidden="true"
+         loading="@Loading" decoding="async" />
+    @if (Original)
+    {
+        <img class="cover-image-step" onload="this.classList.add('loaded')" src="@Src" alt="" aria-hidden="true" loading="@Loading" decoding="async" />
+    }
+</div>
+
+@code {
+    /// <summary>URL of the picture as the server serves it in full; the steps add <c>size=</c> to it.</summary>
+    [Parameter, EditorRequired] public string Src { get; set; } = "";
+
+    [Parameter] public string? Alt { get; set; }
+
+    /// <summary>
+    /// Ends with the full picture (pages with one large picture); grids stop at the tile size, which is sharp there
+    /// already.
+    /// </summary>
+    [Parameter] public bool Original { get; set; }
+
+    /// <summary>Load right away instead of when it scrolls near: for pictures at the top of a page.</summary>
+    [Parameter] public bool Eager { get; set; }
+
+    [Parameter] public string? Class { get; set; }
+    [Parameter] public string? Style { get; set; }
+
+    private string Loading => Eager ? "eager" : "lazy";
+
+    private string Sized(int size) => $"{Src}{(Src.Contains('?') ? '&' : '?')}size={size}";
+}

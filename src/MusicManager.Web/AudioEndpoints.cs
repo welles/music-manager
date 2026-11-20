@@ -39,8 +39,9 @@ public static class AudioEndpoints
             return path == null || !File.Exists(path) ? Results.NotFound() : await Serve(path, audio, ct);
         });
 
-        // Cover of a library file.
-        app.MapGet("/api/library/{id:int}/cover", async (int id, IDbContextFactory<AppDbContext> dbFactory, Storage storage, HttpContext http, CancellationToken ct) =>
+        // Cover of a library file; with size, a square copy of that edge length (tiles, song lists, blurred previews).
+        app.MapGet("/api/library/{id:int}/cover", async (int id, int? size, IDbContextFactory<AppDbContext> dbFactory, Storage storage,
+            ThumbnailCache thumbnails, HttpContext http, CancellationToken ct) =>
         {
             await using var db = await dbFactory.CreateDbContextAsync(ct);
             var entry = await db.Library.FindAsync([id], ct);
@@ -54,6 +55,10 @@ public static class AudioEndpoints
             http.Response.Headers.ETag = etag.ToString();
             if (http.Request.Headers.IfNoneMatch.ToString() == etag.ToString()) return Results.StatusCode(StatusCodes.Status304NotModified);
 
+            if (ThumbnailCache.Normalize(size) is { } edge
+                && await thumbnails.GetAsync(info.FullName, edge, () => Task.FromResult(TagIo.ReadEmbeddedCover(info.FullName)), ct) is { } thumbnail)
+                return Results.File(thumbnail, "image/jpeg");
+
             var data = TagIo.ReadEmbeddedCover(info.FullName);
             return data == null
                 ? Results.Content(Placeholder, "image/svg+xml")
@@ -61,9 +66,11 @@ public static class AudioEndpoints
         });
 
         // Artist image (filled by the artist image service; placeholder until then).
-        app.MapGet("/api/artists/image", async (string name, string? mbid, ArtistImageService images, HttpContext http, CancellationToken ct) =>
+        app.MapGet("/api/artists/image", async (string name, string? mbid, int? size, ArtistImageService images, ThumbnailCache thumbnails,
+            HttpContext http, CancellationToken ct) =>
         {
             var path = await images.GetImagePathAsync(name, mbid, ct);
+            if (path != null && ThumbnailCache.Normalize(size) is { } edge) path = await thumbnails.GetAsync(path, edge, ct) ?? path;
             // Physical file results answer If-Modified-Since themselves, so a week costs at most a 304 per image.
             http.Response.Headers.CacheControl = path == null ? "no-store" : "private, max-age=604800";
             return path == null ? Results.Content(Placeholder, "image/svg+xml") : Results.File(path, "image/jpeg");

@@ -151,7 +151,7 @@ public class SquareImageTests
 
         // Cached before cutting, like an older version did it: scaled down, not square.
         Assert.NotNull(await ServedSizeAsync());
-        var cached = Assert.Single(Directory.GetFiles(Path.Combine(app.DataRoot, "cache", "covers")));
+        var cached = Assert.Single(Directory.GetFiles(Path.Combine(app.DataRoot, "cache", "thumbnails")));
         await FfmpegTestTools.ImageAsync(cached + ".jpg", 100, 75);
         System.IO.File.Move(cached + ".jpg", cached, overwrite: true);
         Assert.Equal((100, 75), await ServedSizeAsync());
@@ -183,7 +183,7 @@ public class SquareImageTests
         // Cached before cutting, like an older version did it: scaled down, not square. The album has no folder
         // cover, so the embedded cover is served.
         Assert.NotNull(await ServedSizeAsync());
-        var cached = Assert.Single(Directory.GetFiles(Path.Combine(app.DataRoot, "cache", "covers")));
+        var cached = Assert.Single(Directory.GetFiles(Path.Combine(app.DataRoot, "cache", "thumbnails")));
         await FfmpegTestTools.ImageAsync(cached + ".jpg", 100, 66);
         System.IO.File.Move(cached + ".jpg", cached, overwrite: true);
         Assert.Equal((100, 66), await ServedSizeAsync());

@@ -37,9 +37,10 @@ public static class SpotifyCovers
     }
 
     public static void MapSpotifyCovers(this IEndpointRouteBuilder app) =>
-        app.MapGet("/api/playlists/spotify/{id:int}/cover", async (int id, HttpContext http, CancellationToken ct) =>
+        app.MapGet("/api/playlists/spotify/{id:int}/cover", async (int id, int? size, ThumbnailCache thumbnails, HttpContext http, CancellationToken ct) =>
         {
             var file = await PathAsync(http.RequestServices, id, ct);
+            if (ThumbnailCache.Normalize(size) is { } edge) file = await thumbnails.GetAsync(file, edge, ct) ?? file;
             http.Response.Headers.CacheControl = "private, max-age=300";
             return Results.File(file, file.EndsWith(".png", StringComparison.Ordinal) ? "image/png" : "image/jpeg");
         });

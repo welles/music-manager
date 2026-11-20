@@ -23,6 +23,7 @@ public sealed class LibraryIndexer(
     PipelineNotifier notifier,
     UserDataStore userData,
     TranscodeCache transcodes,
+    ThumbnailCache thumbnails,
     ILogger<LibraryIndexer> logger) : BackgroundService
 {
     /// <summary>Raise when <see cref="Fill"/> reads more or different data, so existing entries are re-read.</summary>
@@ -30,6 +31,13 @@ public sealed class LibraryIndexer(
 
     private readonly SemaphoreSlim _trigger = new(0, 1);
     private long _version;
+
+    /// <summary>Drops what was made from the old version of a song file: transcodes and scaled covers.</summary>
+    private void ForgetCaches(string path)
+    {
+        transcodes.Forget(path);
+        thumbnails.Forget(path);
+    }
     private readonly SemaphoreSlim _lock = new(1, 1);
     private volatile bool _scanning;
     private string? _activity;
@@ -144,8 +152,8 @@ public sealed class LibraryIndexer(
                 else
                 {
                     updated++;
-                    // Changed outside Music Manager (or since the last scan): transcodes of the old file no longer fit.
-                    if (!unchanged) transcodes.Forget(path);
+                    // Changed outside Music Manager (or since the last scan): transcodes and covers of the old file no longer fit.
+                    if (!unchanged) ForgetCaches(path);
                 }
 
                 Fill(entry, path, info, resetFingerprint: !unchanged);
@@ -158,7 +166,7 @@ public sealed class LibraryIndexer(
             }
 
             var removed = existing.Values.Where(e => !seen.Contains(e.RelativePath)).ToList();
-            foreach (var gone in removed) transcodes.Forget(storage.LibraryPath(gone.RelativePath));
+            foreach (var gone in removed) ForgetCaches(storage.LibraryPath(gone.RelativePath));
             var moved = CarryOverMoved(removed, newEntries);
 
             DropDuplicateSongIds(existing.Values.Where(e => seen.Contains(e.RelativePath)));
@@ -379,9 +387,9 @@ public sealed class LibraryIndexer(
     {
         var path = storage.LibraryPath(relativePath);
         if (!File.Exists(path)) return;
-        // Written anew (filed, retagged, replaced): transcodes of what was there before no longer fit.
-        transcodes.Forget(path);
-        if (replaces != null && replaces != relativePath) transcodes.Forget(storage.LibraryPath(replaces));
+        // Written anew (filed, retagged, replaced): transcodes and covers of what was there before no longer fit.
+        ForgetCaches(path);
+        if (replaces != null && replaces != relativePath) ForgetCaches(storage.LibraryPath(replaces));
         await using var db = await dbFactory.CreateDbContextAsync(ct);
         await using var tx = await db.Database.BeginTransactionAsync(ct);
         var entry = await db.Library.FirstOrDefaultAsync(e => e.RelativePath == relativePath, ct);
@@ -436,7 +444,7 @@ public sealed class LibraryIndexer(
     /// <summary>Removes an entry (file moved to the trash).</summary>
     public async Task RemoveAsync(string relativePath, CancellationToken ct)
     {
-        transcodes.Forget(storage.LibraryPath(relativePath));
+        ForgetCaches(storage.LibraryPath(relativePath));
         await using var db = await dbFactory.CreateDbContextAsync(ct);
         if (await db.Library.Where(e => e.RelativePath == relativePath).ExecuteDeleteAsync(ct) > 0)
             OnChanged();

@@ -24,6 +24,44 @@
     object-position: center 25%;
 }
 
+/* CoverImage: blurred preview, then sharper steps fading in over it. Square, full width unless sized by the page. */
+.cover-image {
+    position: relative;
+    display: block;
+    width: 100%;
+    aspect-ratio: 1 / 1;
+    overflow: hidden;
+    flex-shrink: 0;
+    background: #9e9e9e33;
+}
+
+.cover-image > img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center 25%;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+/* Slightly enlarged, so the blur does not fade out at the edges. */
+.cover-image > .cover-image-preview {
+    filter: blur(8px);
+    transform: scale(1.15);
+}
+
+.cover-image > img.loaded {
+    opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .cover-image > img {
+        transition: none;
+    }
+}
+
 /* Touch devices: swipe the tab bar instead of tapping the scroll arrows. MudTabs moves the
    wrapper with a transform; here it becomes a normal horizontally scrolling strip. */
 @media (pointer: coarse) {

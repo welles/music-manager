@@ -32,8 +32,7 @@
 
 <MudPaper Outlined="true" Class="pa-3 mb-4">
     <div class="d-flex flex-wrap" style="gap:16px">
-        <img src="@($"api/playlists/spotify/{_playlist.Id}/cover?v={_playlist.SyncedAt?.UtcTicks}")" alt="" width="160" height="160" class="rounded"
-             style="object-fit:cover;flex-shrink:0" />
+        <CoverImage Src="@($"api/playlists/spotify/{_playlist.Id}/cover?v={_playlist.SyncedAt?.UtcTicks}")" Alt="@_playlist.Name" Original="true" Eager="true" Class="rounded" Style="width:160px" />
         <div style="min-width:0;flex:1 1 220px">
             <MudText Typo="Typo.h5">@_playlist.Name</MudText>
             <MudText Typo="Typo.body2">Spotify-Playlist@(_playlist.OwnerName is { Length: > 0 } o ? $" von {o}" : "")</MudText>
