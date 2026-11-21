@@ -1,0 +1,211 @@
+@page "/papierkorb"
+@using System.Globalization
+@inject TrashService TrashService
+@inject SettingsService SettingsService
+@inject IDialogService Dialogs
+@inject ISnackbar Snackbar
+
+<PageTitle>Papierkorb – Music Manager</PageTitle>
+
+<PageHeader Title="Papierkorb">
+    <Actions>
+        <MudTooltip Text="Neu einlesen">
+            <MudIconButton Icon="@Icons.Material.Filled.Refresh" OnClick="ReloadAsync" Disabled="_loading" aria-label="Neu einlesen" />
+        </MudTooltip>
+        <ActionButton Variant="Variant.Filled" Color="Color.Error" StartIcon="@Icons.Material.Filled.DeleteForever"
+                      Disabled="@(_contents is not { Files: > 0 } || _loading)" OnClick="EmptyAsync">Papierkorb leeren</ActionButton>
+    </Actions>
+</PageHeader>
+
+<MudText Typo="Typo.body2" Class="mb-3 mud-text-secondary">
+    Ersetzte und verworfene Dateien landen hier in einem Ordner je Tag.
+    @if (_retention > 0)
+    {
+        <span>Tage, die älter als @_retention Tage sind, werden automatisch gelöscht (Einstellungen → Eingang und Automatik → „Papierkorb aufbewahren (Tage)“).</span>
+    }
+    else
+    {
+        <span>Automatisches Löschen ist aus.</span>
+    }
+</MudText>
+
+@if (_contents == null)
+{
+    <MudProgressLinear Indeterminate="true" />
+    <MudText Typo="Typo.caption" Class="mud-text-secondary">Größen werden berechnet …</MudText>
+}
+else if (_contents.Folders.Count == 0)
+{
+    <MudAlert Severity="Severity.Success" Variant="Variant.Outlined">Der Papierkorb ist leer.</MudAlert>
+}
+else
+{
+    @if (_loading)
+    {
+        <MudProgressLinear Indeterminate="true" Class="mb-2" />
+    }
+    <MudPaper Outlined="true" Class="pa-3 mb-3 d-flex flex-wrap align-center" Style="gap:24px">
+        <div>
+            <MudText Typo="Typo.caption" Class="mud-text-secondary">Gesamt</MudText>
+            <MudText Typo="Typo.h5">@FormatSize(_contents.Size)</MudText>
+        </div>
+        <div>
+            <MudText Typo="Typo.caption" Class="mud-text-secondary">Dateien</MudText>
+            <MudText Typo="Typo.h5">@_contents.Files.ToString("N0", German)</MudText>
+        </div>
+        <div>
+            <MudText Typo="Typo.caption" Class="mud-text-secondary">Ordner</MudText>
+            <MudText Typo="Typo.h5">@_contents.Folders.Count.ToString("N0", German)</MudText>
+        </div>
+    </MudPaper>
+
+    <MudExpansionPanels MultiExpansion="true">
+        @foreach (var f in _contents.Folders)
+        {
+            var key = f.Name ?? "";
+            <MudExpansionPanel @key="key" Expanded="_expanded.Contains(key)" ExpandedChanged="@(v => SetExpanded(key, v))">
+                <TitleContent>
+                    <div class="d-flex align-center flex-wrap" style="gap:8px">
+                        <MudIcon Icon="@Icons.Material.Filled.Folder" Size="Size.Small" Color="Color.Default" />
+                        <MudText Typo="Typo.subtitle1">@Title(f)</MudText>
+                        <MudSpacer />
+                        <MudText Typo="Typo.body2" Class="mud-text-secondary">@f.Entries.Count.ToString("N0", German) Einträge · @f.Files.ToString("N0", German) Dateien</MudText>
+                        <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">@FormatSize(f.Size)</MudChip>
+                        @if (f.Name != null)
+                        {
+                            <span @onclick:stopPropagation="true">
+                                <ActionIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Disabled="_loading"
+                                                  aria-label="@($"{Title(f)} löschen")" OnClick="() => DeleteFolderAsync(f)" />
+                            </span>
+                        }
+                    </div>
+                </TitleContent>
+                <ChildContent>
+                    @if (_expanded.Contains(key))
+                    {
+                        <MudSimpleTable Dense="true" Hover="true" Style="overflow-x:auto">
+                            <thead>
+                                <tr>
+                                    <th>Name</th>
+                                    <th style="text-align:right">Dateien</th>
+                                    <th style="text-align:right">Größe</th>
+                                    <th>Geändert</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var e in f.Entries)
+                                {
+                                    <tr>
+                                        <td style="overflow-wrap:anywhere">
+                                            <MudIcon Icon="@(e.IsDirectory ? Icons.Material.Filled.Folder : Icons.Material.Filled.InsertDriveFile)" Size="Size.Small"
+                                                     Style="vertical-align:middle" Class="mr-1 mud-text-secondary" />
+                                            @e.Name
+                                        </td>
+                                        <td style="text-align:right">@e.Files.ToString("N0", German)</td>
+                                        <td style="text-align:right;white-space:nowrap">@FormatSize(e.Size)</td>
+                                        <td style="white-space:nowrap">@e.Modified.ToString("g", German)</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </MudSimpleTable>
+                    }
+                </ChildContent>
+            </MudExpansionPanel>
+        }
+    </MudExpansionPanels>
+}
+
+@code {
+    private static readonly CultureInfo German = CultureInfo.GetCultureInfo("de-DE");
+
+    private TrashContents? _contents;
+    private readonly HashSet<string> _expanded = new(StringComparer.Ordinal);
+    private bool _loading;
+    private int _retention;
+
+    // Not in OnInitializedAsync: the scan walks the whole trash and would run twice with prerendering.
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender) await ReloadAsync();
+    }
+
+    private async Task ReloadAsync()
+    {
+        if (_loading) return;
+        _loading = true;
+        StateHasChanged();
+        try
+        {
+            _retention = (await SettingsService.GetAsync()).TrashRetentionDays;
+            _contents = await TrashService.ListAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Papierkorb konnte nicht gelesen werden: {ex.Message}", Severity.Error);
+            _contents ??= new TrashContents([], 0, 0);
+        }
+        finally
+        {
+            _loading = false;
+            StateHasChanged();
+        }
+    }
+
+    private void SetExpanded(string key, bool expanded)
+    {
+        if (expanded) _expanded.Add(key);
+        else _expanded.Remove(key);
+    }
+
+    private async Task EmptyAsync()
+    {
+        if (_contents == null) return;
+        var ok = await Dialogs.ShowMessageBoxAsync("Papierkorb leeren",
+            $"Alle {_contents.Files.ToString("N0", German)} Dateien ({FormatSize(_contents.Size)}) im Papierkorb endgültig löschen? Das lässt sich nicht rückgängig machen.",
+            yesText: "Endgültig löschen", cancelText: "Abbrechen");
+        if (ok != true) return;
+        Report(await TrashService.EmptyAsync());
+        _expanded.Clear();
+        await ReloadAsync();
+    }
+
+    private async Task DeleteFolderAsync(TrashFolder f)
+    {
+        if (f.Name == null) return;
+        var ok = await Dialogs.ShowMessageBoxAsync("Ordner löschen",
+            $"„{Title(f)}“ mit {f.Files.ToString("N0", German)} Dateien ({FormatSize(f.Size)}) endgültig löschen? Das lässt sich nicht rückgängig machen.",
+            yesText: "Endgültig löschen", cancelText: "Abbrechen");
+        if (ok != true) return;
+        Report(await TrashService.DeleteFolderAsync(f.Name));
+        _expanded.Remove(f.Name);
+        await ReloadAsync();
+    }
+
+    private void Report(TrashDeleteResult r)
+    {
+        Snackbar.Add($"{r.Files.ToString("N0", German)} Dateien gelöscht, {FormatSize(r.Size)} frei.", Severity.Success);
+        if (r.Errors.Count > 0)
+            Snackbar.Add($"{r.Errors.Count} Einträge konnten nicht gelöscht werden: {string.Join("; ", r.Errors.Take(3))}", Severity.Error);
+    }
+
+    private static string Title(TrashFolder f) => f switch
+    {
+        { Date: { } d } => d.ToString("dddd, d. MMMM yyyy", German),
+        { Name: { } n } => n,
+        _ => "Direkt im Papierkorb",
+    };
+
+    /// <summary>Binary units, like <c>du -h</c> and most file managers.</summary>
+    private static string FormatSize(long bytes)
+    {
+        string[] units = ["B", "KB", "MB", "GB", "TB"];
+        double value = bytes;
+        var unit = 0;
+        while (value >= 1024 && unit < units.Length - 1)
+        {
+            value /= 1024;
+            unit++;
+        }
+        return unit == 0 ? $"{bytes} B" : $"{value.ToString(value >= 100 ? "N0" : "N1", German)} {units[unit]}";
+    }
+}

@@ -60,7 +60,7 @@ docker compose up -d
 |----------|------------------------------------------------------------|
 | `/inbox` | New files                                                  |
 | `/music` | Music library                                              |
-| `/trash` | Replaced/discarded files, deleted after the retention time |
+| `/trash` | Replaced/discarded files, deleted after the retention time; the **Papierkorb** page lists them by day with their sizes and empties the trash or single days |
 | `/data`  | SQLite database, work files, Data Protection keys, cover and transcode cache |
 
 | Environment variable              | Purpose                                                   |

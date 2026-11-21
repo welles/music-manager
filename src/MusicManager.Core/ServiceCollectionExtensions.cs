@@ -56,6 +56,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<SettingsService>();
         services.AddSingleton<DatabaseInitializer>();
         services.AddSingleton<Storage>();
+        services.AddSingleton<TrashService>();
         services.AddSingleton<WorkQueue>();
         services.AddSingleton<PipelineNotifier>();
         services.AddSingleton<DuplicateDetector>();
