@@ -10,7 +10,7 @@
         </MudText>
         <MudStack Row="true" AlignItems="AlignItems.Center">
             <MudTextField @bind-Value="Query" Label="Suche" Variant="Variant.Outlined" Immediate="true" OnKeyUp="OnKey" />
-            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="Search" Disabled="_busy">Suchen</MudButton>
+            <ActionButton Variant="Variant.Filled" Color="Color.Primary" OnClick="Search" Disabled="_busy">Suchen</ActionButton>
         </MudStack>
         @if (_busy)
         {
@@ -36,8 +36,8 @@
                 <MudTd DataLabel="Typ">@string.Join(" + ", new[] { context.PrimaryType }.Concat(context.SecondaryTypes).OfType<string>())</MudTd>
                 <MudTd DataLabel="Tracks">@context.TrackCount</MudTd>
                 <MudTd>
-                    <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Primary" Disabled="_busy"
-                               OnClick="() => Assign(context.ReleaseId)">Zuweisen</MudButton>
+                    <ActionButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Primary" Disabled="_busy"
+                               OnClick="() => Assign(context.ReleaseId)">Zuweisen</ActionButton>
                 </MudTd>
             </RowTemplate>
         </MudTable>

@@ -44,10 +44,10 @@
                         </MudChipSet>
                         @if (_show == Show.Same && SameFiles.Count > 0)
                         {
-                            <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small" StartIcon="@Icons.Material.Filled.DeleteSweep"
+                            <ActionButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small" StartIcon="@Icons.Material.Filled.DeleteSweep"
                                        OnClick="DiscardSame" Disabled="_busy">
                                 Alle @SameFiles.Count neuen Dateien verwerfen
-                            </MudButton>
+                            </ActionButton>
                         }
                     </div>
 
@@ -147,19 +147,19 @@
                            below the buttons would push the comparison past the window. *@
                         <MudStack Row="true" Wrap="Wrap.Wrap" Spacing="2" Class="mt-3">
                             <MudTooltip Text="Die vorhandene Datei kommt in den Papierkorb. Die neue übernimmt ihre Song-ID: Wiedergabezähler, Favoriten und Playlist-Einträge bleiben erhalten.">
-                                <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.SwapHoriz" OnClick="KeepNew" Disabled="_busy">
+                                <ActionButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.SwapHoriz" OnClick="KeepNew" Disabled="_busy">
                                     Neue behalten (ersetzt vorhandene)
-                                </MudButton>
+                                </ActionButton>
                             </MudTooltip>
                             <MudTooltip Text="Die neue Datei kommt in den Papierkorb.">
-                                <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Inventory2" OnClick="KeepExisting" Disabled="_busy">
+                                <ActionButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Inventory2" OnClick="KeepExisting" Disabled="_busy">
                                     Vorhandene behalten
-                                </MudButton>
+                                </ActionButton>
                             </MudTooltip>
                             <MudTooltip Text="Die neue Datei wird zusätzlich einsortiert.">
-                                <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.LibraryAdd" OnClick="KeepBoth" Disabled="_busy">
+                                <ActionButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.LibraryAdd" OnClick="KeepBoth" Disabled="_busy">
                                     Beide behalten
-                                </MudButton>
+                                </ActionButton>
                             </MudTooltip>
                         </MudStack>
 

@@ -27,8 +27,8 @@
         <MudTextField @bind-Value="_url" Label="Adresse" Placeholder="https://music.youtube.com/playlist?list=…" Variant="Variant.Outlined"
                       Margin="Margin.Dense" Immediate="true" Style="min-width:260px" Class="flex-grow-1 mt-0"
                       OnKeyUp="@(e => e.Key == "Enter" ? Request() : Task.CompletedTask)" />
-        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Download"
-                   Disabled="@(_busy || string.IsNullOrWhiteSpace(_url))" OnClick="Request">Laden</MudButton>
+        <ActionButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Download"
+                   Disabled="@(_busy || string.IsNullOrWhiteSpace(_url))" OnClick="Request">Laden</ActionButton>
     </div>
 </MudPaper>
 
@@ -66,11 +66,11 @@
                 <MudChip T="string" Size="Size.Small" Color="@StateColor(r.State)" Variant="Variant.Outlined" Style="flex-shrink:0">@StateText(r.State)</MudChip>
                 @if (r.State == "Queued")
                 {
-                    <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small" aria-label="Abbrechen" OnClick="() => Cancel(r)" />
+                    <ActionIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small" aria-label="Abbrechen" OnClick="() => Cancel(r)" />
                 }
                 else if (r.IsFinished)
                 {
-                    <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" aria-label="Aus der Liste entfernen" OnClick="() => Remove(r)" />
+                    <ActionIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" aria-label="Aus der Liste entfernen" OnClick="() => Remove(r)" />
                 }
             </div>
         </MudPaper>

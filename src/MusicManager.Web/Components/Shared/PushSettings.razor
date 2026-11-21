@@ -29,15 +29,15 @@
             @if (_thisDevice)
             {
                 <MudChip T="string" Color="Color.Success" Icon="@Icons.Material.Filled.NotificationsActive">Auf diesem Gerät aktiv</MudChip>
-                <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.NotificationsOff" OnClick="Disable" Disabled="_busy">Hier deaktivieren</MudButton>
+                <ActionButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.NotificationsOff" OnClick="Disable" Disabled="_busy">Hier deaktivieren</ActionButton>
             }
             else
             {
-                <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.NotificationsActive" OnClick="Enable" Disabled="_busy">
+                <ActionButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.NotificationsActive" OnClick="Enable" Disabled="_busy">
                     Auf diesem Gerät aktivieren
-                </MudButton>
+                </ActionButton>
             }
-            <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Send" OnClick="SendTest" Disabled="_busy || _devices.Count == 0">Test senden</MudButton>
+            <ActionButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Send" OnClick="SendTest" Disabled="_busy || _devices.Count == 0">Test senden</ActionButton>
         </MudStack>
         break;
 }
@@ -53,7 +53,7 @@
                     <td>@(d.Device ?? "Unbekannt")@(d.Endpoint == _endpoint ? " · dieses Gerät" : "")</td>
                     <td>@d.CreatedAt.ToLocalTime().ToString("dd.MM.yyyy HH:mm")</td>
                     <td>@(d.LastSentAt?.ToLocalTime().ToString("dd.MM.yyyy HH:mm") ?? "–")</td>
-                    <td><MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" aria-label="Gerät entfernen" OnClick="() => Remove(d)" /></td>
+                    <td><ActionIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" aria-label="Gerät entfernen" OnClick="() => Remove(d)" /></td>
                 </tr>
             }
         </tbody>

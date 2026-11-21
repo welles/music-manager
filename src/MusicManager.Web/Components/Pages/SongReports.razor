@@ -112,15 +112,15 @@
                 <MudSpacer />
                 @if (r.ResolvedAt == null)
                 {
-                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small" StartIcon="@Icons.Material.Filled.Check"
-                               OnClick="() => SetResolved(r, true)">Erledigt</MudButton>
+                    <ActionButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small" StartIcon="@Icons.Material.Filled.Check"
+                               OnClick="() => SetResolved(r, true)">Erledigt</ActionButton>
                 }
                 else
                 {
-                    <MudButton Variant="Variant.Outlined" Size="Size.Small" StartIcon="@Icons.Material.Filled.Undo"
-                               OnClick="() => SetResolved(r, false)">Wieder öffnen</MudButton>
+                    <ActionButton Variant="Variant.Outlined" Size="Size.Small" StartIcon="@Icons.Material.Filled.Undo"
+                               OnClick="() => SetResolved(r, false)">Wieder öffnen</ActionButton>
                 }
-                <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" aria-label="Meldung löschen" OnClick="() => Delete(r)" />
+                <ActionIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" aria-label="Meldung löschen" OnClick="() => Delete(r)" />
             </div>
         </MudPaper>
     };

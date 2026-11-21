@@ -13,7 +13,7 @@
 
 <PageHeader Title="Einstellungen">
     <Actions>
-        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Save" OnClick="Save" Disabled="_s == null">Speichern</MudButton>
+        <ActionButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Save" OnClick="Save" Disabled="_s == null">Speichern</ActionButton>
     </Actions>
 </PageHeader>
 
@@ -80,9 +80,9 @@
             <MudItem xs="6" md="2"><MudNumericField @bind-Value="_s.AacBitrateKbps" Label="AAC-Bitrate (kbps)" Variant="Variant.Outlined" Min="64" Max="512" /></MudItem>
             <MudItem xs="12">
                 <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Spacing="3">
-                    <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Image" OnClick="LoadAlbumCovers" Disabled="_covers.Running">
+                    <ActionButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Image" OnClick="LoadAlbumCovers" Disabled="_covers.Running">
                         Fehlende Album-Cover nachladen
-                    </MudButton>
+                    </ActionButton>
                     @if (_covers.Running)
                     {
                         <MudProgressLinear Value="_covers.Progress" Max="Math.Max(_covers.Total, 1)" Color="Color.Primary" Style="max-width:240px" />
@@ -104,9 +104,9 @@
             </MudItem>
             <MudItem xs="12">
                 <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Spacing="3">
-                    <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Crop" OnClick="CutImagesToSquares" Disabled="_square.Running">
+                    <ActionButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Crop" OnClick="CutImagesToSquares" Disabled="_square.Running">
                         Bilder zuschneiden und Vorschaubilder erzeugen
-                    </MudButton>
+                    </ActionButton>
                     @if (_square.Running && _square.ThumbnailTotal > 0)
                     {
                         <MudProgressLinear Value="_square.ThumbnailProgress" Max="Math.Max(_square.ThumbnailTotal, 1)" Color="Color.Primary" Style="max-width:240px" />
@@ -134,9 +134,9 @@
             <MudItem xs="12">
                 <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Spacing="3">
                     <MudSwitch @bind-Value="_s.WriteReplayGain" Color="Color.Primary" Label="Lautstärke neuer Lieder messen (ReplayGain-Tags)" />
-                    <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.GraphicEq" OnClick="MeasureLibrary" Disabled="_gain.Running || _gainMissing == 0">
+                    <ActionButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.GraphicEq" OnClick="MeasureLibrary" Disabled="_gain.Running || _gainMissing == 0">
                         Lautstärke der Bibliothek messen (@_gainMissing)
-                    </MudButton>
+                    </ActionButton>
                     @if (_gain.Running)
                     {
                         <MudProgressLinear Value="_gain.Progress" Max="Math.Max(_gain.Total, 1)" Color="Color.Primary" Style="max-width:240px" />
