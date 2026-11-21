@@ -164,7 +164,7 @@ else
             $"Alle {_contents.Files.ToString("N0", German)} Dateien ({FormatSize(_contents.Size)}) im Papierkorb endgültig löschen? Das lässt sich nicht rückgängig machen.",
             yesText: "Endgültig löschen", cancelText: "Abbrechen");
         if (ok != true) return;
-        Report(await TrashService.EmptyAsync());
+        await RunAsync(TrashService.EmptyAsync());
         _expanded.Clear();
         await ReloadAsync();
     }
@@ -176,9 +176,22 @@ else
             $"„{Title(f)}“ mit {f.Files.ToString("N0", German)} Dateien ({FormatSize(f.Size)}) endgültig löschen? Das lässt sich nicht rückgängig machen.",
             yesText: "Endgültig löschen", cancelText: "Abbrechen");
         if (ok != true) return;
-        Report(await TrashService.DeleteFolderAsync(f.Name));
+        await RunAsync(TrashService.DeleteFolderAsync(f.Name));
         _expanded.Remove(f.Name);
         await ReloadAsync();
+    }
+
+    /// <summary>Reports the outcome of a deletion; an unexpected error goes to the snackbar instead of ending the circuit.</summary>
+    private async Task RunAsync(Task<TrashDeleteResult> deletion)
+    {
+        try
+        {
+            Report(await deletion);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Löschen fehlgeschlagen: {ex.Message}", Severity.Error);
+        }
     }
 
     private void Report(TrashDeleteResult r)

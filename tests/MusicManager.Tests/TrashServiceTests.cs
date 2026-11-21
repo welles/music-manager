@@ -119,6 +119,19 @@ public sealed class TrashServiceTests : IDisposable
     }
 
     [Fact]
+    public void EntryThatVanishedBeforeDeletingIsSkipped()
+    {
+        var dir = new DirectoryInfo(Path.GetDirectoryName(Write("2026-11-13/album/01.flac", 300))!);
+        var file = new FileInfo(Write("2026-11-13/loose.flac", 10));
+        Directory.Delete(Path.Combine(_trash, "2026-11-13"), true);
+
+        Assert.Equal(0, TrashService.Measure(dir).Size);
+        Assert.Equal(0, TrashService.Measure(file).Size);
+        TrashService.DeleteEntry(dir);
+        TrashService.DeleteEntry(file);
+    }
+
+    [Fact]
     public async Task MissingTrashFolderIsEmpty()
     {
         Directory.Delete(_trash, true);

@@ -62,7 +62,23 @@ public sealed class TrashService(Storage storage, ILogger<TrashService> logger)
         return new TrashContents(ordered, ordered.Sum(f => f.Size), ordered.Sum(f => f.Files));
     }
 
-    private static TrashEntry Measure(FileSystemInfo info)
+    /// <summary>
+    /// Size and file count of an entry. One that vanishes while it is measured (the daily cleanup, a second tab
+    /// emptying the trash) counts as empty instead of stopping the listing or the deletion.
+    /// </summary>
+    internal static TrashEntry Measure(FileSystemInfo info)
+    {
+        try
+        {
+            return MeasureUnsafe(info);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return new TrashEntry(info.Name, info is DirectoryInfo, 0, 0, default);
+        }
+    }
+
+    private static TrashEntry MeasureUnsafe(FileSystemInfo info)
     {
         if (info is FileInfo file) return new TrashEntry(file.Name, false, IsLink(file) ? 0 : file.Length, 1, file.LastWriteTime);
         var dir = (DirectoryInfo)info;
@@ -114,13 +130,23 @@ public sealed class TrashService(Storage storage, ILogger<TrashService> logger)
         foreach (var top in new DirectoryInfo(root).EnumerateFileSystemInfos().Where(select).ToList())
         {
             // A day folder goes entry by entry, so a file moved into the trash at the same time only waits for one entry.
-            var items = top is DirectoryInfo dir && !IsLink(dir) ? dir.EnumerateFileSystemInfos().ToList() : [top];
+            List<FileSystemInfo> items;
+            try
+            {
+                items = top is DirectoryInfo dir && !IsLink(dir) ? dir.EnumerateFileSystemInfos().ToList() : [top];
+            }
+            catch (DirectoryNotFoundException)
+            {
+                // Deleted in the meantime (e.g. by the daily cleanup).
+                continue;
+            }
+
             foreach (var item in items)
             {
                 ct.ThrowIfCancellationRequested();
-                var measured = Measure(item);
                 try
                 {
+                    var measured = Measure(item);
                     lock (storage.TrashLock) DeleteEntry(item);
                     size += measured.Size;
                     files += measured.Files;
@@ -150,7 +176,7 @@ public sealed class TrashService(Storage storage, ILogger<TrashService> logger)
     }
 
     /// <summary>Deletes a file, a symlink (not its target) or a directory tree.</summary>
-    private static void DeleteEntry(FileSystemInfo item)
+    internal static void DeleteEntry(FileSystemInfo item)
     {
         item.Refresh();
         if (!item.Exists && item.LinkTarget == null) return;
