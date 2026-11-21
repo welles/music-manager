@@ -46,7 +46,16 @@ public sealed class TrashService(Storage storage, ILogger<TrashService> logger)
             ct.ThrowIfCancellationRequested();
             if (info is DirectoryInfo dir && !IsLink(dir))
             {
-                var entries = dir.EnumerateFileSystemInfos().Select(Measure).OrderByDescending(e => e.Size).ThenBy(e => e.Name).ToList();
+                List<TrashEntry> entries;
+                try
+                {
+                    entries = dir.EnumerateFileSystemInfos().Select(Measure).OrderByDescending(e => e.Size).ThenBy(e => e.Name).ToList();
+                }
+                catch (DirectoryNotFoundException)
+                {
+                    // Deleted in the meantime (e.g. by the daily cleanup).
+                    continue;
+                }
                 folders.Add(new TrashFolder(dir.Name, ParseDay(dir.Name), entries.Sum(e => e.Size), entries.Sum(e => e.Files), entries));
             }
             else
