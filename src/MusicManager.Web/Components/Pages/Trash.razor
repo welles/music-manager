@@ -29,7 +29,11 @@
     }
 </MudText>
 
-@if (_contents == null)
+@if (_contents == null && _error != null)
+{
+    <MudAlert Severity="Severity.Error" Variant="Variant.Outlined">Der Papierkorb konnte nicht gelesen werden: @_error</MudAlert>
+}
+else if (_contents == null)
 {
     <MudProgressLinear Indeterminate="true" />
     <MudText Typo="Typo.caption" Class="mud-text-secondary">Größen werden berechnet …</MudText>
@@ -121,6 +125,7 @@ else
     private TrashContents? _contents;
     private readonly HashSet<string> _expanded = new(StringComparer.Ordinal);
     private bool _loading;
+    private string? _error;
     private int _retention;
 
     // Not in OnInitializedAsync: the scan walks the whole trash and would run twice with prerendering.
@@ -138,11 +143,13 @@ else
         {
             _retention = (await SettingsService.GetAsync()).TrashRetentionDays;
             _contents = await TrashService.ListAsync();
+            _error = null;
         }
         catch (Exception ex)
         {
+            // Keeps the last listing if there is one; without one the page shows the error, not an empty trash.
             Snackbar.Add($"Papierkorb konnte nicht gelesen werden: {ex.Message}", Severity.Error);
-            _contents ??= new TrashContents([], 0, 0);
+            _error = ex.Message;
         }
         finally
         {
