@@ -40,11 +40,11 @@
     {
         <MudText Typo="Typo.body2" Style="opacity:.75">Verbunden als @(_account.DisplayName ?? _account.UserId)</MudText>
         <MudButtonGroup Variant="Variant.Outlined" Size="Size.Small">
-            <MudButton StartIcon="@Icons.Material.Filled.Add" OnClick="ToggleAdd">Hinzufügen</MudButton>
-            <MudButton StartIcon="@Icons.Material.Filled.Sync" Disabled="Sync.State.Running" OnClick="SyncNow">
+            <ActionButton StartIcon="@Icons.Material.Filled.Add" OnClick="ToggleAdd">Hinzufügen</ActionButton>
+            <ActionButton StartIcon="@Icons.Material.Filled.Sync" Disabled="Sync.State.Running" OnClick="SyncNow">
                 @(Sync.State.Running ? $"Gleiche ab … {Sync.State.Current}" : "Jetzt abgleichen")
-            </MudButton>
-            <MudButton StartIcon="@Icons.Material.Filled.LinkOff" OnClick="Disconnect">Trennen</MudButton>
+            </ActionButton>
+            <ActionButton StartIcon="@Icons.Material.Filled.LinkOff" OnClick="Disconnect">Trennen</ActionButton>
         </MudButtonGroup>
     }
 </div>
@@ -143,7 +143,7 @@ else if (_account == null)
                         }
                         else
                         {
-                            <MudButton Size="Size.Small" Variant="Variant.Outlined" Disabled="!readable || _busy" OnClick="() => Add(p)">Hinzufügen</MudButton>
+                            <ActionButton Size="Size.Small" Variant="Variant.Outlined" Disabled="!readable || _busy" OnClick="() => Add(p)">Hinzufügen</ActionButton>
                         }
                     </div>
                 }

@@ -79,19 +79,19 @@
             {
                 var count = PerfectCount(source);
                 <MudTooltip Text="@($"Alle Dateien ohne jeden MusicBrainz-Fund, die bei {MatchingPipeline.SourceName(source)} einen Treffer mit 100 % Übereinstimmung haben, mit dessen Tags einsortieren")">
-                    <MudButton Variant="Variant.Outlined" Size="Size.Small" Color="Color.Primary" StartIcon="@Icons.Material.Filled.DoneAll"
+                    <ActionButton Variant="Variant.Outlined" Size="Size.Small" Color="Color.Primary" StartIcon="@Icons.Material.Filled.DoneAll"
                                Disabled="_busy || count == 0" OnClick="() => ApplyPerfect(source)" Style="white-space:nowrap">
                         @MatchingPipeline.SourceName(source) 100 % (@count)
-                    </MudButton>
+                    </ActionButton>
                 </MudTooltip>
             }
             <MudSpacer />
             <MudButtonGroup Variant="Variant.Outlined" Size="Size.Small">
                 <MudButton StartIcon="@Icons.Material.Filled.Search" Disabled="_selected.Count == 0" OnClick="SearchRelease">Release zuweisen</MudButton>
-                <MudButton StartIcon="@Icons.Material.Filled.TravelExplore" Disabled="!_selected.Any(f => f.ExternalMatches.Count > 0)" OnClick="ApplyExternal">Vorschlag übernehmen</MudButton>
+                <ActionButton StartIcon="@Icons.Material.Filled.TravelExplore" Disabled="!_selected.Any(f => f.ExternalMatches.Count > 0)" OnClick="ApplyExternal">Vorschlag übernehmen</ActionButton>
                 <MudButton StartIcon="@Icons.Material.Filled.Edit" Disabled="_selected.Count == 0" OnClick="ManualTag">Manuell taggen</MudButton>
-                <MudButton StartIcon="@Icons.Material.Filled.Replay" Disabled="_selected.Count == 0" OnClick="Retry">Erneut verarbeiten</MudButton>
-                <MudButton StartIcon="@Icons.Material.Filled.Delete" Color="Color.Error" Disabled="_selected.Count == 0" OnClick="Discard">Verwerfen</MudButton>
+                <ActionButton StartIcon="@Icons.Material.Filled.Replay" Disabled="_selected.Count == 0" OnClick="Retry">Erneut verarbeiten</ActionButton>
+                <ActionButton StartIcon="@Icons.Material.Filled.Delete" Color="Color.Error" Disabled="_selected.Count == 0" OnClick="Discard">Verwerfen</ActionButton>
             </MudButtonGroup>
         </MudStack>
     </text>;

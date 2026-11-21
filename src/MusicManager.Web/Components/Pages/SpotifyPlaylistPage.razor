@@ -54,10 +54,10 @@
                            Href="@(_playlist.SpotifyId == MusicManager.Core.Services.SpotifyUserClient.LikedSongsId
                                        ? "https://open.spotify.com/collection/tracks"
                                        : $"https://open.spotify.com/playlist/{_playlist.SpotifyId}")" Target="_blank">In Spotify öffnen</MudButton>
-                <MudButton Variant="Variant.Outlined" Size="Size.Small" StartIcon="@Icons.Material.Filled.Sync" Disabled="Sync.State.Running"
-                           OnClick="() => Sync.Request()">Jetzt abgleichen</MudButton>
-                <MudButton Variant="Variant.Outlined" Size="Size.Small" Color="Color.Error" StartIcon="@Icons.Material.Filled.Delete"
-                           OnClick="Remove">Entfernen</MudButton>
+                <ActionButton Variant="Variant.Outlined" Size="Size.Small" StartIcon="@Icons.Material.Filled.Sync" Disabled="Sync.State.Running"
+                           OnClick="() => Sync.Request()">Jetzt abgleichen</ActionButton>
+                <ActionButton Variant="Variant.Outlined" Size="Size.Small" Color="Color.Error" StartIcon="@Icons.Material.Filled.Delete"
+                           OnClick="Remove">Entfernen</ActionButton>
             </div>
         </div>
     </div>
@@ -87,7 +87,7 @@
                     @if (MusicFab.IsConfigured && row.SpotifyTrackId is { } spotifyId)
                     {
                         <MudTooltip Text="Mit MusicFab laden">
-                            <MudIconButton Icon="@Icons.Material.Filled.Download" Size="Size.Small" aria-label="Mit MusicFab laden"
+                            <ActionIconButton Icon="@Icons.Material.Filled.Download" Size="Size.Small" aria-label="Mit MusicFab laden"
                                            Disabled="_requested.Contains(spotifyId)" OnClick="() => RequestFromMusicFab(spotifyId)" />
                         </MudTooltip>
                     }

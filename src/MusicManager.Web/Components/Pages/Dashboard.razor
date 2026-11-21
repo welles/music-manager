@@ -12,10 +12,10 @@
 <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-4">
     <MudText Typo="Typo.h5">Übersicht</MudText>
     <MudSpacer />
-    <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Refresh" OnClick="() => Scan(false)">Eingang scannen</MudButton>
-    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.PlayArrow" OnClick="() => Scan(true)">
+    <ActionButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Refresh" OnClick="() => Scan(false)">Eingang scannen</ActionButton>
+    <ActionButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.PlayArrow" OnClick="() => Scan(true)">
         Sofort verarbeiten
-    </MudButton>
+    </ActionButton>
 </MudStack>
 
 @foreach (var warning in _warnings)

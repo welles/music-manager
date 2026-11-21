@@ -18,7 +18,7 @@
         <MudDataGrid T="ArtistRule" Items="_artistRules" ReadOnly="false" EditMode="DataGridEditMode.Cell" Dense="true"
                      CommittedItemChanges="SaveArtistRule" Bordered="true">
             <ToolBarContent>
-                <MudButton StartIcon="@Icons.Material.Filled.Add" Variant="Variant.Outlined" OnClick="AddArtistRule">Neue Regel</MudButton>
+                <ActionButton StartIcon="@Icons.Material.Filled.Add" Variant="Variant.Outlined" OnClick="AddArtistRule">Neue Regel</ActionButton>
             </ToolBarContent>
             <Columns>
                 <PropertyColumn Property="x => x.Kind" Title="Art">
@@ -37,7 +37,7 @@
                 <PropertyColumn Property="x => x.Comment" Title="Kommentar" />
                 <TemplateColumn Editable="false" Style="width:60px">
                     <CellTemplate>
-                        <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" OnClick="() => DeleteArtistRule(context.Item)" />
+                        <ActionIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" OnClick="() => DeleteArtistRule(context.Item)" />
                     </CellTemplate>
                 </TemplateColumn>
             </Columns>
@@ -57,7 +57,7 @@
         </MudChipSet>
         <MudStack Row="true" AlignItems="AlignItems.Center" Class="mt-2">
             <MudTextField @bind-Value="_newSplitter" Label="Neues Trennzeichen (z. B. „ x “)" Variant="Variant.Outlined" Margin="Margin.Dense" />
-            <MudButton Variant="Variant.Outlined" OnClick="AddSplitter">Hinzufügen</MudButton>
+            <ActionButton Variant="Variant.Outlined" OnClick="AddSplitter">Hinzufügen</ActionButton>
         </MudStack>
     </MudTabPanel>
 
@@ -69,7 +69,7 @@
         <MudDataGrid T="SourceProfile" Items="_profiles" ReadOnly="false" EditMode="DataGridEditMode.Cell" Dense="true"
                      CommittedItemChanges="SaveProfile" Bordered="true">
             <ToolBarContent>
-                <MudButton StartIcon="@Icons.Material.Filled.Add" Variant="Variant.Outlined" OnClick="AddProfile">Neue Quelle</MudButton>
+                <ActionButton StartIcon="@Icons.Material.Filled.Add" Variant="Variant.Outlined" OnClick="AddProfile">Neue Quelle</ActionButton>
             </ToolBarContent>
             <Columns>
                 <PropertyColumn Property="x => x.Name" Title="Name" />
@@ -87,7 +87,7 @@
                 </TemplateColumn>
                 <TemplateColumn Editable="false" Style="width:60px">
                     <CellTemplate>
-                        <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" OnClick="() => DeleteProfile(context.Item)" />
+                        <ActionIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" OnClick="() => DeleteProfile(context.Item)" />
                     </CellTemplate>
                 </TemplateColumn>
             </Columns>

@@ -48,10 +48,10 @@
         }
         <MudSpacer />
         <MudSwitch @bind-Value="_movePaths" Color="Color.Primary" Label="Dateien bei geändertem Pfad verschieben" />
-        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Save" OnClick="Apply"
+        <ActionButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Save" OnClick="Apply"
                    Disabled="@(SelectedChanged.Count == 0)">
             Übernehmen (@SelectedChanged.Count)
-        </MudButton>
+        </ActionButton>
     </MudStack>
 
     @if (changed.Any(p => p.PathChanged))

@@ -9,9 +9,9 @@
 @* Library check: groups of library files that are the same recording. *@
 
 <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-3" Wrap="Wrap.Wrap">
-    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.ManageSearch" OnClick="Scan" Disabled="State.Running">
+    <ActionButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.ManageSearch" OnClick="Scan" Disabled="State.Running">
         Bibliothek auf Duplikate prüfen
-    </MudButton>
+    </ActionButton>
     @if (State.Running)
     {
         <MudProgressLinear Value="@(State.Total == 0 ? 0 : 100.0 * State.Progress / State.Total)" Color="Color.Primary" Style="max-width:300px" />
@@ -50,7 +50,7 @@
                             <MudToggleIconButton Toggled="selected.B == e.Id" ToggledChanged="@(_ => SetSelection(group, selected.A, e.Id))"
                                                  Icon="@Icons.Material.Outlined.LooksTwo" ToggledIcon="@Icons.Material.Filled.LooksTwo" Size="Size.Small" title="Als B anhören" />
                         </td>
-                        <td><MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="() => Keep(group, e)">Diese behalten</MudButton></td>
+                        <td><ActionButton Size="Size.Small" Variant="Variant.Outlined" OnClick="() => Keep(group, e)">Diese behalten</ActionButton></td>
                     </tr>
                 }
             </tbody>
@@ -68,7 +68,7 @@
             <MudButton Size="Size.Small" StartIcon="@Icons.Material.Filled.Headphones" OnClick="() => _open = _open == group.Key ? null : group.Key">
                 @(_open == group.Key ? "Player schließen" : "Anhören")
             </MudButton>
-            <MudButton Size="Size.Small" StartIcon="@Icons.Material.Filled.DoNotDisturb" OnClick="() => Dismiss(group)">Kein Duplikat</MudButton>
+            <ActionButton Size="Size.Small" StartIcon="@Icons.Material.Filled.DoNotDisturb" OnClick="() => Dismiss(group)">Kein Duplikat</ActionButton>
         </MudStack>
     </MudPaper>
 }

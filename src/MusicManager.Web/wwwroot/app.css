@@ -842,3 +842,10 @@
         display: none;
     }
 }
+
+/* ActionButton/ActionIconButton: clicked, the server hasn't answered yet (js/action.js). Once it has, the
+   button is disabled and shows a spinner until the action is done. */
+.mm-action.mm-pending {
+    pointer-events: none;
+    opacity: 0.6;
+}
