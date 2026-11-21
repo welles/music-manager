@@ -18,13 +18,22 @@ public sealed class Storage(IOptions<MusicManagerOptions> options)
 
     public string RelativeToInbox(string absolute) => Path.GetRelativePath(InboxRoot, absolute);
 
+    /// <summary>
+    /// Held while a file is moved into the trash and while <see cref="TrashService"/> deletes an entry, so emptying
+    /// the trash can't remove a folder between its creation and the move.
+    /// </summary>
+    internal Lock TrashLock { get; } = new();
+
     /// <summary>Moves a file into the trash (dated folder, original relative path) instead of deleting it.</summary>
     public string MoveToTrash(string absolutePath, string relativeName)
     {
         var target = SafeCombine(TrashRoot, Path.Combine(DateTime.Now.ToString("yyyy-MM-dd"), relativeName));
-        target = UniquePath(target);
-        Directory.CreateDirectory(Path.GetDirectoryName(target)!);
-        File.Move(absolutePath, target);
+        lock (TrashLock)
+        {
+            target = UniquePath(target);
+            Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+            File.Move(absolutePath, target);
+        }
         return target;
     }
 
