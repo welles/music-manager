@@ -36,6 +36,7 @@ else
         FileStatus.Done => "Einsortiert",
         FileStatus.Error => "Fehler",
         FileStatus.Discarded => "Verworfen",
+        FileStatus.DuplicateDiscarded => "Duplikat verworfen",
         _ => s.ToString(),
     };
 
@@ -59,6 +60,7 @@ else
         FileStatus.Duplicate => Icons.Material.Filled.ContentCopy,
         FileStatus.Processing or FileStatus.Approved => Icons.Material.Filled.Autorenew,
         FileStatus.Analyzed => Icons.Material.Filled.HourglassTop,
+        FileStatus.DuplicateDiscarded => Icons.Material.Filled.AutoDelete,
         FileStatus.Discarded => Icons.Material.Filled.Delete,
         _ => Icons.Material.Filled.Schedule,
     };

@@ -66,13 +66,19 @@ public sealed class SameAudioChecker(
             if (fresh is not { Values.Length: > 0 } || existing is not { Values.Length: > 0 })
             {
                 m.SameAudio = null;
+                m.AudioSimilarity = null;
+                m.AudioWeakest = null;
+                m.AudioLengthGap = null;
                 m.AudioCheck = fresh is not { Values.Length: > 0 } ? "Audio-Vergleich nicht möglich: neue Datei nicht lesbar"
                     : "Audio-Vergleich nicht möglich: vorhandene Datei nicht lesbar";
                 continue;
             }
 
-            (m.SameAudio, m.AudioCheck) = Judge(FingerprintMatcher.Compare(fresh.Value.Values, existing.Value.Values),
-                fresh.Value.Duration, existing.Value.Duration);
+            var comparison = FingerprintMatcher.Compare(fresh.Value.Values, existing.Value.Values);
+            (m.SameAudio, m.AudioCheck) = Judge(comparison, fresh.Value.Duration, existing.Value.Duration);
+            m.AudioSimilarity = comparison.Overall;
+            m.AudioWeakest = comparison.Weakest;
+            m.AudioLengthGap = Math.Abs(fresh.Value.Duration - existing.Value.Duration);
         }
 
         // A new list, so the JSON column is seen as changed.
@@ -148,8 +154,71 @@ public sealed class SameAudioChecker(
         logger.LogInformation("Audio comparison of open duplicates finished");
     }
 
-    private static bool NeedsCheck(TrackFile f) =>
-        f.Duplicates.Any(d => d.Kind == DuplicateKind.Duplicate && d.AudioCheck == null);
+    /// <summary>Not compared yet, or compared before the numbers were kept (only the verdict and its text).</summary>
+    public static bool NeedsCheck(TrackFile f) =>
+        f.Duplicates.Any(d => d.Kind == DuplicateKind.Duplicate && (d.AudioCheck == null || d.SameAudio != null && (d.AudioSimilarity == null || d.AudioWeakest == null || d.AudioLengthGap == null)));
+
+    /// <summary>Default of the "discard duplicates from … %" button.</summary>
+    public const int DefaultDiscardPercent = 98;
+
+    /// <summary>Similarity in whole percent, rounded like it is shown (0.996 → 100).</summary>
+    public static int Percent(double similarity) => (int)Math.Round(similarity * 100, MidpointRounding.AwayFromZero);
+
+    /// <summary>
+    /// The library file most similar to the new file by the whole-track audio comparison, among the matches that only
+    /// differ evenly: no 10-second section below <see cref="SectionThreshold"/> (a commentary, a DJ tag, a bleeped word stays
+    /// for review however high the average) and the same length (± <see cref="DurationTolerance"/>, measured like the
+    /// verdict: a cut or longer edit is another version).
+    /// </summary>
+    public static DuplicateMatch? MostSimilar(TrackFile f) =>
+        f.Duplicates
+            .Where(d => d is { Kind: DuplicateKind.Duplicate, AudioSimilarity: not null, AudioWeakest: >= SectionThreshold, AudioLengthGap: <= DurationTolerance })
+            .MaxBy(d => d.AudioSimilarity);
+
+    /// <summary>A library file is at least <paramref name="percent"/> % the same audio as the new file, evenly and as long (see <see cref="MostSimilar"/>).</summary>
+    public static bool IsAtLeast(TrackFile f, int percent) => MostSimilar(f) is { AudioSimilarity: { } s } && Percent(s) >= percent;
+
+    /// <summary>
+    /// New file that is discarded without asking: 100 % the same audio as a library file, judged the same audio as well (no
+    /// section that sounds different, same length), from the same release, and not of better quality – a lossless or
+    /// clearly higher-bitrate copy waits in the duplicate view, where "keep new" can replace the library file with it.
+    /// </summary>
+    public static DuplicateMatch? IdenticalMatch(TrackFile f) =>
+        f.Duplicates.Where(d => d is { Kind: DuplicateKind.Duplicate, SameAudio: true, AudioSimilarity: { } s } && Percent(s) >= 100
+                                && IsSameRelease(f, d) && !IsBetterQuality(f, d))
+            .MaxBy(d => d.AudioSimilarity);
+
+    /// <summary>
+    /// The library file is the same track of the same release: same target path, or the same MusicBrainz release – the album
+    /// name only counts where a release ID is missing. The same
+    /// recording on another release (the single of an album track, a compilation) waits in the duplicate view, so an
+    /// album is not left with a gap without asking.
+    /// </summary>
+    public static bool IsSameRelease(TrackFile f, DuplicateMatch d)
+    {
+        static bool Same(string? a, string? b) =>
+            !string.IsNullOrWhiteSpace(a) && !string.IsNullOrWhiteSpace(b) && string.Equals(a.Trim(), b.Trim(), StringComparison.OrdinalIgnoreCase);
+
+        if (Same(f.TargetPath, d.RelativePath)) return true;
+        // Both release IDs known: they decide (a deluxe edition has the same album name as the standard one).
+        if (!string.IsNullOrWhiteSpace(f.FinalTags?.MbReleaseId) && !string.IsNullOrWhiteSpace(d.MbReleaseId))
+            return Same(f.FinalTags.MbReleaseId, d.MbReleaseId);
+        return Same(f.FinalTags?.Album, d.Album);
+    }
+
+    private static readonly HashSet<string> LosslessCodecs = new(StringComparer.OrdinalIgnoreCase)
+        { "flac", "alac", "wav", "aiff", "ape", "wavpack", "tta", "truehd", "mlp" };
+
+    private static bool IsLossless(string? codec) =>
+        codec != null && (LosslessCodecs.Contains(codec) || codec.StartsWith("pcm", StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>The new file is lossless while the library file is not, or both are lossy and the new one has a clearly higher bitrate.</summary>
+    public static bool IsBetterQuality(TrackFile f, DuplicateMatch d)
+    {
+        if (IsLossless(f.Codec)) return !IsLossless(d.Codec);
+        if (IsLossless(d.Codec)) return false;
+        return f.BitrateKbps is { } a && d.BitrateKbps is { } b && a > b * 1.1;
+    }
 
     /// <summary>All duplicate matches of a file are the same audio: the new file can go without a listen.</summary>
     public static bool IsSafeToDiscard(TrackFile f) =>

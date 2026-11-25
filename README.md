@@ -45,6 +45,12 @@ streams straight from Music Manager.
    discarded in one go. A version with a voice or other sound laid over the music
    (a commentary track) stays for review. Open duplicates from before this check
    are compared once after the start.
+   A new file that is 100 % the same audio as a library file is discarded
+   automatically (status "Duplikat verworfen", the library file stays) if it is the
+   same release (MusicBrainz release, album or target path) and not of better
+   quality (lossless, or a clearly higher bitrate). Open
+   duplicates from a chosen similarity on (default 98 %; same length and no
+   section that sounds different) can be discarded in one go as well.
 
 ## Running with Docker
 
