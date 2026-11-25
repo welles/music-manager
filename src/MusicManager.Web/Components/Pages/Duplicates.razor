@@ -35,6 +35,18 @@
                         <MudProgressLinear Value="@(SameAudio.State.Total == 0 ? 0 : 100.0 * SameAudio.State.Done / SameAudio.State.Total)" Class="mb-3" />
                     }
 
+                    @* Discard every new file that is at least this similar to a library file; the library files stay. *@
+                    <div class="d-flex flex-wrap align-center mb-3" style="gap:8px">
+                        <MudNumericField T="int" @bind-Value="_percent" Label="Ähnlichkeit ab (%)" Variant="Variant.Outlined" Margin="Margin.Dense"
+                                         Min="50" Max="100" Style="max-width:150px" />
+                        <MudTooltip Text="Neue Dateien, deren Audio über die ganze Länge mindestens so ähnlich wie eine gleich lange Datei in der Bibliothek ist, kommen in den Papierkorb. Die vorhandenen bleiben. Klingt ein Abschnitt anders (z. B. Kommentar), bleibt die Datei zur Prüfung.">
+                            <ActionButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Small" StartIcon="@Icons.Material.Filled.DeleteSweep"
+                                          OnClick="DiscardSimilar" Disabled="@(_busy || SimilarFiles.Count == 0)">
+                                @SimilarFiles.Count Duplikate ab @_percent % verwerfen
+                            </ActionButton>
+                        </MudTooltip>
+                    </div>
+
                     <div class="d-flex flex-wrap align-center mb-3" style="gap:8px">
                         <MudChipSet T="Show" SelectedValue="_show" SelectedValueChanged="SetShow" SelectionMode="SelectionMode.SingleSelection" CheckMark="true"
                                     Size="Size.Small">
@@ -62,6 +74,10 @@
                                 <MudListItem T="int" Value="f.Id">
                                     <div class="d-flex align-center" style="gap:4px">
                                         <div style="min-width:0;flex:1"><TrackSummary File="f" /></div>
+                                        @if (SameAudioChecker.MostSimilar(f)?.AudioSimilarity is { } similarity)
+                                        {
+                                            <MudText Typo="Typo.caption" Style="opacity:.7;white-space:nowrap">@SameAudioChecker.Percent(similarity) %</MudText>
+                                        }
                                         @if (SameAudioChecker.IsSafeToDiscard(f))
                                         {
                                             <MudTooltip Text="Gleiche Aufnahme wie in der Bibliothek">
@@ -241,6 +257,38 @@
             if (_player != null) await _player.StopAsync();
             var count = await Review.DiscardSameAudioAsync(ids);
             Snackbar.Add($"{count} neue Dateien verworfen, die vorhandenen Versionen bleiben.", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Fehler: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private int _percent = SameAudioChecker.DefaultDiscardPercent;
+
+    private List<TrackFile> SimilarFiles => _files.Where(f => SameAudioChecker.IsAtLeast(f, _percent)).ToList();
+
+    private async Task DiscardSimilar()
+    {
+        var percent = _percent;
+        var ids = SimilarFiles.Select(f => f.Id).ToList();
+        var count = ids.Count;
+        var ok = await Dialogs.ShowMessageBoxAsync("Duplikate verwerfen",
+            $"Bei {count} neuen Dateien ist das Audio zu mindestens {percent} % dasselbe wie bei einer gleich langen Datei in der " +
+            "Bibliothek, ohne Abschnitt, der anders klingt. Die neuen Dateien kommen in den Papierkorb, die vorhandenen bleiben, wie sie sind.",
+            yesText: "Verwerfen", cancelText: "Abbrechen");
+        if (ok != true) return;
+
+        _busy = true;
+        try
+        {
+            if (_player != null) await _player.StopAsync();
+            var discarded = await Review.DiscardSimilarAsync(ids, percent);
+            Snackbar.Add($"{discarded} neue Dateien verworfen, die vorhandenen Versionen bleiben.", Severity.Success);
         }
         catch (Exception ex)
         {

@@ -36,6 +36,11 @@ public enum FileStatus
 
     /// <summary>Moved to the trash without filing it.</summary>
     Discarded,
+
+    /// <summary>
+    /// Discarded automatically: the whole-track audio comparison found it 100 % the same as a library file, which is kept.
+    /// </summary>
+    DuplicateDiscarded,
 }
 
 public enum DecisionSource
@@ -390,6 +395,17 @@ public sealed class DuplicateMatch
     /// audio, just encoded differently; false = it sounds different somewhere; null = not compared (yet).
     /// </summary>
     public bool? SameAudio { get; set; }
+
+    /// <summary>
+    /// Similarity of the whole-track audio comparison (0–1, at the best alignment); null = not compared (yet) or not possible.
+    /// </summary>
+    public double? AudioSimilarity { get; set; }
+
+    /// <summary>Similarity of the weakest 10-second section in the same comparison; null like <see cref="AudioSimilarity"/>.</summary>
+    public double? AudioWeakest { get; set; }
+
+    /// <summary>Length difference in seconds as the same comparison measured it (fpcalc); null like <see cref="AudioSimilarity"/>.</summary>
+    public double? AudioLengthGap { get; set; }
 
     /// <summary>What the audio comparison found, in words; set when it ran (also when it could not compare).</summary>
     public string? AudioCheck { get; set; }

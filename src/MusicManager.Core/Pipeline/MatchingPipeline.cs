@@ -725,6 +725,25 @@ public sealed partial class MatchingPipeline(
                         file.Duplicates = await sameAudio.CheckAsync(source, file.Duplicates, ct);
                         foreach (var m in file.Duplicates.Where(d => d.Kind == DuplicateKind.Duplicate))
                             AddEvent(file, $"Audio-Vergleich mit {m.RelativePath}: {m.AudioCheck}");
+
+                        // 100 % the same audio as a library file: nothing to decide, the library file stays.
+                        if (DiscardIfIdentical(file, source))
+                        {
+                            // The file is in the trash already: the state has to be saved, not cancelled, and a failing
+                            // clean-up of the inbox folder must not turn the discarded file into an error.
+                            await db.SaveChangesAsync(CancellationToken.None);
+                            try
+                            {
+                                await FinalizeGroupAsync(db, file.GroupId, ct);
+                            }
+                            catch (Exception ex) when (ex is not OperationCanceledException)
+                            {
+                                logger.LogWarning(ex, "Could not clean up the inbox folder of group {Group}", file.GroupId);
+                            }
+
+                            notifier.Notify();
+                            return;
+                        }
                     }
 
                     var reason = dup.Count > 0 ? $"{dup[0].Reason}: {dup[0].RelativePath}" : $"Zieldatei existiert bereits: {file.TargetPath}";
@@ -898,7 +917,7 @@ public sealed partial class MatchingPipeline(
     private async Task FinalizeGroupAsync(AppDbContext db, int groupId, CancellationToken ct)
     {
         var group = await db.Groups.Include(g => g.Files).FirstAsync(g => g.Id == groupId, ct);
-        if (group.Open || group.Files.Any(f => f.Status is not (FileStatus.Done or FileStatus.Discarded)))
+        if (group.Open || group.Files.Any(f => f.Status is not (FileStatus.Done or FileStatus.Discarded or FileStatus.DuplicateDiscarded)))
             return;
         if (group.RelativeFolder == "") return;
 
@@ -950,6 +969,22 @@ public sealed partial class MatchingPipeline(
     /// <summary>Value of the MUSICMANAGER_SOURCE tag: where the tags came from.</summary>
     public static string SourceFor(TrackFile file) =>
         file.ManuallyTagged ? file.ExternalSource ?? "manual" : file.Decision == DecisionSource.Ai ? "musicbrainz-ai" : "musicbrainz";
+
+    /// <summary>
+    /// A new file that is 100 % the same audio as a library file (<see cref="SameAudioChecker.IdenticalMatch"/>) goes to the
+    /// trash with the status <see cref="FileStatus.DuplicateDiscarded"/>; the library file stays. True if it was discarded.
+    /// </summary>
+    public bool DiscardIfIdentical(TrackFile file, string source)
+    {
+        if (SameAudioChecker.IdenticalMatch(file) is not { } identical) return false;
+        if (File.Exists(source))
+            file.TrashPath = storage.MoveToTrash(source, file.RelativePath);
+        file.DuplicateDecision = DuplicateDecision.KeepExisting;
+        SetStatus(file, FileStatus.DuplicateDiscarded, $"Duplikat – 100 % gleich wie {identical.RelativePath}");
+        AddEvent(file, $"Automatisch verworfen: 100 % gleiche Aufnahme wie {identical.RelativePath}, " +
+                       "vorhandene Version behalten, neue Datei in den Papierkorb");
+        return true;
+    }
 
     public static void SetStatus(TrackFile file, FileStatus status, string? reason)
     {

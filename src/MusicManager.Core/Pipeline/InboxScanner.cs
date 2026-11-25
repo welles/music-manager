@@ -76,7 +76,7 @@ public sealed class InboxScanner(
 
             await using var db = await dbFactory.CreateDbContextAsync(ct);
             var activePaths = (await db.Files
-                    .Where(f => f.Status != FileStatus.Done && f.Status != FileStatus.Discarded)
+                    .Where(f => f.Status != FileStatus.Done && f.Status != FileStatus.Discarded && f.Status != FileStatus.DuplicateDiscarded)
                     .Select(f => f.RelativePath).ToListAsync(ct))
                 .ToHashSet(StringComparer.Ordinal);
             var openGroups = await db.Groups.Where(g => g.Open).Include(g => g.Files).ToListAsync(ct);

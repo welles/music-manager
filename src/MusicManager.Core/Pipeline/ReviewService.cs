@@ -277,6 +277,8 @@ public sealed class ReviewService(
     {
         await using var db = await dbFactory.CreateDbContextAsync(ct);
         var file = await db.Files.FirstAsync(f => f.Id == fileId, ct);
+        // Decided elsewhere in the meantime (another tab, a bulk discard): a second decision would trash a file on its way.
+        if (file.Status != FileStatus.Duplicate) throw new AlreadyDecidedException();
         if (file.FinalTags == null) throw new InvalidOperationException("Keine Tags zum Schreiben vorhanden");
 
         switch (decision)
@@ -325,9 +327,43 @@ public sealed class ReviewService(
                 .Where(SameAudioChecker.IsSafeToDiscard).Select(f => f.Id).ToList();
         }
 
-        foreach (var id in safe)
-            await ResolveDuplicateAsync(id, DuplicateDecision.KeepExisting, ct: ct);
-        return safe.Count;
+        return await KeepExistingAsync(safe, ct);
+    }
+
+    /// <summary>
+    /// "Keep existing" for the given duplicates (the ones the user saw and confirmed) whose most similar library file is at
+    /// least <paramref name="percent"/> % the same audio (<see cref="SameAudioChecker.IsAtLeast"/>) – each only if it is still
+    /// open. Returns how many new files went to the trash.
+    /// </summary>
+    public async Task<int> DiscardSimilarAsync(IReadOnlyCollection<int> fileIds, int percent, CancellationToken ct = default)
+    {
+        List<int> ids;
+        await using (var db = await dbFactory.CreateDbContextAsync(ct))
+        {
+            ids = (await db.Files.AsNoTracking().Where(f => fileIds.Contains(f.Id) && f.Status == FileStatus.Duplicate).ToListAsync(ct))
+                .Where(f => SameAudioChecker.IsAtLeast(f, percent)).Select(f => f.Id).ToList();
+        }
+
+        return await KeepExistingAsync(ids, ct);
+    }
+
+    /// <summary>"Keep existing" for each file; files decided elsewhere in the meantime are left alone and not counted.</summary>
+    private async Task<int> KeepExistingAsync(List<int> ids, CancellationToken ct)
+    {
+        var count = 0;
+        foreach (var id in ids)
+        {
+            try
+            {
+                await ResolveDuplicateAsync(id, DuplicateDecision.KeepExisting, ct: ct);
+                count++;
+            }
+            catch (AlreadyDecidedException)
+            {
+            }
+        }
+
+        return count;
     }
 
     /// <summary>Processes a file again from the beginning.</summary>
@@ -368,3 +404,6 @@ public sealed class ReviewService(
         MatchingPipeline.AddEvent(file, message);
     }
 }
+
+/// <summary>A duplicate decision for a file that is no longer an open duplicate.</summary>
+public sealed class AlreadyDecidedException() : InvalidOperationException("Diese Datei wurde bereits entschieden");
